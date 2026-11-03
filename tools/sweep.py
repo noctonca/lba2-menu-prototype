@@ -36,9 +36,9 @@ PAGES = ["Options", "Preset", "Language and interface", "Display and graphics", 
 # Actions per group on the Controls page (controls.cpp kActions).
 CONTROL_GROUPS = [5, 6, 4, 7, 4, 4, 6]
 
-# The same eight as selftest.cpp kCombos.
+# The same nine as selftest.cpp kCombos.
 COMBOS = ["band=1,gameplay=0", "band=1,gameplay=1", "band=0,gameplay=1", "help640=1,gameplay=1",
-          "devices=0", "padnames=2", "padnames=3", "chip=1"]
+          "devices=0", "padnames=2", "padnames=3", "chip=1", "heads=0"]
 
 def parse_combo(spec):
     return {k: int(v) for k, v in (part.split("=") for part in spec.split(","))}
@@ -114,6 +114,15 @@ def run_scripts(binary, size, combo, only, shots):
                 found[f"{size} {label} [{st['page']}] {prob}"] = None
     return found
 
+def head_row(h, rows):
+    """The row a column head is drawn inside (heads=1), or None for a head above the rows."""
+    x0, y0, x1, y1 = h["rect"]
+    for r in rows:
+        rx0, ry0, rx1, ry1 = r["rect"]
+        if rx0 <= x0 and x1 <= rx1 and ry0 < y0 and y1 < ry1:
+            return r
+    return None
+
 def check(state):
     problems = []
     W, H = state["logical"]
@@ -164,9 +173,10 @@ def check(state):
                 problems.append(f"edge: {r['label']!r} at x {x0}..{x1}, its pane's rows at {px0}..{px1}")
             if wide and pane not in ("column", "confirm") and r["text_left"] != x0 + 16:
                 problems.append(f"edge: {r['label']!r} starts at x {r['text_left']}, not {x0 + 16}")
-    # The Controls page's first column head (the action names') starts on its rows' label edge.
+    # The Controls page's first column head (the action names') starts on its rows' label edge,
+    # when the heads are a line above the rows.
     heads = controls.get("heads", [])
-    if wide and heads:
+    if wide and heads and head_row(heads[0], state["rows"]) is None:
         h = heads[0]
         for r in state["rows"]:
             if r["rect"][0] <= h["rect"][0] <= r["rect"][2] and r["rect"][1] > h["rect"][3]:
@@ -219,6 +229,8 @@ def check(state):
                 problems.append(f"proximity: {gap} px between {pane} and the {v['where']}, rows are 5 apart")
     # Proximity: a column head is closer to the rows below it than to the rows above it.
     for h in controls.get("heads", []):
+        if head_row(h, state["rows"]) is not None:
+            continue
         hx0, hy0_, _, hy1_ = h["rect"]
         below = [r["rect"][1] - hy1_ - 1 for r in state["rows"]
                  if r["rect"][0] <= hx0 <= r["rect"][2] and r["rect"][1] > hy1_]
@@ -227,6 +239,21 @@ def check(state):
         if below and above and min(below) >= min(above):
             problems.append(f"proximity: head {h['text']!r} is {min(below)} px above its rows, "
                             f"{min(above)} px below the row above")
+    # Proximity: a column head inside a row is in its pane's first row, above its own chip,
+    # and clear of the action's name.
+    for h in controls.get("heads", []):
+        r = head_row(h, state["rows"])
+        if r is None:
+            continue
+        hx0, _, _, hy1_ = h["rect"]
+        if any(o["pane"] == r["pane"] and o["rect"][1] < r["rect"][1] for o in state["rows"]):
+            problems.append(f"proximity: head {h['text']!r} in {r['label']!r}, not its pane's first row")
+        mine = [k for k in chips if k["rect"][0] <= hx0 <= k["rect"][2]
+                and r["rect"][1] <= k["rect"][1] and k["rect"][3] <= r["rect"][3]]
+        if not mine or mine[-1]["rect"][1] <= hy1_:
+            problems.append(f"proximity: head {h['text']!r} not above its chip in {r['label']!r}")
+        if hx0 <= r["text_right"]:
+            problems.append(f"proximity: head {h['text']!r} runs into the name of {r['label']!r}")
     return problems
 
 # ───────────────────────────── Checking the command lines ─────────────────────────────
@@ -260,7 +287,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--bin", default=os.path.join(os.path.dirname(__file__), "..", "build", "lba2menu"))
     ap.add_argument("--sizes", default="640x480,1280x720,1280x800,1920x1080,2400x1080")
-    ap.add_argument("--combo", action="append", help="name=v,name=v (repeat; default: the eight)")
+    ap.add_argument("--combo", action="append", help="name=v,name=v (repeat; default: the nine)")
     ap.add_argument("--only", help="one page by name")
     ap.add_argument("--again", action="store_true", help="print the command line that shows each problem")
     ap.add_argument("--layout-only", action="store_true", help="the layout walk only, no walks by keys")

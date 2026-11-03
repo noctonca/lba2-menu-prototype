@@ -7,7 +7,8 @@
 // Switches the menu lists with its own:
 //   devices   1 = one device per view, Tab switches (the review); 0 = Key 1, Key 2 and Gamepad side by side
 //   padnames  0 = the connected pad's own names (Xbox when none), 1 Xbox, 2 PlayStation, 3 Nintendo
-extern int sw_devices, sw_padnames;
+//   heads     wide: 1 = the column names inside the first row, above its chips; 0 = a line of heads above the rows
+extern int sw_devices, sw_padnames, sw_heads;
 
 void Controls_Open();   // from the "Keys and buttons" row
 void Controls_Close();  // back to the Options, as they were
@@ -28,7 +29,7 @@ struct ChipView {
     int x0, y0, x1, y1;
 };
 int Controls_Chips(ChipView *out, int max);
-// The column heads above the actions, as the last Controls_Draw drew them.
+// The column heads, above the actions or inside the first row, as the last Controls_Draw drew them.
 struct HeadView {
     const char *text;
     int x0, y0, x1, y1;

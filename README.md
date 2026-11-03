@@ -53,6 +53,7 @@ Keys: arrows, Enter, Esc; a pad's d-pad or left stick, A and B.
 | F9 | `gameplay` | the Gameplay category |
 | F10 | `devices` | Controls: one device per view, Tab switches / Key 1, Key 2 and Gamepad side by side |
 | F11 | `padnames` | the pad's names: the connected pad's / Xbox / PlayStation / Nintendo |
+| F12 | `heads` | Controls, wide: the column names inside the first row, above its chips / a line of heads above the rows |
 
 ## The Controls page
 
@@ -82,7 +83,7 @@ Every run can be steered and read back without a person at the keys.
     build/lba2menu --do "open Sound; key down 2"     # commands inline; the window stays up on that screen
     build/lba2menu --control FILE                    # append commands to FILE while the window is up
 
-Commands, one per line: `key <up|down|left|right|enter|esc|tab|del|f1..f11> [count]`,
+Commands, one per line: `key <up|down|left|right|enter|esc|tab|del|f1..f12> [count]`,
 `press <key>` (a raw key for rebinding: an SDL name such as `J`, `Left Alt` or
 `Keypad 5`, or `pad:a`, `pad:lb`, `pad:lstick-up` ...),
 `wait <frames>`, `state`, `shot <path.png> [scale]`, `switch <name> <value>`,
@@ -98,8 +99,8 @@ Commands, one per line: `key <up|down|left|right|enter|esc|tab|del|f1..f11> [cou
 - On the Controls page `state` adds `controls`: the device, group, action and
   column under the cursor, whether it waits for a key, every chip drawn
   (name, rectangle, fill, conflict, whether the name fits), the column heads
-  above the actions (`heads`: text and rectangle), every binding and every
-  conflict.
+  above the actions or inside their first row (`heads`: text and rectangle),
+  every binding and every conflict.
 - `shot` writes exactly what is in the frame buffer through the current palette.
 - Every key and every change is a trace line (`trace t=<ms> f=<frame> ...`) on
   stderr and in `--trace FILE`.
@@ -110,7 +111,7 @@ Commands, one per line: `key <up|down|left|right|enter|esc|tab|del|f1..f11> [cou
 ## Testing
 
 `lba2menu --selftest` visits every row of every page and every chip of the
-Controls page at one screen size, for each of eight switch combinations, and
+Controls page at one screen size, for each of nine switch combinations, and
 lists what does not fit: help cut off, rows running into the help or off the
 screen, labels running into their values or their key chips, key names cut in
 their chips. On every screen it also checks that exactly one row or chip has
@@ -118,13 +119,15 @@ the cursor, that a red key chip under the cursor is explained in the help, and
 that a clash shows on both actions. It also checks the rules of
 [docs/UX.md](docs/UX.md) a screen can show (each problem starts with the rule's
 name): `edge:` the rows of a pane share their left and right edges and, wide,
-every label starts 16 in, the Controls page's first column head too; `margin:`
-nothing on a wide page is drawn in its margins (32 at the sides, 24 at the top
-and bottom); `trailing:` wide, what a row shows on the right ends 24 in from its
-right edge; `pitch:` rows in a pane are 56 apart and 50 tall; `current:` at most
-one current-value row in a pane; `value:` every setting row shows its value;
-`proximity:` a pane's last row is further from the help below than rows are from
-each other, and a column head is nearer its rows than the row above it.
+every label starts 16 in, the Controls page's first column head too when the
+heads are a line above the rows; `margin:` nothing on a wide page is drawn in
+its margins (32 at the sides, 24 at the top and bottom); `trailing:` wide, what
+a row shows on the right ends 24 in from its right edge; `pitch:` rows in a pane
+are 56 apart and 50 tall; `current:` at most one current-value row in a pane;
+`value:` every setting row shows its value; `proximity:` a pane's last row is
+further from the help below than rows are from each other, a column head above
+the rows is nearer them than the row above it, and a column head inside a row
+is in its pane's first row, above its own chip, and clear of the action's name.
 
 Then it walks the menu by its keys and checks what they do. Each problem a
 walk finds starts with the walk's name:
@@ -159,13 +162,13 @@ screen it was found on:
         again: build/lba2menu --size 1920x1080 --switch band=1 --switch gameplay=0 --switch typing=2 --do "open Sound"
 
 - `--combo name=v,name=v` (repeatable) tests those switch settings instead of
-  the eight; any switch of `state` can go in.
+  the nine; any switch of `state` can go in.
 - `--only PAGE` keeps one page (`"Keys and buttons"` for the Controls page).
   The `esc:` and `reach:` walk needs every page, so it runs only without it.
 - `--layout-only` leaves out the walks by keys.
 - Add `--headless` and `; shot x.png` to an `again` line for a picture.
 
-`tools/sweep.py` runs the self test for five screen sizes and the eight
+`tools/sweep.py` runs the self test for five screen sizes and the nine
 combinations, one process each, in parallel (about 3 seconds on the Mac), and
 takes `--sizes`, `--combo`, `--only`, `--again` and `--layout-only` the same way.
 

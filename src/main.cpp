@@ -19,13 +19,13 @@
 // so a driver can steer a session someone is watching. Replies go to stdout.
 //
 // Commands (from --script, and from stdin with --stdin), one per line:
-//   key <name> [count]   press a key: up down left right enter esc tab del f1..f11
+//   key <name> [count]   press a key: up down left right enter esc tab del f1..f12
 //   press <name>         a raw key for rebinding: an SDL key name ("J", "Left Alt",
 //                        "Keypad 5") or pad:<a|b|x|y|lb|rb|lt|rt|start|back|ls|rs|dpad-up|lstick-left...>
 //   wait <frames>        let frames pass
 //   state                print the state as one JSON line: "state {...}"
 //   shot <path> [scale]  write the screen as a PNG (logical size x scale)
-//   switch <name> <v>    band typing chip word island help640 gameplay overlay devices padnames
+//   switch <name> <v>    band typing chip word island help640 gameplay overlay devices padnames heads
 //   set <setting> <v>    a fake setting by id (see `state`)
 //   open <page name>     jump to a page ("Display and graphics", "Keys and buttons", "original", ...)
 //   quit
@@ -358,6 +358,8 @@ int main(int argc, char **argv) {
             Menu_SetSwitch("devices", !Menu_GetSwitch("devices"));
         if (Engine_Pressed(KEY_F11))
             Menu_SetSwitch("padnames", Menu_GetSwitch("padnames") + 1);
+        if (Engine_Pressed(KEY_F12))
+            Menu_SetSwitch("heads", !Menu_GetSwitch("heads"));
         if (Engine_Pressed(KEY_F2)) {
             size_t count = sizeof kSizes / sizeof kSizes[0], at = 0;
             for (size_t i = 0; i < count; i++)

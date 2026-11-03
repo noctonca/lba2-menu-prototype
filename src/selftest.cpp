@@ -24,6 +24,7 @@
 static const char *kCombos[] = {
     "band=1,gameplay=0", "band=1,gameplay=1", "band=0,gameplay=1", "help640=1,gameplay=1",
     "devices=0",         "padnames=2",        "padnames=3",        "chip=1",
+    "heads=0",
 };
 
 static const char *kPages[] = {
@@ -117,6 +118,14 @@ static std::string Fmt(const char *fmt, ...) {
 // ───────────────────────────── The rules ─────────────────────────────
 
 // sweep.py check(), rule for rule.
+// The row a column head is drawn inside (heads=1), or -1 for a head above the rows.
+static int HeadRow(const HeadView &h, const DrawnRow *rows, int n) {
+    for (int i = 0; i < n; i++)
+        if (rows[i].x0 <= h.x0 && h.x1 <= rows[i].x1 && rows[i].y0 < h.y0 && h.y1 < rows[i].y1)
+            return i;
+    return -1;
+}
+
 static void Check(std::vector<std::string> *found) {
     const S32 W = (S32)Engine_LogicalW(), H = (S32)Engine_LogicalH();
     MenuHelp v;
@@ -195,10 +204,11 @@ static void Check(std::vector<std::string> *found) {
                 found->push_back(Fmt("edge: %s starts at x %d, not %d", Repr(r.label).c_str(), r.textLeft, r.x0 + 16));
         }
     }
-    // The Controls page's first column head (the action names') starts on its rows' label edge.
+    // The Controls page's first column head (the action names') starts on its rows' label edge,
+    // when the heads are a line above the rows.
     HeadView heads[4];
     int nh = Controls_Active() ? Controls_Heads(heads, 4) : 0;
-    for (int i = 0; wide && nh && i < n; i++) {
+    for (int i = 0; wide && nh && HeadRow(heads[0], rows, n) < 0 && i < n; i++) {
         if (heads[0].x0 >= rows[i].x0 && heads[0].x0 <= rows[i].x1 && rows[i].y0 > heads[0].y1) {
             if (heads[0].x0 != rows[i].x0 + 16)
                 found->push_back(Fmt("edge: head %s starts at x %d, not %d", Repr(heads[0].text).c_str(), heads[0].x0,
@@ -279,6 +289,8 @@ static void Check(std::vector<std::string> *found) {
     }
     // Proximity: a column head is closer to the rows below it than to the rows above it.
     for (int h = 0; h < nh; h++) {
+        if (HeadRow(heads[h], rows, n) >= 0)
+            continue;
         int below = -1, above = -1;
         for (int i = 0; i < n; i++) {
             const DrawnRow &r = rows[i];
@@ -292,6 +304,31 @@ static void Check(std::vector<std::string> *found) {
         if (below >= 0 && above >= 0 && below >= above)
             found->push_back(Fmt("proximity: head %s is %d px above its rows, %d px below the row above",
                                  Repr(heads[h].text).c_str(), below, above));
+    }
+    // Proximity: a column head inside a row is in its pane's first row, above its own chip,
+    // and clear of the action's name.
+    for (int h = 0; h < nh; h++) {
+        int ri = HeadRow(heads[h], rows, n);
+        if (ri < 0)
+            continue;
+        const DrawnRow &r = rows[ri];
+        for (int i = 0; i < n; i++)
+            if (!strcmp(rows[i].pane, r.pane) && rows[i].y0 < r.y0) {
+                found->push_back(Fmt("proximity: head %s in %s, not its pane's first row", Repr(heads[h].text).c_str(),
+                                     Repr(r.label).c_str()));
+                break;
+            }
+        bool chip = false;
+        for (int i = 0; i < nc; i++)
+            if (chips[i].x0 <= heads[h].x0 && heads[h].x0 <= chips[i].x1 && r.y0 <= chips[i].y0 &&
+                chips[i].y1 <= r.y1)
+                chip = chips[i].y0 > heads[h].y1;
+        if (!chip)
+            found->push_back(Fmt("proximity: head %s not above its chip in %s", Repr(heads[h].text).c_str(),
+                                 Repr(r.label).c_str()));
+        if (heads[h].x0 <= r.textRight)
+            found->push_back(Fmt("proximity: head %s runs into the name of %s", Repr(heads[h].text).c_str(),
+                                 Repr(r.label).c_str()));
     }
 }
 

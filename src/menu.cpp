@@ -906,18 +906,28 @@ static void DrawLegend(S32 x, S32 yc, const char **keys, const char **words, int
     }
 }
 
-static void DrawConfirm() {
-    // A small panel in the middle: the question is in the voice below, the rows here.
-    S32 w = 360, x0 = (S32)Engine_LogicalW() / 2 - w / 2, x1 = x0 + w;
-    S32 y0 = Wide() ? 150 : 120;
+// The question's answers, the safe one first; the question itself is in the voice.
+// One column: a small panel in the middle, labels centred, as 1997. Wide: in place
+// of the right pane's rows, labels on the pane's label edge.
+static void DrawConfirm(const char *pane, S32 x0, S32 x1, S32 y0) {
+    bool centred = !strcmp(pane, "confirm");
     const char *const *answers = kQuestions[g_question].answers;
     for (int i = 0; i < 2; i++) {
-        S32 ry0 = y0 + i * ROW_PITCH;
+        S32 ry0 = y0 + i * ROW_PITCH, yc = ry0 + ROW_H / 2;
         RowFill fill = i == g_confirmCursor ? FILL_CURSOR : FILL_SHADE;
         Ui_RowBackground(x0, ry0, x1, ry0 + ROW_H, fill);
-        Menu_RowLabelCentred(x0, x1, ry0 + ROW_H / 2, answers[i], INK_WHITE);
-        Menu_Record("confirm", answers[i], "", fill, x0, ry0, x1, ry0 + ROW_H).textLeft =
-            (x0 + x1) / 2 - Ui_TextWidth(answers[i]) / 2;
+        DrawnRow &d = Menu_Record(pane, answers[i], "", fill, x0, ry0, x1, ry0 + ROW_H);
+        if (centred) {
+            Menu_RowLabelCentred(x0, x1, yc, answers[i], INK_WHITE);
+            d.textLeft = (x0 + x1) / 2 - Ui_TextWidth(answers[i]) / 2;
+        } else {
+            MemoClip();
+            SetClip(x0 + 1, ry0, x1 - 1, ry0 + ROW_H);
+            Ui_Text(x0 + 16, yc - 18, answers[i], INK_WHITE);
+            RestoreClip();
+            d.textLeft = x0 + 16;
+            d.textRight = x0 + 16 + Ui_TextWidth(answers[i]);
+        }
     }
 }
 
@@ -951,7 +961,7 @@ static void DrawColumn() {
     }
 
     if (g_confirm) {
-        DrawConfirm();
+        DrawConfirm("confirm", W / 2 - 180, W / 2 + 180, 120);
     } else {
         S32 top = 16, bottom = help ? H - 1 - 137 - 16 : H - 16;
         if (g_first)
@@ -1005,35 +1015,37 @@ static void DrawWide() {
         y += ROW_PITCH;
     }
 
-    // Right pane: the page of the category under the left cursor.
-    int rp = RightPage();
-    const Page &page = g_pages[rp];
-    int n = page.count - RightFirst();
-    S32 limit = Menu_WideRowsLimit();
-    int visible = (limit - top + ROW_GAP) / ROW_PITCH;
-    if (visible > n)
-        visible = n;
-    if (g_focus == F_RIGHT) {
-        if (g_cursor < g_scroll)
-            g_scroll = g_cursor;
-        if (g_cursor >= g_scroll + visible)
-            g_scroll = g_cursor - visible + 1;
+    // Right pane: the page of the category under the left cursor, or, while a
+    // question is up, its answers in place of the rows.
+    if (g_confirm) {
+        DrawConfirm("right", rx0, rx1, top);
     } else {
-        g_scroll = 0;
+        int rp = RightPage();
+        const Page &page = g_pages[rp];
+        int n = page.count - RightFirst();
+        S32 limit = Menu_WideRowsLimit();
+        int visible = (limit - top + ROW_GAP) / ROW_PITCH;
+        if (visible > n)
+            visible = n;
+        if (g_focus == F_RIGHT) {
+            if (g_cursor < g_scroll)
+                g_scroll = g_cursor;
+            if (g_cursor >= g_scroll + visible)
+                g_scroll = g_cursor - visible + 1;
+        } else {
+            g_scroll = 0;
+        }
+        y = top;
+        for (int i = g_scroll; i < g_scroll + visible; i++) {
+            RowFill fill = FILL_SHADE;
+            if (g_focus == F_RIGHT && i == g_cursor)
+                fill = FILL_CURSOR;
+            DrawWideRow("right", page.rows[RightFirst() + i], rx0, y, rx1, y + ROW_H, fill);
+            y += ROW_PITCH;
+        }
+        if (visible < n)
+            Menu_DrawScrollBar(rx1 + 9, top, top + visible * ROW_PITCH - ROW_GAP - 1, g_scroll, visible, n);
     }
-    y = top;
-    for (int i = g_scroll; i < g_scroll + visible; i++) {
-        RowFill fill = FILL_SHADE;
-        if (g_focus == F_RIGHT && i == g_cursor)
-            fill = g_confirm ? FILL_CURRENT : FILL_CURSOR;  // the question has the cursor
-        DrawWideRow("right", page.rows[RightFirst() + i], rx0, y, rx1, y + ROW_H, fill);
-        y += ROW_PITCH;
-    }
-    if (visible < n)
-        Menu_DrawScrollBar(rx1 + 9, top, top + visible * ROW_PITCH - ROW_GAP - 1, g_scroll, visible, n);
-
-    if (g_confirm)
-        DrawConfirm();
 
     // Help and legend.
     const char *keys[4], *words[4];
@@ -1089,6 +1101,7 @@ static void DrawOverlay() {
         "F9 Gameplay category",
         "F10 Controls: one device per view / all columns",
         "F11 pad names: connected / Xbox / PlayStation / Nintendo",
+        "F12 Controls heads: inside the first row / above",
     };
     S32 n = (S32)(sizeof lines / sizeof lines[0]);
     S32 w = 8 * 50 + 16, h = n * 12 + 12;
@@ -1141,7 +1154,7 @@ static const SwitchDef kSwitches[] = {
     {"band", &sw_band, 0, 1, 1},           {"typing", &sw_typing, 0, 2, 0},   {"chip", &sw_chip, 1, 2, 2},
     {"word", &sw_word, 0, 2, 0},           {"island", &sw_island, 0, 1, 0},   {"help640", &sw_help640, 0, 1, 0},
     {"gameplay", &sw_gameplay, 0, 1, 0},   {"overlay", &sw_overlay, 0, 1, 0},
-    {"devices", &sw_devices, 0, 1, 1},     {"padnames", &sw_padnames, 0, 3, 0},
+    {"devices", &sw_devices, 0, 1, 1},     {"padnames", &sw_padnames, 0, 3, 0},   {"heads", &sw_heads, 0, 1, 1},
 };
 
 bool Menu_SetSwitch(const char *name, int v) {

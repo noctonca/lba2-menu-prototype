@@ -60,6 +60,15 @@ the call is answered.
   from their row's right edge on every page, measured to the last pixel drawn.
   **[self test: trailing]** The one-column Controls page keeps its chips 12
   in: at 640 wide, 24 runs action names into them.
+- **Controls column heads sit inside the first visible row**, above their
+  chips, in the 8x8 font at 1x: the one place 1x is used on the wide canvas,
+  since 2x does not fit between a row's frame and its chip. Both panes then
+  start at y 24 and their rows line up (decided 2026-11-03, switch `heads`;
+  0 shows the head line above). The pad column's head reads "Gamepad", so the
+  page names the device it shows.
+- **A question takes the right pane** in the wide layout: its answers replace
+  the pane's rows, on the label edge, and the voice asks it in the band. At
+  640x480 it stays the centred box (decided 2026-11-03).
 - The panes' split may differ by page: Options splits 464:416 (right pane at
   512), Controls 304:576 (right pane at 352), because Controls needs the room
   for two chip columns beside an action's name (decided 2026-11-03).

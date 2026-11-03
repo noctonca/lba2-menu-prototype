@@ -12,7 +12,7 @@
 #include <stdio.h>
 #include <string.h>
 
-int sw_devices = 1, sw_padnames = 0;
+int sw_devices = 1, sw_padnames = 0, sw_heads = 1;
 
 // ───────────────────────────── The actions ─────────────────────────────
 
@@ -232,6 +232,10 @@ static char g_lastBound[96];
 static bool g_bindingsReady;
 
 static bool Wide() { return Engine_LogicalW() >= 840; }
+
+// Wide, with heads=1: the column names sit inside the first row, so the actions start on the
+// top margin level with the groups. The one column keeps its heads above, as 1997's page.
+static bool HeadsInRow() { return sw_heads && Wide(); }
 
 // The columns this view shows: 0 Key 1, 1 Key 2, 2 the pad.
 static int Columns(int *out) {
@@ -494,7 +498,7 @@ struct DrawnChip {
 };
 static DrawnChip g_chips[32];
 static int g_chipCount;
-// The column heads above the actions, in the 8x8 font.
+// The column heads, above the actions or inside the first row, in the 8x8 font.
 static struct {
     const char *text;
     int x0, y0, x1, y1;
@@ -522,6 +526,11 @@ static void ChipLayout(S32 rowX1, const int *cols, int ncols, S32 *x0, S32 *w) {
     (void)cols;
 }
 
+// A chip is 24 tall at 2x on a 51-tall row, so it can't be centred exactly: 13 above it
+// and 12 below, or 12 and 13. With heads inside the row it takes the lower place, which
+// gives a head 1 px more and puts a 2x key name on the action name's cap band.
+static S32 ChipTop(S32 yc, S32 s) { return yc - Ui_KeyChipHeight(s) / 2 + (HeadsInRow() ? 1 : 0); }
+
 static void DrawActionRow(int action, S32 x0, S32 y0, S32 x1, S32 y1, const int *cols, int ncols, bool cursorRow,
                           const char *pane) {
     S32 yc = (y0 + y1) / 2;
@@ -547,7 +556,7 @@ static void DrawActionRow(int action, S32 x0, S32 y0, S32 x1, S32 y1, const int 
         bool here = cursorRow && i == g_column && g_focusRight;
         ChipFill fill = here ? (g_waiting ? CHIP_WAITING : CHIP_CURSOR) : CHIP_SHADE;
         bool red = ConflictOf(action, c) >= 0;
-        S32 cy = yc - ch / 2;
+        S32 cy = ChipTop(yc, s);
         bool fits = Ui_KeyChip(cx[i], cy, cw[i], name, s, fill, red);
         if (g_chipCount < 32) {
             DrawnChip &k = g_chips[g_chipCount++];
@@ -582,6 +591,21 @@ static void DrawHeads(S32 nameX, S32 rowX1, const int *cols, int ncols, S32 y) {
         DrawHead(cx[i], y, ColumnHead(cols[i]), s);
 }
 
+// The column names inside a row from y0, each over its chip at 1x: 3 above the chip, and no
+// nearer than 3 to the row's top frame. A 2x name (16) doesn't fit in the 13 above a 2x chip;
+// at 1x the cell's last row, a descender, comes within 2 of it. With no device head, the
+// names say the device: Key 1 and Key 2 are keys, and the pad's column says Gamepad, as in
+// the side-by-side view, not Button.
+static void DrawHeadsInRow(S32 rowY0, S32 rowX1, const int *cols, int ncols) {
+    S32 cx[3], cw[3];
+    ChipLayout(rowX1, cols, ncols, cx, cw);
+    S32 y = ChipTop(rowY0 + ROW_H / 2, ChipScale()) - 3 - 8;
+    if (y < rowY0 + 4)
+        y = rowY0 + 4;
+    for (int i = 0; i < ncols; i++)
+        DrawHead(cx[i], y, cols[i] == 2 ? DeviceName(1) : ColumnHead(cols[i]), 1);
+}
+
 static void Legend(const char **keys, const char **words, int *n) {
     static char other[16];
     *n = 0;
@@ -604,12 +628,12 @@ static void Legend(const char **keys, const char **words, int *n) {
 }
 
 // The column heads from y top, then rows for the actions of the group 22 below, scrolled
-// to keep the cursor in view.
+// to keep the cursor in view; with the heads inside the first row, the rows from y top.
 static void DrawActions(S32 x0, S32 x1, S32 headsTop, S32 limit, const char *pane) {
     int cols[3];
     int ncols = Columns(cols);
     int n = GroupCount(g_group);
-    S32 top = headsTop + 22;
+    S32 top = HeadsInRow() ? headsTop : headsTop + 22;
     int visible = (limit - top + ROW_GAP) / ROW_PITCH;
     if (visible > n)
         visible = n;
@@ -619,13 +643,16 @@ static void DrawActions(S32 x0, S32 x1, S32 headsTop, S32 limit, const char *pan
         g_scroll = g_row - visible + 1;
     if (!g_focusRight)
         g_scroll = 0;
-    DrawHeads(x0 + 16, x1, cols, ncols, headsTop);  // on the label edge, as the names below
+    if (!HeadsInRow())
+        DrawHeads(x0 + 16, x1, cols, ncols, headsTop);  // on the label edge, as the names below
     S32 y = top;
     int first = GroupFirst(g_group);
     for (int i = g_scroll; i < g_scroll + visible; i++) {
         DrawActionRow(first + i, x0, y, x1, y + ROW_H, cols, ncols, i == g_row, pane);
         y += ROW_PITCH;
     }
+    if (HeadsInRow() && visible > 0)
+        DrawHeadsInRow(top, x1, cols, ncols);  // the first row shown, scrolled or not
     if (visible < n)
         Menu_DrawScrollBar(x1 + 9, top, top + visible * ROW_PITCH - ROW_GAP - 1, g_scroll, visible, n);
 }
@@ -633,7 +660,8 @@ static void DrawActions(S32 x0, S32 x1, S32 headsTop, S32 limit, const char *pan
 static void DrawWideControls() {
     S32 W = (S32)Engine_LogicalW();
     // The groups and the column heads start on the top margin, as Options' panes do; seven
-    // groups from 24 end at 410, clear of the band at 430. The actions start under their heads.
+    // groups from 24 end at 410, clear of the band at 430. The actions start under their heads,
+    // or with the heads inside their first row (heads=1), level with the groups.
     const S32 side = 32, top = 24, gap = 16;
     S32 inner = W - 2 * side - gap;
     S32 leftW = inner * 304 / 880;
