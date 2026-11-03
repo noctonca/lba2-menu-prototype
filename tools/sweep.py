@@ -3,9 +3,12 @@
 settings, and list what does not fit: help cut off, rows running into the help
 or off the canvas, labels running into their values or out of their row.
 
-    tools/sweep.py [--bin build/lba2menu] [--sizes 640x480,1920x1080] [--shots DIR]
+    tools/sweep.py [--bin build/lba2menu] [--sizes 640x480,1920x1080] [--shots DIR] [--jobs N]
+
+Each (size, switches) run is its own process; --jobs of them run at once.
 """
 import argparse, json, os, subprocess, sys
+from concurrent.futures import ThreadPoolExecutor
 
 PAGES = ["Options", "Preset", "Language and interface", "Display and graphics", "Sound",
          "Controls and camera", "Advanced and reset", "Gameplay"]
@@ -84,20 +87,23 @@ def main():
     ap.add_argument("--bin", default=os.path.join(os.path.dirname(__file__), "..", "build", "lba2menu"))
     ap.add_argument("--sizes", default="640x480,1280x720,1280x800,1920x1080,2400x1080")
     ap.add_argument("--shots")
+    ap.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     a = ap.parse_args()
     if a.shots:
         os.makedirs(a.shots, exist_ok=True)
     combos = [{"band": 1, "gameplay": 0}, {"band": 1, "gameplay": 1}, {"band": 0, "gameplay": 1},
               {"help640": 1, "gameplay": 1}, {"devices": 0}, {"padnames": 2}, {"padnames": 3},
               {"chip": 1}]
+    jobs = [(size, sw) for size in a.sizes.split(",") for sw in combos]
+    with ThreadPoolExecutor(max_workers=max(1, a.jobs)) as pool:
+        results = list(pool.map(lambda j: run(a.bin, j[0], j[1], a.shots), jobs))
     found = {}
-    for size in a.sizes.split(","):
-        for sw in combos:
-            for st in run(a.bin, size, sw, a.shots):
-                for prob in check(st, size):
-                    key = (size, json.dumps(sw), st["page"], prob)
-                    found.setdefault(key, 0)
-                    found[key] += 1
+    for (size, sw), states in zip(jobs, results):
+        for st in states:
+            for prob in check(st, size):
+                key = (size, json.dumps(sw), st["page"], prob)
+                found.setdefault(key, 0)
+                found[key] += 1
     for (size, sw, page, prob) in sorted(found):
         print(f"{size} {sw} [{page}] {prob}")
     print(f"{len(found)} problem(s)")
