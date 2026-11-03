@@ -198,8 +198,9 @@ bool Engine_SetScreen(U32 w, U32 h, bool sizeWindow) {
     return true;
 }
 
+// lba2cc's recommended modes (RES_CATALOG.CPP kRecommended) with the larger screens between.
 static const U32 kSizes[][2] = {
-    {640, 480}, {1280, 720}, {1280, 800}, {1920, 1080}, {2400, 1080}, {2560, 1440}, {3440, 1440}, {3840, 2160},
+    {640, 480}, {768, 480}, {1024, 480}, {1280, 720}, {1280, 800}, {1920, 1080}, {2400, 1080}, {2560, 1440}, {3440, 1440}, {3840, 2160},
 };
 
 int Engine_SizeCount() { return (int)(sizeof kSizes / sizeof kSizes[0]); }

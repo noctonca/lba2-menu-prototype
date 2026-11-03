@@ -10,7 +10,7 @@ BIN=${1:-build/lba2menu}
 PAGES=("Display and graphics" "Sound" "Controls and camera" "Advanced and reset" "original"
        "Keys and buttons" "Experimental settings")
 STARTS=(1280x720 640x480 3840x2160 1280x800)
-TARGETS=(1920x1080 640x480 3440x1440 1280x800 2400x1080 3840x2160 1512x904)
+TARGETS=(1920x1080 768x480 1024x480 640x480 3440x1440 1280x800 2400x1080 3840x2160 1512x904)
 
 state() { "$BIN" --headless --switch typing=2 "$@" 2>/dev/null | grep '^state ' | sed -E 's/"t":[0-9]+,//'; }
 column() { "$BIN" --headless --size "$1" --do state 2>/dev/null | grep -q '"layout":"column"' && echo 1 || echo 0; }
@@ -50,9 +50,9 @@ for start in "${STARTS[@]}"; do
     done
 done
 
-# F2 eight times comes back round to where it started, on the same row.
+# F2 once for each size comes back round to where it started, on the same row.
 a=$(state --size 640x480 --do "open Sound; key down; key down; wait 2; state")
-b=$(state --size 640x480 --do "open Sound; key down; key down; wait 2; key f2 8; wait 2; state" | sed -n 1p)
+b=$(state --size 640x480 --do "open Sound; key down; key down; wait 2; key f2 10; wait 2; state" | sed -n 1p)
 runs=$((runs + 1))
 [ -n "$a" ] && [ "$(echo "$a" | grep -o '"cursor_row":"[^"]*"')" = "$(echo "$b" | grep -o '"cursor_row":"[^"]*"')" ] &&
     echo "$b" | grep -q '"physical":\[640,480\]' || { echo "DIFF F2 round trip"; bad=$((bad + 1)); }

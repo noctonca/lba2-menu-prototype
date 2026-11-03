@@ -45,8 +45,9 @@ the page, the cursor, the settings and every switch stay as they were, and a
 note at the bottom right says the new size and its logical canvas.
 
 - F2 steps to the next size in the list, Shift+F2 back to the previous one
-  (640x480, 1280x720, 1280x800, 1920x1080, 2400x1080, 2560x1440, 3440x1440,
-  3840x2160). The window is sized to suit, as at launch.
+  (640x480, 768x480, 1024x480, 1280x720, 1280x800, 1920x1080, 2400x1080,
+  2560x1440, 3440x1440, 3840x2160). 768x480 and 1024x480 are lba2cc's
+  widescreen modes: 480 high, they keep the one column on a wider canvas. The window is sized to suit, as at launch.
 - Dragging the window's edge makes its size in pixels the screen: any size in
   between, the layout following as you drag. On a Retina display that is twice
   the window's size in points (a 1100x650 window is a 2200x1236 screen). The
@@ -314,7 +315,7 @@ screen it was found on:
 - `--layout-only` leaves out the walks by keys.
 - Add `--headless` and `; shot x.png` to an `again` line for a picture.
 
-`tools/sweep.py` runs the self test for five screen sizes and the seven
+`tools/sweep.py` runs the self test for seven screen sizes and the seven
 combinations, one process each, in parallel (about 3 seconds on the Mac), and
 takes `--sizes`, `--combo`, `--only`, `--again` and `--layout-only` the same way.
 
@@ -330,8 +331,8 @@ takes `--sizes`, `--combo`, `--only`, `--again` and `--layout-only` the same way
 `tools/resize-check.sh` checks that a size changed in place shows what a fresh
 start at that size shows on the same row: seven pages (Controls and
 Experimental among them, and Experimental's list form) from four sizes to
-seven, compared through `state`, and F2 round the list and back (225 runs,
-about 40 seconds). With the layout hand-over turned off it finds 72 of them
+nine, compared through `state`, and F2 round the list and back (289 runs,
+about 50 seconds). With the layout hand-over turned off it finds 120 of them
 differ.
 
 ## Checked against the game

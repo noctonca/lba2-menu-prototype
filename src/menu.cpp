@@ -26,7 +26,7 @@ struct Setting {
     const char *label;
     Kind kind;
     int max;                 // last value (choices: count - 1)
-    const char *names[8];    // value names for choices, toggles and steps
+    const char *names[10];   // value names for choices, toggles and steps
     int fresh;               // what a fresh install has (= Modern)
     int classic;             // what Classic sets, when presetSets
     bool presetSets;
@@ -54,9 +54,9 @@ static const Setting kSettings[S_COUNT] = {
     // Not a stored value: the row shows the screen in use and steps it through
     // Engine_SizeAt's list, as F2 does. g_val keeps its fresh value, so presets,
     // Reset settings and their undo leave the screen alone.
-    {"resolution", "Resolution", K_CHOICE, 7,
-     {"640 x 480", "1280 x 720", "1280 x 800", "1920 x 1080", "2400 x 1080", "2560 x 1440", "3440 x 1440", "3840 x 2160"},
-     3, 3, false,
+    {"resolution", "Resolution", K_CHOICE, 9,
+     {"640 x 480", "768 x 480", "1024 x 480", "1280 x 720", "1280 x 800", "1920 x 1080", "2400 x 1080", "2560 x 1440", "3440 x 1440", "3840 x 2160"},
+     5, 5, false,
      "The size of the picture the game draws."},
     // Not a stored value either: the row shows the window as it is and turns it.
     {"fullscreen", "Fullscreen", K_TOGGLE, 1, {"Off", "On"}, 1, 1, false,

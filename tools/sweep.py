@@ -354,7 +354,7 @@ def check_again(line, again):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--bin", default=os.path.join(os.path.dirname(__file__), "..", "build", "lba2menu"))
-    ap.add_argument("--sizes", default="640x480,1280x720,1280x800,1920x1080,2400x1080")
+    ap.add_argument("--sizes", default="640x480,768x480,1024x480,1280x720,1280x800,1920x1080,2400x1080")
     ap.add_argument("--combo", action="append", help="name=v,name=v (repeat; default: the seven)")
     ap.add_argument("--only", help="one page by name")
     ap.add_argument("--again", action="store_true", help="print the command line that shows each problem")
