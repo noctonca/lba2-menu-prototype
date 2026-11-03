@@ -4,8 +4,9 @@ several screen sizes and switch settings, and list what does not fit: help cut
 off, rows running into the help or off the canvas, labels running into their
 values or out of their row, key names cut in their chips; and what is wrong on
 a screen: not exactly one cursor, a red key the help does not explain, a clash
-only one of the two actions shows. The self test then walks the menu by its
-keys and lists what they do wrong (see README "Testing").
+only one of the two actions shows, and the screen rules of docs/UX.md (edge,
+margin, trailing, pitch, current, value, proximity). The self test then walks the
+menu by its keys and lists what they do wrong (see README "Testing").
 
     tools/sweep.py [--bin build/lba2menu] [--sizes 640x480,1920x1080] [--jobs N]
                    [--combo band=1,gameplay=0 ...] [--only PAGE] [--again]
@@ -148,6 +149,84 @@ def check(state):
     for a, col, other in controls.get("conflicts", []):
         if other not in clashing:
             problems.append(f"clash one way: {a!r} {col} is also {other!r}, which shows no clash")
+    # The rows by pane, in draw order (the first-launch title is not a pane).
+    panes = {}
+    for r in state["rows"]:
+        if r["pane"] != "title":
+            panes.setdefault(r["pane"], []).append(r)
+    wide = state["layout"] == "wide"
+    # One edge per pane: its rows share x0 and x1; wide labels start 16 in.
+    for pane, rows in panes.items():
+        px0, px1 = rows[0]["rect"][0], rows[0]["rect"][2]
+        for r in rows:
+            x0, x1 = r["rect"][0], r["rect"][2]
+            if (x0, x1) != (px0, px1):
+                problems.append(f"edge: {r['label']!r} at x {x0}..{x1}, its pane's rows at {px0}..{px1}")
+            if wide and pane not in ("column", "confirm") and r["text_left"] != x0 + 16:
+                problems.append(f"edge: {r['label']!r} starts at x {r['text_left']}, not {x0 + 16}")
+    # The Controls page's first column head (the action names') starts on its rows' label edge.
+    heads = controls.get("heads", [])
+    if wide and heads:
+        h = heads[0]
+        for r in state["rows"]:
+            if r["rect"][0] <= h["rect"][0] <= r["rect"][2] and r["rect"][1] > h["rect"][3]:
+                if h["rect"][0] != r["rect"][0] + 16:
+                    problems.append(f"edge: head {h['text']!r} starts at x {h['rect'][0]}, not {r['rect'][0] + 16}")
+                break
+    # Margins: nothing on a wide page within 32 of the sides or 24 of the top and bottom.
+    if wide:
+        boxes = [(r["label"], r["rect"]) for r in state["rows"]]
+        boxes += [(f"{k['action']} {k['column']}", k["rect"]) for k in chips]
+        boxes += [(h["text"], h["rect"]) for h in controls.get("heads", [])]
+        if v["where"] != "none":
+            boxes.append(("help", v["rect"]))
+        for what, (x0, y0, x1, y1) in boxes:
+            if x0 < 32 or y0 < 24 or x1 > W - 33 or y1 > H - 25:
+                problems.append(f"margin: {what!r} [{x0}, {y0}, {x1}, {y1}] in the margin")
+    # One trailing edge: wide, what a row shows on the right (a value, a slider, steps, its
+    # last key chip) ends on the column 24 in from the row's right edge.
+    if wide:
+        for r in state["rows"]:
+            x1 = r["rect"][2]
+            if r["value_right"] > 0 and r["value_right"] != x1 - 24:
+                problems.append(f"trailing: {r['label']!r} ends at x {r['value_right']}, not {x1 - 24}")
+    # The pitch: in a pane, each row starts 56 below the one above and is 50 tall.
+    for pane, rows in panes.items():
+        if len(rows) < 2:
+            continue
+        for above, r in zip(rows, rows[1:]):
+            d = r["rect"][1] - above["rect"][1]
+            if d != 56:
+                problems.append(f"pitch: {r['label']!r} starts {d} below the row above, not 56")
+        for r in rows:
+            h = r["rect"][3] - r["rect"][1]
+            if h != 50:
+                problems.append(f"pitch: {r['label']!r} is {h} tall, not 50")
+    # At most one current-value plasma in a pane.
+    for pane, rows in panes.items():
+        n = sum(r["fill"] == "current" for r in rows)
+        if n > 1:
+            problems.append(f"current: {n} current-value rows in the {pane} pane")
+    # Every setting row shows its value.
+    for r in state["rows"]:
+        if r["setting"] and not r["value"]:
+            problems.append(f"value: setting {r['label']!r} shows no value")
+    # Proximity: a pane's last row is further from the help below than rows are apart (5).
+    if v["where"] != "none":
+        for pane, rows in panes.items():
+            gap = hy0 - max(r["rect"][3] for r in rows) - 1
+            if 0 <= gap <= 5:
+                problems.append(f"proximity: {gap} px between {pane} and the {v['where']}, rows are 5 apart")
+    # Proximity: a column head is closer to the rows below it than to the rows above it.
+    for h in controls.get("heads", []):
+        hx0, hy0_, _, hy1_ = h["rect"]
+        below = [r["rect"][1] - hy1_ - 1 for r in state["rows"]
+                 if r["rect"][0] <= hx0 <= r["rect"][2] and r["rect"][1] > hy1_]
+        above = [hy0_ - r["rect"][3] - 1 for r in state["rows"]
+                 if r["rect"][0] <= hx0 <= r["rect"][2] and r["rect"][3] < hy0_]
+        if below and above and min(below) >= min(above):
+            problems.append(f"proximity: head {h['text']!r} is {min(below)} px above its rows, "
+                            f"{min(above)} px below the row above")
     return problems
 
 # ───────────────────────────── Checking the command lines ─────────────────────────────

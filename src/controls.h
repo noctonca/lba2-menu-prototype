@@ -25,8 +25,15 @@ struct ChipView {
     const char *name;
     const char *fill;  // shade, cursor or waiting
     bool fits, conflict;
+    int x0, y0, x1, y1;
 };
 int Controls_Chips(ChipView *out, int max);
+// The column heads above the actions, as the last Controls_Draw drew them.
+struct HeadView {
+    const char *text;
+    int x0, y0, x1, y1;
+};
+int Controls_Heads(HeadView *out, int max);
 // Every clash in the bindings: action's key in column is also other's.
 struct ConflictView {
     const char *action, *column, *other;

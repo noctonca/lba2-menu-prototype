@@ -171,6 +171,128 @@ static void Check(std::vector<std::string> *found) {
                                      cv[i].column, Repr(cv[i].other).c_str()));
         }
     }
+    // The rows by pane, in draw order (the first-launch title is not a pane).
+    std::vector<std::string> paneNames;
+    std::map<std::string, std::vector<const DrawnRow *> > panes;
+    for (int i = 0; i < n; i++) {
+        if (!strcmp(rows[i].pane, "title"))
+            continue;
+        if (!panes.count(rows[i].pane))
+            paneNames.push_back(rows[i].pane);
+        panes[rows[i].pane].push_back(&rows[i]);
+    }
+    const bool wide = !strcmp(Menu_Layout(), "wide");
+    // One edge per pane: its rows share x0 and x1; wide labels start 16 in.
+    for (size_t p = 0; p < paneNames.size(); p++) {
+        const std::vector<const DrawnRow *> &pr = panes[paneNames[p]];
+        bool centred = paneNames[p] == "column" || paneNames[p] == "confirm";
+        for (size_t i = 0; i < pr.size(); i++) {
+            const DrawnRow &r = *pr[i];
+            if (r.x0 != pr[0]->x0 || r.x1 != pr[0]->x1)
+                found->push_back(Fmt("edge: %s at x %d..%d, its pane's rows at %d..%d", Repr(r.label).c_str(), r.x0, r.x1,
+                                     pr[0]->x0, pr[0]->x1));
+            if (wide && !centred && r.textLeft != r.x0 + 16)
+                found->push_back(Fmt("edge: %s starts at x %d, not %d", Repr(r.label).c_str(), r.textLeft, r.x0 + 16));
+        }
+    }
+    // The Controls page's first column head (the action names') starts on its rows' label edge.
+    HeadView heads[4];
+    int nh = Controls_Active() ? Controls_Heads(heads, 4) : 0;
+    for (int i = 0; wide && nh && i < n; i++) {
+        if (heads[0].x0 >= rows[i].x0 && heads[0].x0 <= rows[i].x1 && rows[i].y0 > heads[0].y1) {
+            if (heads[0].x0 != rows[i].x0 + 16)
+                found->push_back(Fmt("edge: head %s starts at x %d, not %d", Repr(heads[0].text).c_str(), heads[0].x0,
+                                     rows[i].x0 + 16));
+            break;
+        }
+    }
+    // Margins: nothing on a wide page within 32 of the sides or 24 of the top and bottom.
+    if (wide) {
+        struct Area {
+            std::string what;
+            int x0, y0, x1, y1;
+        };
+        std::vector<Area> boxes;
+        for (int i = 0; i < n; i++)
+            boxes.push_back({rows[i].label, rows[i].x0, rows[i].y0, rows[i].x1, rows[i].y1});
+        for (int i = 0; i < nc; i++)
+            boxes.push_back({std::string(chips[i].action) + " " + chips[i].column, chips[i].x0, chips[i].y0, chips[i].x1,
+                             chips[i].y1});
+        for (int i = 0; i < nh; i++)
+            boxes.push_back({heads[i].text, heads[i].x0, heads[i].y0, heads[i].x1, heads[i].y1});
+        if (help)
+            boxes.push_back({"help", v.x0, v.y0, v.x1, v.y1});
+        for (size_t i = 0; i < boxes.size(); i++) {
+            const Area &b = boxes[i];
+            if (b.x0 < 32 || b.y0 < 24 || b.x1 > W - 33 || b.y1 > H - 25)
+                found->push_back(
+                    Fmt("margin: %s [%d, %d, %d, %d] in the margin", Repr(b.what.c_str()).c_str(), b.x0, b.y0, b.x1, b.y1));
+        }
+    }
+    // One trailing edge: wide, what a row shows on the right (a value, a slider, steps, its
+    // last key chip) ends on the column 24 in from the row's right edge.
+    if (wide)
+        for (int i = 0; i < n; i++)
+            if (rows[i].valueRight > 0 && rows[i].valueRight != rows[i].x1 - 24)
+                found->push_back(Fmt("trailing: %s ends at x %d, not %d", Repr(rows[i].label).c_str(), rows[i].valueRight,
+                                     rows[i].x1 - 24));
+    // The pitch: in a pane, each row starts 56 below the one above and is 50 tall.
+    for (size_t p = 0; p < paneNames.size(); p++) {
+        const std::vector<const DrawnRow *> &pr = panes[paneNames[p]];
+        if (pr.size() < 2)
+            continue;
+        for (size_t i = 1; i < pr.size(); i++)
+            if (pr[i]->y0 - pr[i - 1]->y0 != ROW_PITCH)
+                found->push_back(Fmt("pitch: %s starts %d below the row above, not 56", Repr(pr[i]->label).c_str(),
+                                     pr[i]->y0 - pr[i - 1]->y0));
+        for (size_t i = 0; i < pr.size(); i++)
+            if (pr[i]->y1 - pr[i]->y0 != ROW_H)
+                found->push_back(
+                    Fmt("pitch: %s is %d tall, not 50", Repr(pr[i]->label).c_str(), pr[i]->y1 - pr[i]->y0));
+    }
+    // At most one current-value plasma in a pane.
+    for (size_t p = 0; p < paneNames.size(); p++) {
+        const std::vector<const DrawnRow *> &pr = panes[paneNames[p]];
+        int current = 0;
+        for (size_t i = 0; i < pr.size(); i++)
+            current += !strcmp(pr[i]->fill, "current");
+        if (current > 1)
+            found->push_back(Fmt("current: %d current-value rows in the %s pane", current, paneNames[p].c_str()));
+    }
+    // Every setting row shows its value.
+    for (int i = 0; i < n; i++)
+        if (rows[i].setting && !rows[i].value[0])
+            found->push_back(Fmt("value: setting %s shows no value", Repr(rows[i].label).c_str()));
+    // Proximity: a pane's last row is further from the help below than rows are apart (5).
+    if (help) {
+        for (size_t p = 0; p < paneNames.size(); p++) {
+            const std::vector<const DrawnRow *> &pr = panes[paneNames[p]];
+            int bottom = pr[0]->y1;
+            for (size_t i = 1; i < pr.size(); i++)
+                if (pr[i]->y1 > bottom)
+                    bottom = pr[i]->y1;
+            int gap = v.y0 - bottom - 1;
+            if (gap >= 0 && gap <= ROW_PITCH - ROW_H - 1)
+                found->push_back(Fmt("proximity: %d px between %s and the %s, rows are 5 apart", gap,
+                                     paneNames[p].c_str(), v.where));
+        }
+    }
+    // Proximity: a column head is closer to the rows below it than to the rows above it.
+    for (int h = 0; h < nh; h++) {
+        int below = -1, above = -1;
+        for (int i = 0; i < n; i++) {
+            const DrawnRow &r = rows[i];
+            if (heads[h].x0 < r.x0 || heads[h].x0 > r.x1)
+                continue;
+            if (r.y0 > heads[h].y1 && (below < 0 || r.y0 - heads[h].y1 - 1 < below))
+                below = r.y0 - heads[h].y1 - 1;
+            if (r.y1 < heads[h].y0 && (above < 0 || heads[h].y0 - r.y1 - 1 < above))
+                above = heads[h].y0 - r.y1 - 1;
+        }
+        if (below >= 0 && above >= 0 && below >= above)
+            found->push_back(Fmt("proximity: head %s is %d px above its rows, %d px below the row above",
+                                 Repr(heads[h].text).c_str(), below, above));
+    }
 }
 
 // ───────────────────────────── The walk ─────────────────────────────
@@ -219,6 +341,20 @@ struct Walker {
         path.assign(1, std::string("open ") + page);
         Menu_Open(page);
         Frame();
+    }
+    // Another page on the same path: what was done before it stays in the again line.
+    void OpenToo(const char *page) {
+        path.push_back(std::string("open ") + page);
+        Menu_Open(page);
+        Frame();
+    }
+    bool RowDrawn(const char *label) const {
+        const DrawnRow *rows;
+        int n = Menu_DrawnRows(&rows);
+        for (int i = 0; i < n; i++)
+            if (!strcmp(rows[i].label, label))
+                return true;
+        return false;
     }
     void Fresh(const char *page) {
         Start();
@@ -544,8 +680,8 @@ struct Walker {
         Expect(active, "setting: Invert camera stays dimmed with the Auto camera");
     }
 
-    // preset: Classic asks first and the safe answer is first; Back to my settings
-    // and Reset settings put the preset row back; a changed setting marks it.
+    // preset: Classic and Reset settings ask first and the safe answer is first; Back to
+    // my settings undoes either; a changed setting marks the preset row.
     void Presets() {
         if (Wanted("Preset")) {
             Fresh("Preset");
@@ -583,7 +719,6 @@ struct Walker {
             std::string p0 = Menu_PresetLabel();
             if (!MoveTo("Fix retail bugs"))
                 return;
-            std::string v0 = Menu_CursorValue();
             Key("right");
             if (!Expect(std::string(Menu_PresetLabel()).find(", changed") != std::string::npos,
                         Fmt("preset: changing Fix retail bugs leaves the preset row at %s", Repr(Menu_PresetLabel()).c_str())))
@@ -592,18 +727,78 @@ struct Walker {
             if (!Expect(Menu_PresetLabel() == p0, Fmt("preset: putting Fix retail bugs back leaves the preset row at %s",
                                                       Repr(Menu_PresetLabel()).c_str())))
                 return;
-            Key("right");
-            if (!MoveTo("Reset settings"))
-                return;
-            Key("enter");
-            if (!Expect(Menu_PresetLabel() == p0, Fmt("preset: Reset settings leaves the preset row at %s, not %s",
-                                                      Repr(Menu_PresetLabel()).c_str(), Repr(p0.c_str()).c_str())))
-                return;
-            if (!MoveTo("Fix retail bugs"))
-                return;
-            Expect(Menu_CursorValue() == v0, Fmt("preset: Reset settings leaves Fix retail bugs at %s, not %s",
-                                                 Repr(Menu_CursorValue()).c_str(), Repr(v0.c_str()).c_str()));
+            ResetSettings();
         }
+    }
+
+    // preset: Reset settings, from Classic and a setting changed: the question starts on
+    // No, Esc and No change nothing, Yes resets, and Back to my settings (the row right
+    // after it) puts the setting and the preset back, then goes.
+    void ResetSettings() {
+        Fresh("Preset");
+        std::string fresh = Menu_PresetLabel();
+        if (!MoveTo("Classic"))
+            return;
+        Key("enter");
+        Key("down");
+        Key("enter");
+        if (!Expect(std::string(Menu_PresetLabel()).find("Classic") != std::string::npos,
+                    Fmt("preset: Yes leaves the preset row at %s", Repr(Menu_PresetLabel()).c_str())))
+            return;
+        OpenToo("Advanced and reset");
+        const char *setting = "Show experimental settings";
+        if (!MoveTo(setting))
+            return;
+        std::string v0 = Menu_CursorValue();
+        Key("right");
+        std::string mine = Menu_CursorValue(), pMine = Menu_PresetLabel();
+        if (!Expect(mine != v0, Fmt("preset: Right does not change %s", setting)))
+            return;
+        if (!MoveTo("Reset settings"))
+            return;
+        std::string here = Where();
+        Key("enter");
+        std::string w = Where();
+        if (!Expect(EndsWith(w, "| confirm"), "preset: Reset settings does not ask first"))
+            return;
+        Expect(EndsWith(w, "| No | confirm"), "preset: the Reset settings question does not start on No");
+        Key("esc");
+        if (!Expect(Where() == here && Menu_PresetLabel() == pMine,
+                    Fmt("preset: Esc on the Reset settings question does not answer No (%s, preset row %s)",
+                        Repr(Where().c_str()).c_str(), Repr(Menu_PresetLabel()).c_str())))
+            return;
+        Key("enter");
+        Key("enter");
+        if (!Expect(Where() == here && Menu_PresetLabel() == pMine,
+                    Fmt("preset: No on the Reset settings question changes the preset row to %s",
+                        Repr(Menu_PresetLabel()).c_str())))
+            return;
+        Key("enter");
+        Key("down");
+        Key("enter");
+        if (!Expect(Menu_PresetLabel() == fresh, Fmt("preset: Reset settings leaves the preset row at %s, not %s",
+                                                    Repr(Menu_PresetLabel()).c_str(), Repr(fresh.c_str()).c_str())))
+            return;
+        Key("down");
+        if (!Expect(!strcmp(Menu_CursorLabel(), "Back to my settings"),
+                    Fmt("preset: after a reset, the row after Reset settings is %s, not Back to my settings",
+                        Repr(Menu_CursorLabel()).c_str())))
+            return;
+        if (!MoveTo(setting))
+            return;
+        if (!Expect(Menu_CursorValue() == v0, Fmt("preset: Reset settings leaves %s at %s, not %s", setting,
+                                                  Repr(Menu_CursorValue()).c_str(), Repr(v0.c_str()).c_str())))
+            return;
+        if (!MoveTo("Back to my settings"))
+            return;
+        Key("enter");
+        Expect(Menu_PresetLabel() == pMine, Fmt("preset: Back to my settings after a reset leaves the preset row at %s, not %s",
+                                                Repr(Menu_PresetLabel()).c_str(), Repr(pMine.c_str()).c_str()));
+        Expect(!RowDrawn("Back to my settings"), "preset: Back to my settings stays after it put the settings back");
+        if (!MoveTo(setting))
+            return;
+        Expect(Menu_CursorValue() == mine, Fmt("preset: Back to my settings after a reset leaves %s at %s, not %s", setting,
+                                               Repr(Menu_CursorValue()).c_str(), Repr(mine.c_str()).c_str()));
     }
 
     // bind: on the first action of each group, in each column.

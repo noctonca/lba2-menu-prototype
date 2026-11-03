@@ -494,14 +494,22 @@ struct DrawnChip {
 };
 static DrawnChip g_chips[32];
 static int g_chipCount;
+// The column heads above the actions, in the 8x8 font.
+static struct {
+    const char *text;
+    int x0, y0, x1, y1;
+} g_heads[4];
+static int g_headCount;
 
 static S32 ChipScale() { return Menu_GetSwitch("chip"); }
 
-// Chip x positions for this view, right-aligned 12 in from the row's right edge.
+// Chip x positions for this view. Wide, the last chip's right frame is the value edge, 24
+// in from the row's right edge, where every value ends (docs/UX.md, the grid); the one
+// column has no value edge and keeps them 12 in, to leave the centred names more room.
 static void ChipLayout(S32 rowX1, const int *cols, int ncols, S32 *x0, S32 *w) {
     S32 s = ChipScale();
     S32 chipW = 60 * s, step = chipW + 8;
-    S32 right = rowX1 - 12;
+    S32 right = rowX1 - (Wide() ? 24 : 12);
     if (ncols == 1) {
         w[0] = 2 * chipW + 8;
         x0[0] = right - w[0] + 1;
@@ -527,6 +535,7 @@ static void DrawActionRow(int action, S32 x0, S32 y0, S32 x1, S32 y1, const int 
     ChipLayout(x1, cols, ncols, cx, cw);
     S32 s = ChipScale(), ch = Ui_KeyChipHeight(s);
     DrawnRow &d = Menu_Record(pane, kActions[action].name, "", FILL_SHADE, x0, y0, x1, y1);
+    d.textLeft = x0 + 16;
     d.textRight = x0 + 16 + Ui_TextWidth(kActions[action].name);
     if (d.textRight + 8 > cx[0])
         d.textRight = x1 + (d.textRight + 8 - cx[0]);  // the name runs into the first chip
@@ -550,6 +559,17 @@ static void DrawActionRow(int action, S32 x0, S32 y0, S32 x1, S32 y1, const int 
             k.conflict = red;
             k.fits = fits;
         }
+        d.valueRight = cx[i] + cw[i] - 1;
+    }
+}
+
+static void DrawHead(S32 x, S32 y, const char *text, S32 s) {
+    Ui_Small(x, y, text, INK_CONFIG_HEAD, s);
+    if (g_headCount < 4) {
+        g_heads[g_headCount].text = text;
+        g_heads[g_headCount].x0 = x, g_heads[g_headCount].y0 = y;
+        g_heads[g_headCount].x1 = x + Ui_SmallWidth(text, s) - 1, g_heads[g_headCount].y1 = y + 8 * s - 1;
+        g_headCount++;
     }
 }
 
@@ -557,10 +577,9 @@ static void DrawHeads(S32 nameX, S32 rowX1, const int *cols, int ncols, S32 y) {
     S32 s = ChipScale();
     S32 cx[3], cw[3];
     ChipLayout(rowX1, cols, ncols, cx, cw);
-    const char *first = sw_devices ? DeviceName(g_device) : "Action";
-    Ui_Small(nameX, y, first, INK_CONFIG_HEAD, s);
+    DrawHead(nameX, y, sw_devices ? DeviceName(g_device) : "Action", s);
     for (int i = 0; i < ncols; i++)
-        Ui_Small(cx[i], y, ColumnHead(cols[i]), INK_CONFIG_HEAD, s);
+        DrawHead(cx[i], y, ColumnHead(cols[i]), s);
 }
 
 static void Legend(const char **keys, const char **words, int *n) {
@@ -584,11 +603,13 @@ static void Legend(const char **keys, const char **words, int *n) {
         keys[*n] = "Esc", words[(*n)++] = "Back";
 }
 
-// Rows for the actions of the group, scrolled to keep the cursor in view.
-static void DrawActions(S32 x0, S32 x1, S32 top, S32 limit, const char *pane) {
+// The column heads from y top, then rows for the actions of the group 22 below, scrolled
+// to keep the cursor in view.
+static void DrawActions(S32 x0, S32 x1, S32 headsTop, S32 limit, const char *pane) {
     int cols[3];
     int ncols = Columns(cols);
     int n = GroupCount(g_group);
+    S32 top = headsTop + 22;
     int visible = (limit - top + ROW_GAP) / ROW_PITCH;
     if (visible > n)
         visible = n;
@@ -598,7 +619,7 @@ static void DrawActions(S32 x0, S32 x1, S32 top, S32 limit, const char *pane) {
         g_scroll = g_row - visible + 1;
     if (!g_focusRight)
         g_scroll = 0;
-    DrawHeads(x0 + 18, x1, cols, ncols, top - 22);
+    DrawHeads(x0 + 16, x1, cols, ncols, headsTop);  // on the label edge, as the names below
     S32 y = top;
     int first = GroupFirst(g_group);
     for (int i = g_scroll; i < g_scroll + visible; i++) {
@@ -611,7 +632,9 @@ static void DrawActions(S32 x0, S32 x1, S32 top, S32 limit, const char *pane) {
 
 static void DrawWideControls() {
     S32 W = (S32)Engine_LogicalW();
-    const S32 side = 32, top = 28, gap = 16;
+    // The groups and the column heads start on the top margin, as Options' panes do; seven
+    // groups from 24 end at 410, clear of the band at 430. The actions start under their heads.
+    const S32 side = 32, top = 24, gap = 16;
     S32 inner = W - 2 * side - gap;
     S32 leftW = inner * 304 / 880;
     S32 lx0 = side, lx1 = side + leftW - 1;
@@ -625,6 +648,7 @@ static void DrawWideControls() {
         Ui_RowBackground(lx0, y, lx1, y + ROW_H, fill);
         Ui_Text(lx0 + 16, y + ROW_H / 2 - 18, kGroups[g].name, INK_WHITE);
         DrawnRow &d = Menu_Record("controls-left", kGroups[g].name, "", fill, lx0, y, lx1, y + ROW_H);
+        d.textLeft = lx0 + 16;
         d.textRight = lx0 + 16 + Ui_TextWidth(kGroups[g].name);
         y += ROW_PITCH;
     }
@@ -660,6 +684,7 @@ static void DrawColumnControls() {
             Ui_RowBackground(x0, y, x1, y + ROW_H, fill);
             Menu_RowLabelCentred(x0, x1, y + ROW_H / 2, label, INK_WHITE);
             DrawnRow &d = Menu_Record("column", label, "", fill, x0, y, x1, y + ROW_H);
+            d.textLeft = (x0 + x1) / 2 - Ui_TextWidth(label) / 2;
             d.textRight = (x0 + x1) / 2 + Ui_TextWidth(label) / 2 + 8;
             y += ROW_PITCH;
         }
@@ -670,12 +695,12 @@ static void DrawColumnControls() {
         return;
     }
     // The actions page: column heads, the rows, and the voice below (it asks for the key).
-    DrawActions(x0, x1, 28, Menu_DialogueTop() - 16, "column");
+    DrawActions(x0, x1, 6, Menu_DialogueTop() - 16, "column");
     Menu_DrawDialogue();
 }
 
 void Controls_Draw() {
-    g_chipCount = 0;
+    g_chipCount = g_headCount = 0;
     if (Wide())
         DrawWideControls();
     else
@@ -693,6 +718,16 @@ int Controls_Chips(ChipView *out, int max) {
         out[i].fill = g_chips[i].fill;
         out[i].fits = g_chips[i].fits;
         out[i].conflict = g_chips[i].conflict;
+        out[i].x0 = g_chips[i].x0, out[i].y0 = g_chips[i].y0, out[i].x1 = g_chips[i].x1, out[i].y1 = g_chips[i].y1;
+    }
+    return n;
+}
+
+int Controls_Heads(HeadView *out, int max) {
+    int n = g_headCount < max ? g_headCount : max;
+    for (int i = 0; i < n; i++) {
+        out[i].text = g_heads[i].text;
+        out[i].x0 = g_heads[i].x0, out[i].y0 = g_heads[i].y0, out[i].x1 = g_heads[i].x1, out[i].y1 = g_heads[i].y1;
     }
     return n;
 }
@@ -763,6 +798,12 @@ void Controls_WriteState(FILE *f) {
         Menu_JsonString(f, k.name);
         fprintf(f, ",\"rect\":[%d,%d,%d,%d],\"fill\":\"%s\",\"conflict\":%s,\"fits\":%s}", k.x0, k.y0, k.x1, k.y1,
                 k.fill, k.conflict ? "true" : "false", k.fits ? "true" : "false");
+    }
+    fprintf(f, "],\"heads\":[");
+    for (int i = 0; i < g_headCount; i++) {
+        fprintf(f, "%s{\"text\":", i ? "," : "");
+        Menu_JsonString(f, g_heads[i].text);
+        fprintf(f, ",\"rect\":[%d,%d,%d,%d]}", g_heads[i].x0, g_heads[i].y0, g_heads[i].x1, g_heads[i].y1);
     }
     fprintf(f, "],\"bindings\":{");
     for (int i = 0; i < ACTION_COUNT; i++) {

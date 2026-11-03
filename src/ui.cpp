@@ -31,14 +31,18 @@ void Ui_RowBackground(S32 x0, S32 y0, S32 x1, S32 y1, RowFill fill) {
     Cadre_Frame(x0, y0, x1, y1);
 }
 
-void Ui_Panel(S32 x0, S32 y0, S32 x1, S32 y1) {
+void Ui_Panel(S32 x0, S32 y0, S32 x1, S32 y1, S32 level) {
     Cadre_BackupCorners(x0, y0, x1, y1);
-    Cadre_Shade(x0, y0, x1, y1, PANEL_SHADE_LVL);
+    Cadre_Shade(x0, y0, x1, y1, level);
     Cadre_Frame(x0, y0, x1, y1);
 }
 
 S32 Ui_TextWidth(const char *s) {
     return SizeFont((char *)s);
+}
+
+S32 Ui_TextInkWidth(const char *s) {
+    return s[0] ? SizeFont((char *)s) - InterLeave : 0;
 }
 
 void Ui_Text(S32 x, S32 y, const char *s, U8 colour) {
@@ -72,14 +76,14 @@ void Ui_ChangeMarks(S32 leftX, S32 rightX, S32 yc) {
 
 void Ui_Steps(S32 xRight, S32 yc, S32 count, S32 lit, S32 *outLeft) {
     const S32 w = 22, h = 20, gap = 6;
-    S32 x = xRight - count * w - (count - 1) * gap;
+    S32 x = xRight + 1 - count * w - (count - 1) * gap;
     if (outLeft)
         *outLeft = x;
     for (S32 i = 0; i < count; i++) {
         S32 x0 = x + i * (w + gap), y0 = yc - h / 2;
         S32 x1 = x0 + w - 1, y1 = y0 + h - 1;
-        if (i < lit)
-            Box(x0 + 1, y0 + 1, x1 - 1, y1 - 1, FILL_SELECTED);
+        if (i < lit)  // GAMEMENU.CPP: the slider plasma, as the 1997 slider fill
+            Cadre_FireBar(x0 + 1, y0 + 1, x1 - 1, y1 - 1, PLASMA_SLIDER);
         else
             Cadre_Shade(x0 + 1, y0 + 1, x1 - 1, y1 - 1, 4);
         Line(x0, y0, x1, y0, COUL_UP_BLUE);
@@ -89,14 +93,22 @@ void Ui_Steps(S32 xRight, S32 yc, S32 count, S32 lit, S32 *outLeft) {
     }
 }
 
-void Ui_MiniSlider(S32 x0, S32 x1, S32 yc, S32 value, S32 max) {
+void Ui_MiniSlider(S32 x0, S32 x1, S32 yc, S32 value, S32 max, bool dim) {
     const S32 h = 20;
     S32 y0 = yc - h / 2, y1 = y0 + h - 1;
     S32 fill = x0 + 1 + (x1 - x0 - 2) * value / (max ? max : 1);
-    if (fill > x0 + 1)
-        Cadre_FireBar(x0 + 1, y0 + 1, fill, y1 - 1, PLASMA_SLIDER);
-    if (fill < x1 - 1)
-        Box(fill + 1, y0 + 1, x1 - 1, y1 - 1, FILL_SELECTED);
+    if (fill > x0 + 1) {
+        if (dim)
+            Box(x0 + 1, y0 + 1, fill, y1 - 1, INK_DISABLED);
+        else
+            Cadre_FireBar(x0 + 1, y0 + 1, fill, y1 - 1, PLASMA_SLIDER);
+    }
+    if (fill < x1 - 1) {
+        if (dim)  // the empty track dark, as an unlit step
+            Cadre_Shade(fill + 1, y0 + 1, x1 - 1, y1 - 1, 4);
+        else
+            Box(fill + 1, y0 + 1, x1 - 1, y1 - 1, FILL_SELECTED);
+    }
     Line(x0, y0, x1, y0, COUL_UP_BLUE);
     Line(x0, y0, x0, y1, COUL_UP_BLUE);
     Line(x1, y0 + 1, x1, y1, COUL_DOWN_BLUE);
@@ -219,6 +231,12 @@ static S32 Wrap(const char *text, S32 width, const char **starts, S32 *lens, S32
         p = lineStart + len;
     }
     return lines;
+}
+
+S32 Voice_Lines(const char *text, S32 width) {
+    const char *starts[8];
+    S32 lens[8];
+    return Wrap(text, width, starts, lens, 8);
 }
 
 S32 Voice_Draw(const Voice &v, S32 x0, S32 y0, S32 width, S32 maxLines, S32 *needed) {

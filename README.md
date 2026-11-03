@@ -89,13 +89,17 @@ Commands, one per line: `key <up|down|left|right|enter|esc|tab|del|f1..f11> [cou
 `set <setting> <value>`, `open <page name>`, `quit`.
 
 - `state` prints one JSON line: layout, sizes, page, focus, cursor, every row
-  drawn (label, value, fill, rectangle, dimmed, changed, change marks, where its
-  text ends), the help text with how many letters are typed and whether it was
-  cut off, the legend, the switches and every setting.
+  drawn (label, value, fill, rectangle, dimmed, changed, change marks, whether
+  it is a setting, where its text starts and ends: `text_left`, `text_right`,
+  and the last pixel column of what it shows on the right, a value, a slider,
+  steps or its last key chip: `value_right`, 0 for nothing), the help text
+  with how many letters are typed and whether it was cut off, the legend, the
+  switches and every setting.
 - On the Controls page `state` adds `controls`: the device, group, action and
   column under the cursor, whether it waits for a key, every chip drawn
-  (name, rectangle, fill, conflict, whether the name fits), every binding and
-  every conflict.
+  (name, rectangle, fill, conflict, whether the name fits), the column heads
+  above the actions (`heads`: text and rectangle), every binding and every
+  conflict.
 - `shot` writes exactly what is in the frame buffer through the current palette.
 - Every key and every change is a trace line (`trace t=<ms> f=<frame> ...`) on
   stderr and in `--trace FILE`.
@@ -111,21 +115,34 @@ lists what does not fit: help cut off, rows running into the help or off the
 screen, labels running into their values or their key chips, key names cut in
 their chips. On every screen it also checks that exactly one row or chip has
 the cursor, that a red key chip under the cursor is explained in the help, and
-that a clash shows on both actions.
+that a clash shows on both actions. It also checks the rules of
+[docs/UX.md](docs/UX.md) a screen can show (each problem starts with the rule's
+name): `edge:` the rows of a pane share their left and right edges and, wide,
+every label starts 16 in, the Controls page's first column head too; `margin:`
+nothing on a wide page is drawn in its margins (32 at the sides, 24 at the top
+and bottom); `trailing:` wide, what a row shows on the right ends 24 in from its
+right edge; `pitch:` rows in a pane are 56 apart and 50 tall; `current:` at most
+one current-value row in a pane; `value:` every setting row shows its value;
+`proximity:` a pane's last row is further from the help below than rows are from
+each other, and a column head is nearer its rows than the row above it.
 
 Then it walks the menu by its keys and checks what they do. Each problem a
 walk finds starts with the walk's name:
 
 - `esc:` from every row of every page, opened from the hub with Enter, Esc
-  puts the cursor back where it was (the Controls page, its groups, and the
-  wait for a key too).
+  puts the cursor back where it was (the Controls page, its groups, the
+  questions, and the wait for a key too).
 - `reach:` Enter opens every page from the hub.
 - `setting:` Left or Right changes the value shown and the other key puts it
   back; a dimmed row ignores Left, Right and Enter; Invert camera is dimmed
   with the Classic camera and wakes with Auto.
 - `preset:` Classic asks first, starting on No, and Esc answers No; Back to my
-  settings and Reset settings put the preset row back; changing Fix retail
-  bugs marks the preset changed.
+  settings puts the preset row back; changing Fix retail bugs marks the preset
+  changed. With Classic chosen and Show experimental settings changed, Reset
+  settings asks first, starting on No; Esc and No change nothing; Yes puts the
+  setting and the preset back as a fresh install has them, and a Back to my
+  settings row comes right after Reset settings; Enter on it puts back the
+  setting and Classic, and the row goes.
 - `bind:` on the first action of each group, in each column: Enter waits and
   the voice asks for the key; Esc cancels; the other device's input is ignored;
   a key another action has goes in, both chips go red and the help names the

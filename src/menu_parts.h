@@ -13,7 +13,11 @@ struct DrawnRow {
     const char *fill;
     int x0, y0, x1, y1;
     bool dim, changed, marks;
+    bool setting;   // a setting row: it shows a value
+    int textLeft;   // where the label starts
     int textRight;  // where the label (or value) ends; > x1 means it spills
+    int valueRight; // the last pixel column of what the row shows on the right (a value, a
+                    // slider, steps, key chips); 0 when it shows nothing there
 };
 DrawnRow &Menu_Record(const char *pane, const char *label, const char *value, RowFill fill, int x0, int y0, int x1,
                       int y1);
@@ -45,6 +49,7 @@ struct MenuHelp {
 };
 void Menu_Help(MenuHelp *out);
 const char *Menu_PageName();  // as `state` names it
+const char *Menu_Layout();    // as `state` names it: wide, column, first-launch, closed
 // Where the player is, as one string ("page | cursor row | confirm"), and how deep:
 // each screen or pane Enter opens adds one, so Esc should take it back by one.
 int Menu_Where(char *buf, size_t n);

@@ -86,9 +86,12 @@ static const Setting kSettings[S_COUNT] = {
 
 static int g_val[S_COUNT];
 static int g_preset;  // 0 Modern, 1 Classic
-static int g_before[S_COUNT];
+static int g_before[S_COUNT];  // before a preset was chosen: the preset page's Back to my settings
 static int g_beforePreset;
 static bool g_haveBefore;
+static int g_beforeReset[S_COUNT];  // before Reset settings: the Advanced page's Back to my settings
+static int g_beforeResetPreset;
+static bool g_haveBeforeReset;
 
 static const char *kPresetNames[2] = {"Modern", "Classic"};
 
@@ -129,6 +132,31 @@ static bool BackDiffers() {
     return false;
 }
 
+// Reset settings puts every setting and the preset back; its undo covers them all.
+static bool ResetBackDiffers() {
+    if (!g_haveBeforeReset)
+        return false;
+    if (g_beforeResetPreset != g_preset)
+        return true;
+    return memcmp(g_beforeReset, g_val, sizeof g_val) != 0;
+}
+
+static void ResetSettings() {
+    bool fresh = g_preset == 0;
+    for (int s = 0; s < S_COUNT; s++)
+        fresh = fresh && g_val[s] == kSettings[s].fresh;
+    if (!fresh) {  // a second reset with nothing changed keeps the first one's undo
+        memcpy(g_beforeReset, g_val, sizeof g_val);
+        g_beforeResetPreset = g_preset;
+        g_haveBeforeReset = true;
+    }
+    for (int s = 0; s < S_COUNT; s++)
+        g_val[s] = kSettings[s].fresh;
+    g_preset = 0;
+    g_haveBefore = false;
+    Trace("reset settings");
+}
+
 // ───────────────────────────── Pages as data ─────────────────────────────
 
 enum RowType { R_RETURN, R_CATEGORY, R_PRESET_ROW, R_SETTING, R_PRESET_CHOICE, R_BACK_TO_MINE, R_ACTION };
@@ -139,6 +167,9 @@ struct Row {
     int arg;  // setting, page or preset
     const char *help;
 };
+
+enum { A_KEYS, A_RESET };  // R_ACTION: opens Keys and buttons, or asks to reset
+enum { BACK_PRESET, BACK_RESET };  // R_BACK_TO_MINE: undoes a preset, or a reset
 
 enum { P_HUB, P_PRESET, P_LANG, P_DISPLAY, P_SOUND, P_CONTROLS, P_ADVANCED, P_GAMEPLAY, P_FIRST, P_ORIGINAL, P_COUNT };
 
@@ -189,7 +220,7 @@ static void BuildPages() {
     AddRow(pr, R_PRESET_CHOICE, "Modern", 0, "The original, with its known bugs fixed. What a fresh install plays.");
     AddRow(pr, R_PRESET_CHOICE, "Classic", 1, "The rules of the 1997 CD release, bugs and all. Nothing else changes.");
     if (BackDiffers())
-        AddRow(pr, R_BACK_TO_MINE, "Back to my settings", 0, "Puts back the settings you had before you chose a preset.");
+        AddRow(pr, R_BACK_TO_MINE, "Back to my settings", BACK_PRESET, "Puts back the settings you had before you chose a preset.");
 
     Page &lang = g_pages[P_LANG];
     lang.name = "Language and interface";
@@ -219,7 +250,7 @@ static void BuildPages() {
     Page &ctl = g_pages[P_CONTROLS];
     ctl.name = "Controls and camera";
     AddRow(ctl, R_RETURN, "Return to previous menu", 0, "");
-    AddRow(ctl, R_ACTION, "Keys and buttons", 0, "Change which key or button does what.");
+    AddRow(ctl, R_ACTION, "Keys and buttons", A_KEYS, "Change which key or button does what.");
     AddSetting(ctl, S_CAM_OUT);
     AddSetting(ctl, S_CAM_IN);
     AddSetting(ctl, S_INVERT);
@@ -230,7 +261,9 @@ static void BuildPages() {
     AddRow(adv, R_RETURN, "Return to previous menu", 0, "");
     AddSetting(adv, S_FIXBUGS);
     AddSetting(adv, S_SHOWEXP);
-    AddRow(adv, R_ACTION, "Reset settings", 1, "Puts every setting back as a fresh install has it.");
+    AddRow(adv, R_ACTION, "Reset settings", A_RESET, "Puts every setting back as a fresh install has it.");
+    if (ResetBackDiffers())
+        AddRow(adv, R_BACK_TO_MINE, "Back to my settings", BACK_RESET, "Puts back what you had before the reset.");
 
     Page &gp = g_pages[P_GAMEPLAY];
     gp.name = "Gameplay";
@@ -294,8 +327,27 @@ static int g_leftCursor;   // wide: cursor in the left pane
 static Focus g_focus;
 static int g_scroll;
 static bool g_first;       // first-launch screen
-static bool g_confirm;     // the Classic question is up
+static bool g_confirm;     // a question is up: Classic, or Reset settings
 static int g_confirmCursor;
+enum Question { Q_CLASSIC, Q_RESET };
+static Question g_question;
+
+// What a question says in the voice, and its answers: the safe one first.
+struct QuestionText {
+    const char *voice;
+    const char *answers[2];
+};
+static const QuestionText kQuestions[2] = {
+    {"Play by the 1997 rules? The screen, sound and keys stay as they are.", {"No, keep Modern", "Yes, play Classic"}},
+    {"Put every setting back as a fresh install has it?", {"No, keep my settings", "Yes, reset settings"}},
+};
+
+static void Ask(Question q) {
+    g_confirm = true;
+    g_question = q;
+    g_confirmCursor = 0;  // the safe answer first
+    Trace("ask %s", q == Q_RESET ? "reset" : "classic");
+}
 static bool g_closed;      // left the Options (shown as a note)
 static Voice g_voice;
 static bool g_pageEntered; // typing mode 1: type once on entering a page
@@ -342,11 +394,29 @@ static const Row *CursorRow() {
     return &g_pages[RightPage()].rows[RightFirst() + g_cursor];
 }
 
+static void LegendFor(const Row *r, const char **keys, const char **words, int *n);
+static S32 LegendWidth(const char **keys, const char **words, int n, S32 scale);
+
+// Whether a line for the row under the cursor fits the voice it will be said in:
+// the band beside the legend, the help line, or the 640x480 dialogue window.
+static bool VoiceFits(const char *text, const Row *r) {
+    S32 W = (S32)Engine_LogicalW();
+    if (!Wide())
+        return Voice_Lines(text, W - 49) <= 3;
+    if (!sw_band)
+        return Voice_Lines(text, W - 64) <= 1;
+    const char *keys[4], *words[4];
+    int nk;
+    LegendFor(r, keys, words, &nk);
+    S32 voiceW = W - 64 - LegendWidth(keys, words, nk, sw_chip) - 48;  // as Menu_DrawFoot
+    return Voice_Lines(text, voiceW < 620 ? voiceW : 620) <= 2;
+}
+
 static const char *HelpFor(const Row *r) {
     static char buf[256];
     if (!r)
         return "";
-    if (r->type == R_BACK_TO_MINE && BackDiffers()) {
+    if (r->type == R_BACK_TO_MINE && r->arg == BACK_PRESET && BackDiffers()) {
         char list[160] = "";
         for (int s = 0; s < S_COUNT; s++) {
             if (kSettings[s].presetSets && g_before[s] != g_val[s]) {
@@ -357,6 +427,38 @@ static const char *HelpFor(const Row *r) {
         }
         snprintf(buf, sizeof buf, "Puts back what you had: %s.", list);
         return buf;
+    }
+    if (r->type == R_BACK_TO_MINE && r->arg == BACK_RESET && ResetBackDiffers()) {
+        // Every setting that differs, and the preset; as many named as the voice
+        // holds, the rest counted.
+        const char *names[S_COUNT + 1];
+        char preset[48];
+        int n = 0;
+        if (g_beforeResetPreset != g_preset) {
+            snprintf(preset, sizeof preset, "%s %c%s", kPresetNames[g_beforeResetPreset], kWords[sw_word][0] + 32,
+                     kWords[sw_word] + 1);  // "Classic settings"
+            names[n++] = preset;
+        }
+        for (int s = 0; s < S_COUNT; s++)
+            if (g_beforeReset[s] != g_val[s])
+                names[n++] = kSettings[s].label;
+        for (int shown = n; shown > 0; shown--) {
+            char list[200] = "";
+            for (int i = 0; i < shown; i++) {
+                if (i)
+                    strncat(list, i + 1 == n ? " and " : ", ", sizeof list - strlen(list) - 1);
+                strncat(list, names[i], sizeof list - strlen(list) - 1);
+            }
+            if (shown < n) {
+                char more[24];
+                snprintf(more, sizeof more, " and %d more", n - shown);
+                strncat(list, more, sizeof list - strlen(list) - 1);
+            }
+            snprintf(buf, sizeof buf, "Puts back what you had: %s.", list);
+            if (VoiceFits(buf, r))
+                return buf;
+        }
+        return r->help;
     }
     return r->help ? r->help : "";
 }
@@ -373,8 +475,7 @@ void Menu_PageEntered() { g_pageEntered = true; }
 
 static void UpdateVoice() {
     const Row *r = CursorRow();
-    const char *text = g_confirm ? "Play by the 1997 rules? The screen, sound and keys stay as they are."
-                                 : HelpFor(r);
+    const char *text = g_confirm ? kQuestions[g_question].voice : HelpFor(r);
     Menu_Say(text);
 }
 
@@ -477,34 +578,32 @@ static void Activate(const Row &r) {
             break;
         }
         if (r.arg == 1 && g_preset != 1) {
-            g_confirm = true;
-            g_confirmCursor = 0;  // the safe answer first
-            Trace("ask classic");
+            Ask(Q_CLASSIC);
         } else {
             ApplyPreset(r.arg);
             BuildPages();
         }
         break;
     case R_BACK_TO_MINE:
-        memcpy(g_val, g_before, sizeof g_val);
-        g_preset = g_beforePreset;
-        g_haveBefore = false;
+        if (r.arg == BACK_RESET) {
+            memcpy(g_val, g_beforeReset, sizeof g_val);
+            g_preset = g_beforeResetPreset;
+            g_haveBeforeReset = false;
+        } else {
+            memcpy(g_val, g_before, sizeof g_val);
+            g_preset = g_beforePreset;
+            g_haveBefore = false;
+        }
         Trace("back to my settings");
         BuildPages();
         if (!Wide() && g_cursor >= g_pages[TopPage()].count)
             g_cursor = g_pages[TopPage()].count - 1;
         break;
     case R_ACTION:
-        if (r.arg == 1) {
-            for (int s = 0; s < S_COUNT; s++)
-                g_val[s] = kSettings[s].fresh;
-            g_preset = 0;
-            g_haveBefore = false;
-            BuildPages();
-            Trace("reset settings");
-        } else {
+        if (r.arg == A_RESET)
+            Ask(Q_RESET);
+        else
             Controls_Open();
-        }
         break;
     }
 }
@@ -558,7 +657,10 @@ void Menu_Update() {
             g_confirm = false;
             Trace("answer %s", g_confirmCursor ? "yes" : "no");
             if (g_confirmCursor) {
-                ApplyPreset(1);
+                if (g_question == Q_RESET)
+                    ResetSettings();
+                else
+                    ApplyPreset(1);
                 BuildPages();
             }
         }
@@ -632,8 +734,9 @@ DrawnRow &Menu_Record(const char *pane, const char *label, const char *value, Ro
     d.y0 = y0;
     d.x1 = x1;
     d.y1 = y1;
-    d.dim = d.changed = d.marks = false;
-    d.textRight = x0;
+    d.dim = d.changed = d.marks = d.setting = false;
+    d.textLeft = d.textRight = x0;
+    d.valueRight = 0;
     return d;
 }
 
@@ -680,6 +783,8 @@ static void DrawColumnRow(const Row &r, S32 x0, S32 y0, S32 x1, S32 y1, bool cur
     DrawnRow &d = Menu_Record("column", text, r.type == R_SETTING ? ValueText(r.arg, val, sizeof val) : "", fill, x0, y0,
                          x1, y1);
     d.dim = !active;
+    d.setting = r.type == R_SETTING;
+    d.textLeft = (x0 + x1) / 2 - Ui_TextWidth(text) / 2;
     d.textRight = (x0 + x1) / 2 + Ui_TextWidth(text) / 2 + 8;  // 8: the original's side padding
 }
 
@@ -702,6 +807,8 @@ static void DrawWideRow(const char *pane, const Row &r, S32 x0, S32 y0, S32 x1, 
 
     DrawnRow &d = Menu_Record(pane, label, "", fill, x0, y0, x1, y1);
     d.dim = !active;
+    d.setting = r.type == R_SETTING;
+    d.textLeft = x0 + 16;
     d.textRight = x0 + 16 + Ui_TextWidth(label);
 
     const S32 valueRight = x1 - 24;
@@ -716,24 +823,26 @@ static void DrawWideRow(const char *pane, const Row &r, S32 x0, S32 y0, S32 x1, 
             left = valueRight - 128;
             if (d.textRight + 8 > left - 17)
                 d.textRight = x1 + (d.textRight + 8 - (left - 17));
-            Ui_MiniSlider(left, valueRight, yc, g_val[r.arg], st.max);
+            Ui_MiniSlider(left, valueRight, yc, g_val[r.arg], st.max, !active);
             snprintf(d.value, sizeof d.value, "%d", g_val[r.arg]);
         } else {
             ValueText(r.arg, val, sizeof val);
-            left = valueRight - Ui_TextWidth(val);
+            left = valueRight + 1 - Ui_TextInkWidth(val);  // the ink ends on the value edge
             if (d.textRight + 8 > left - 17)
                 d.textRight = x1 + (d.textRight + 8 - (left - 17));  // label runs into the value
             Ui_Text(left, yc - 18, val, !active ? INK_DISABLED : changed ? INK_COUNT : INK_WHITE);
             snprintf(d.value, sizeof d.value, "%s", val);
         }
         d.changed = changed;
+        d.valueRight = valueRight;
         if (fill == FILL_CURSOR && active) {
             Ui_ChangeMarks(left - 17, valueRight + 17, yc);  // in the padding: the value never moves
             d.marks = true;
         }
     } else if (r.type == R_PRESET_CHOICE && r.arg == g_preset && PresetChanged()) {
-        Ui_Text(valueRight - Ui_TextWidth("Changed"), yc - 18, "Changed", INK_COUNT);
+        Ui_Text(valueRight + 1 - Ui_TextInkWidth("Changed"), yc - 18, "Changed", INK_COUNT);
         snprintf(d.value, sizeof d.value, "Changed");
+        d.valueRight = valueRight;
     }
 }
 
@@ -767,7 +876,7 @@ static void LegendFor(const Row *r, const char **keys, const char **words, int *
             Kind k = kSettings[r->arg].kind;
             keys[*n] = "\x11\x10";
             words[(*n)++] = (k == K_SLIDER || k == K_STEPS) ? "Adjust" : "Change";
-        } else if (r->type == R_CATEGORY || r->type == R_PRESET_ROW) {
+        } else if (r->type == R_CATEGORY || r->type == R_PRESET_ROW || (r->type == R_ACTION && r->arg == A_KEYS)) {
             keys[*n] = "Enter"; words[(*n)++] = "Open";
         } else if (r->type != R_SETTING) {
             keys[*n] = "Enter"; words[(*n)++] = "Choose";
@@ -801,13 +910,14 @@ static void DrawConfirm() {
     // A small panel in the middle: the question is in the voice below, the rows here.
     S32 w = 360, x0 = (S32)Engine_LogicalW() / 2 - w / 2, x1 = x0 + w;
     S32 y0 = Wide() ? 150 : 120;
-    const char *answers[2] = {"No, keep Modern", "Yes, play Classic"};
+    const char *const *answers = kQuestions[g_question].answers;
     for (int i = 0; i < 2; i++) {
         S32 ry0 = y0 + i * ROW_PITCH;
         RowFill fill = i == g_confirmCursor ? FILL_CURSOR : FILL_SHADE;
         Ui_RowBackground(x0, ry0, x1, ry0 + ROW_H, fill);
         Menu_RowLabelCentred(x0, x1, ry0 + ROW_H / 2, answers[i], INK_WHITE);
-        Menu_Record("confirm", answers[i], "", fill, x0, ry0, x1, ry0 + ROW_H);
+        Menu_Record("confirm", answers[i], "", fill, x0, ry0, x1, ry0 + ROW_H).textLeft =
+            (x0 + x1) / 2 - Ui_TextWidth(answers[i]) / 2;
     }
 }
 
@@ -817,7 +927,7 @@ void Menu_DrawDialogue() {
     // MESSAGE.CPP NormalWinDial: 8 in from the sides, 137 tall, 8 off the bottom.
     S32 W = (S32)Engine_LogicalW(), H = (S32)Engine_LogicalH();
     S32 x0 = 8, y0 = H - 1 - 137, x1 = W - 1 - 8, y1 = H - 1 - 8;
-    Ui_Panel(x0, y0, x1, y1);
+    Ui_Panel(x0, y0, x1, y1, PANEL_SHADE_LVL);
     g_voiceLines = Voice_Draw(g_voice, x0 + 16, y0 + 12, x1 - x0 - 32, 3, &g_voiceNeeded);
     g_voiceMax = 3;
     g_helpBox.shown = true;
@@ -837,7 +947,7 @@ static void DrawColumn() {
         ColorFont(INK_BLACK);
         Font(tx + 4, 64 + 4, title);  // the title shadow, +4,+4
         Ui_Text(tx, 64, title, INK_WHITE);
-        Menu_Record("title", title, "", FILL_SHADE, tx, 64, tx + Ui_TextWidth(title), 64 + 38);
+        Menu_Record("title", title, "", FILL_SHADE, tx, 64, tx + Ui_TextWidth(title), 64 + 38).textLeft = tx;
     }
 
     if (g_confirm) {
@@ -945,7 +1055,7 @@ void Menu_DrawFoot(const char **keys, const char **words, int nk) {
     S32 helpLineY = H - 168, promptY = H - 68;
     S32 legendW = LegendWidth(keys, words, nk, chip);
     if (sw_band) {
-        Ui_Panel(side, bandY0, W - side - 1, bandY1);
+        Ui_Panel(side, bandY0, W - side - 1, bandY1, BAND_SHADE_LVL);
         S32 voiceW = (W - 2 * side) - legendW - 48;
         if (voiceW > 620)
             voiceW = 620;
@@ -983,7 +1093,7 @@ static void DrawOverlay() {
     S32 n = (S32)(sizeof lines / sizeof lines[0]);
     S32 w = 8 * 50 + 16, h = n * 12 + 12;
     S32 x0 = (S32)Engine_LogicalW() - w - 8, y0 = 8;
-    Ui_Panel(x0, y0, x0 + w, y0 + h);
+    Ui_Panel(x0, y0, x0 + w, y0 + h, PANEL_SHADE_LVL);
     for (S32 i = 0; i < n; i++)
         Ui_Small(x0 + 8, y0 + 8 + i * 12, lines[i], i ? INK_CONFIG_MENU : INK_CONFIG_HEAD, 1);
 }
@@ -1128,6 +1238,7 @@ void Menu_Reset() {
     g_confirmCursor = 0;
     g_closed = false;
     g_haveBefore = false;
+    g_haveBeforeReset = false;
     g_scroll = 0;
     g_toast[0] = 0;
     g_toastUntil = 0;
@@ -1152,11 +1263,13 @@ void Menu_Help(MenuHelp *h) {
     h->text = g_voice.text;
 }
 
+const char *Menu_Layout() { return g_closed ? "closed" : g_first ? "first-launch" : Wide() ? "wide" : "column"; }
+
 const char *Menu_PageName() {
     return Controls_Active() ? "Keys and buttons" : g_first ? "First launch" : g_pages[Wide() ? RightPage() : TopPage()].name;
 }
 
-// One for the hub; each page pushed, the wide right pane and the Classic question add one.
+// One for the hub; each page pushed, the wide right pane and a question add one.
 static int Depth() {
     if (g_first)
         return 1;
@@ -1229,7 +1342,7 @@ void Menu_WriteState(FILE *f) {
             (unsigned)Engine_TimeMs(), (unsigned)Engine_PhysW(), (unsigned)Engine_PhysH(),
             (unsigned)Engine_LogicalW(), (unsigned)Engine_LogicalH(),
             (unsigned)Engine_Scale(Engine_PhysW(), Engine_PhysH()));
-    Menu_JsonString(f, g_closed ? "closed" : g_first ? "first-launch" : Wide() ? "wide" : "column");
+    Menu_JsonString(f, Menu_Layout());
     fprintf(f, ",\"page\":");
     Menu_JsonString(f, Menu_PageName());
     fprintf(f, ",\"focus\":\"%s\",\"cursor\":%d,\"left_cursor\":%d,\"scroll\":%d,\"confirm\":%s",
@@ -1249,9 +1362,9 @@ void Menu_WriteState(FILE *f) {
         Menu_JsonString(f, d.label);
         fprintf(f, ",\"value\":");
         Menu_JsonString(f, d.value);
-        fprintf(f, ",\"fill\":\"%s\",\"rect\":[%d,%d,%d,%d],\"dim\":%s,\"changed\":%s,\"marks\":%s,\"text_right\":%d}", d.fill, d.x0,
-                d.y0, d.x1, d.y1, d.dim ? "true" : "false", d.changed ? "true" : "false", d.marks ? "true" : "false",
-                d.textRight);
+        fprintf(f, ",\"fill\":\"%s\",\"rect\":[%d,%d,%d,%d],\"dim\":%s,\"changed\":%s,\"marks\":%s,\"setting\":%s,\"text_left\":%d,\"text_right\":%d,\"value_right\":%d}",
+                d.fill, d.x0, d.y0, d.x1, d.y1, d.dim ? "true" : "false", d.changed ? "true" : "false",
+                d.marks ? "true" : "false", d.setting ? "true" : "false", d.textLeft, d.textRight, d.valueRight);
     }
     fprintf(f, "]");
 
