@@ -6,6 +6,7 @@
 
 #include "controls.h"
 #include "engine.h"
+#include "experimental.h"
 #include "menu.h"
 #include "menu_parts.h"
 #include "trace.h"
@@ -36,6 +37,9 @@ static const char *kPages[] = {
 
 // Actions per group on the Controls page (controls.cpp kActions).
 static const int kGroupSizes[] = {5, 6, 4, 7, 4, 4, 6};
+// Rows per group on the Experimental settings page (experimental.cpp kTuning).
+static const int kExpGroups[] = {22, 9, 7, 3};
+static const char *kExpPage = "Experimental settings";
 
 struct Switch {
     std::string name;
@@ -154,13 +158,17 @@ static void Check(std::vector<std::string> *found) {
             found->push_back(Fmt("key name cut in its chip: %s %s %s", Repr(chips[i].action).c_str(), chips[i].column,
                                  Repr(chips[i].name).c_str()));
 
-    // One cursor: exactly one row or chip wears it.
-    if (n || nc) {
+    ExpTable et;
+    bool table = Exp_Table(&et);
+    // One cursor: exactly one row, chip or table line wears it.
+    if (n || nc || table) {
         int cursors = 0;
         for (int i = 0; i < n; i++)
             cursors += !strcmp(rows[i].fill, "cursor");
         for (int i = 0; i < nc; i++)
             cursors += !strcmp(chips[i].fill, "cursor") || !strcmp(chips[i].fill, "waiting");
+        for (int i = 0; table && i < et.count; i++)
+            cursors += et.lines[i].cursor;
         if (cursors != 1)
             found->push_back(Fmt("%d cursors on the screen", cursors));
     }
@@ -180,6 +188,49 @@ static void Check(std::vector<std::string> *found) {
             if (!back)
                 found->push_back(Fmt("clash one way: %s %s is also %s, which shows no clash", Repr(cv[i].action).c_str(),
                                      cv[i].column, Repr(cv[i].other).c_str()));
+        }
+    }
+    // The Experimental settings table: its panel clear of the canvas edge and the help, its
+    // lines on one strip, the names on the label edge, the values on one trailing edge clear
+    // of the names, 10 apart at 1x, inside the panel above the status line, which fits; the
+    // cursor's group head shown when the cursor is on the group's first row.
+    if (table) {
+        S32 s = et.scale;
+        if (et.y1 >= H || et.x1 >= W || et.x0 < 0)
+            found->push_back(Fmt("row off the canvas: 'table' [%d, %d, %d, %d]", et.x0, et.y0, et.x1, et.y1));
+        if (help && et.y1 >= v.y0 && et.y0 <= v.y1 && et.x1 >= v.x0 && et.x0 <= v.x1)
+            found->push_back(Fmt("row overlaps the %s by %d px: 'table'", v.where, et.y1 - v.y0 + 1));
+        if (help && v.y0 - et.y1 - 1 >= 0 && v.y0 - et.y1 - 1 <= ROW_PITCH - ROW_H - 1)
+            found->push_back(Fmt("proximity: %d px between table and the %s, rows are 5 apart", v.y0 - et.y1 - 1, v.where));
+        if (et.statusRight > et.x1 - 24)
+            found->push_back(Fmt("table: the status line ends at x %d, past %d: %s", et.statusRight, et.x1 - 24,
+                                 Repr(et.status).c_str()));
+        for (int i = 0; i < et.count; i++) {
+            const ExpLine &l = et.lines[i];
+            if (l.x0 != et.x0 + 8 || l.x1 != et.x1 - 8)
+                found->push_back(Fmt("edge: %s at x %d..%d, the table's lines at %d..%d", Repr(l.text).c_str(), l.x0, l.x1,
+                                     et.x0 + 8, et.x1 - 8));
+            if (l.textLeft != et.x0 + 16)
+                found->push_back(Fmt("edge: %s starts at x %d, not %d", Repr(l.text).c_str(), l.textLeft, et.x0 + 16));
+            if (l.y0 <= et.y0 || l.y1 >= et.statusTop)
+                found->push_back(Fmt("table: %s [%d..%d] outside the panel's lines (%d..%d)", Repr(l.text).c_str(), l.y0,
+                                     l.y1, et.y0 + 1, et.statusTop - 1));
+            if (l.y1 - l.y0 != 10 * s - 1)
+                found->push_back(Fmt("pitch: %s is %d tall, not %d", Repr(l.text).c_str(), l.y1 - l.y0 + 1, 10 * s));
+            if (i && l.y0 - et.lines[i - 1].y0 != 10 * s)
+                found->push_back(Fmt("pitch: %s starts %d below the line above, not %d", Repr(l.text).c_str(),
+                                     l.y0 - et.lines[i - 1].y0, 10 * s));
+            if (l.head)
+                continue;
+            int want = l.cursor ? et.x1 - 24 : et.valueEdge;
+            if (l.valueRight != want)
+                found->push_back(Fmt("trailing: %s ends at x %d, not %d", Repr(l.text).c_str(), l.valueRight, want));
+            if (l.textRight + 8 * s >= l.valueLeft)
+                found->push_back(Fmt("text spills %d px: %s %s", l.textRight + 8 * s - l.valueLeft + 1, Repr(l.text).c_str(),
+                                     Repr(l.value).c_str()));
+            if (l.cursor && l.first && !(i && et.lines[i - 1].head))
+                found->push_back(Fmt("table: %s is first in its group, and its group's head is not shown",
+                                     Repr(l.text).c_str()));
         }
     }
     // The rows by pane, in draw order (the first-launch title is not a pane).
@@ -234,6 +285,8 @@ static void Check(std::vector<std::string> *found) {
             boxes.push_back({heads[i].text, heads[i].x0, heads[i].y0, heads[i].x1, heads[i].y1});
         if (help)
             boxes.push_back({"help", v.x0, v.y0, v.x1, v.y1});
+        if (table)
+            boxes.push_back({"table", et.x0, et.y0, et.x1, et.y1});
         for (size_t i = 0; i < boxes.size(); i++) {
             const Area &b = boxes[i];
             if (b.x0 < 32 || b.y0 < 24 || b.x1 > W - 33 || b.y1 > H - 25)
@@ -558,6 +611,31 @@ struct Walker {
         }
     }
 
+    // The Experimental settings page: every row, in the table (exptable=1) or the list.
+    void ExperimentalPage() {
+        if (!Wanted(kExpPage))
+            return;
+        Open(kExpPage);
+        Check(kExpPage);
+        if (Menu_GetSwitch("exptable")) {
+            for (int i = 0; i < Exp_Count(); i++) {
+                Key("down");
+                Check();
+            }
+            return;
+        }
+        for (size_t g = 0; g < sizeof kExpGroups / sizeof kExpGroups[0]; g++) {
+            Check();
+            Key("enter");
+            for (int r = 0; r < kExpGroups[g]; r++) {
+                Check();
+                Key("down");
+            }
+            Key("esc");
+            Key("down");
+        }
+    }
+
     void Pages(bool gameplay) {
         for (size_t p = 0; p < sizeof kPages / sizeof kPages[0]; p++) {
             if (!strcmp(kPages[p], "Gameplay") && !gameplay)
@@ -840,6 +918,174 @@ struct Walker {
                                                Repr(Menu_CursorValue()).c_str(), Repr(mine.c_str()).c_str()));
     }
 
+    // experimental: the row comes and goes with Show experimental settings; Enter opens the
+    // page and Esc comes back to the row; on every row Right and Left change the value and
+    // the other key puts it back, and Del puts the default back; Page Down and Page Up go to
+    // the ends; a changed value marks the preset changed, Modern and Reset settings put it
+    // back to its default, and Back to my settings names it and puts it back.
+    bool Table() const { return Menu_GetSwitch("exptable") != 0; }
+    void ToRows() {  // the list opens on its groups
+        if (!Table())
+            Key("enter");
+    }
+    void LeaveExp() { Key("esc", Table() ? 1 : 2); }
+    bool OpenAgain(const char *page) {
+        OpenToo(page);
+        return Expect(!strcmp(Menu_PageName(), page), Fmt("experimental: open %s lands on %s", page,
+                                                          Repr(Menu_PageName()).c_str()));
+    }
+    void ExpRow() {
+        std::string name = Exp_CursorName(), v0 = Exp_CursorValue();
+        Key("right");
+        std::string v1 = Exp_CursorValue();
+        Key("left");
+        std::string v2 = Exp_CursorValue();
+        if (v1 != v0) {
+            if (!Expect(v2 == v0, Fmt("experimental: Right then Left leaves %s at %s, not %s", name.c_str(),
+                                      Repr(v2.c_str()).c_str(), Repr(v0.c_str()).c_str())))
+                return;
+            Key("right");
+        } else {
+            if (!Expect(v2 != v0, Fmt("experimental: neither Left nor Right changes %s", name.c_str())))
+                return;
+            Key("right");
+            if (!Expect(Exp_CursorValue() == v0, Fmt("experimental: Left then Right leaves %s at %s, not %s", name.c_str(),
+                                                     Repr(Exp_CursorValue()).c_str(), Repr(v0.c_str()).c_str())))
+                return;
+            Key("left");
+        }
+        // Moved off the default now (a fresh page has every value at it): Del puts it back.
+        Expect(Menu_PresetLabel() && std::string(Menu_PresetLabel()).find(", changed") != std::string::npos,
+               Fmt("experimental: %s changed leaves the preset row at %s", name.c_str(), Repr(Menu_PresetLabel()).c_str()));
+        Key("del");
+        Expect(Exp_CursorValue() == v0, Fmt("experimental: Del leaves %s at %s, not its default %s", name.c_str(),
+                                            Repr(Exp_CursorValue()).c_str(), Repr(v0.c_str()).c_str()));
+    }
+
+    void Experimental() {
+        if (!Wanted(kExpPage))
+            return;
+        const char *row = "Experimental settings", *sw = "Show experimental settings";
+        Fresh("Advanced and reset");
+        if (!Expect(!RowDrawn(row), "experimental: the row shows with Show experimental settings off"))
+            return;
+        if (!MoveTo(sw))
+            return;
+        Key("right");
+        if (!Expect(RowDrawn(row), "experimental: Show experimental settings on does not show the row"))
+            return;
+        if (!MoveTo(row))
+            return;
+        int d0, d1;
+        std::string here = Where(&d0);
+        Key("enter");
+        Where(&d1);
+        if (!Expect(Exp_Active() && d1 == d0 + 1, "experimental: Enter on the row does not open the page"))
+            return;
+        Check(kExpPage);
+        Key("esc");
+        if (!Expect(Where() == here, Fmt("experimental: Esc from the page went to %s, not back to %s",
+                                         Repr(Where().c_str()).c_str(), Repr(here.c_str()).c_str())))
+            return;
+        if (!MoveTo(sw))
+            return;
+        Key("left");
+        if (!Expect(!RowDrawn(row), "experimental: the row stays with Show experimental settings off"))
+            return;
+
+        // Every row.
+        Fresh(kExpPage);
+        ToRows();
+        std::string first = Exp_CursorName();
+        for (size_t g = 0; g < sizeof kExpGroups / sizeof kExpGroups[0]; g++) {
+            for (int r = 0; r < kExpGroups[g]; r++) {
+                ExpRow();
+                Key("down");
+            }
+            if (!Table()) {
+                Key("esc");
+                Key("down");
+                if (EndsWith(Where(), "| Return to previous menu"))
+                    Key("down");  // one column: the groups page has a Return row
+                Key("enter");
+            }
+        }
+        if (!Expect(Exp_CursorName() == first, Fmt("experimental: Down does not come back round to %s (on %s)",
+                                                   first.c_str(), Exp_CursorName())))
+            return;
+
+        // The ends, a window at a time.
+        if (Table()) {
+            Key("pgdn");
+            std::string one = Exp_CursorName();
+            Expect(one != first && Where().find(Exp_Name(1)) == std::string::npos,
+                   Fmt("experimental: Page Down moves to %s, not a window on", one.c_str()));
+            Key("pgdn", 10);
+            Expect(!strcmp(Exp_CursorName(), Exp_Name(Exp_Count() - 1)),
+                   Fmt("experimental: Page Down stops at %s, not the last row", Exp_CursorName()));
+            Key("pgup", 10);
+            Expect(Exp_CursorName() == first, Fmt("experimental: Page Up stops at %s, not the first row", Exp_CursorName()));
+        }
+
+        // Presets: changed, Modern, Back to my settings.
+        Fresh(kExpPage);
+        ToRows();
+        std::string v0 = Exp_CursorValue(), name = Exp_CursorName();
+        Key("right");
+        std::string v1 = Exp_CursorValue();
+        LeaveExp();
+        if (!OpenAgain("Preset") || !MoveTo("Modern"))
+            return;
+        Key("enter");
+        Expect(std::string(Menu_PresetLabel()).find(", changed") == std::string::npos,
+               Fmt("experimental: Modern leaves the preset row at %s", Repr(Menu_PresetLabel()).c_str()));
+        if (!MoveTo("Back to my settings"))
+            return;
+        Expect(Voice().find(name) != std::string::npos || Voice().find(" more.") != std::string::npos,
+               Fmt("experimental: Back to my settings does not name %s: %s", name.c_str(), Repr(Voice().c_str()).c_str()));
+        if (!OpenAgain(kExpPage))
+            return;
+        ToRows();
+        if (!Expect(Exp_CursorValue() == v0, Fmt("experimental: Modern leaves %s at %s, not %s", name.c_str(),
+                                                 Repr(Exp_CursorValue()).c_str(), Repr(v0.c_str()).c_str())))
+            return;
+        LeaveExp();
+        if (!OpenAgain("Preset") || !MoveTo("Back to my settings"))
+            return;
+        Key("enter");
+        if (!OpenAgain(kExpPage))
+            return;
+        ToRows();
+        if (!Expect(Exp_CursorValue() == v1, Fmt("experimental: Back to my settings leaves %s at %s, not %s", name.c_str(),
+                                                 Repr(Exp_CursorValue()).c_str(), Repr(v1.c_str()).c_str())))
+            return;
+
+        // Reset settings, and its undo.
+        LeaveExp();
+        if (!MoveTo("Reset settings"))
+            return;
+        Key("enter");
+        Key("down");
+        Key("enter");
+        Expect(!strcmp(Menu_CursorLabel(), "Reset settings"),
+               Fmt("experimental: after a reset the cursor is on %s, not Reset settings", Repr(Menu_CursorLabel()).c_str()));
+        Expect(std::string(Menu_PresetLabel()).find(", changed") == std::string::npos,
+               Fmt("experimental: Reset settings leaves the preset row at %s", Repr(Menu_PresetLabel()).c_str()));
+        Key("down");
+        if (!Expect(!strcmp(Menu_CursorLabel(), "Back to my settings"),
+                    Fmt("experimental: after a reset the row after Reset settings is %s", Repr(Menu_CursorLabel()).c_str())))
+            return;
+        Expect(Voice().find(name) != std::string::npos || Voice().find(" more.") != std::string::npos,
+               Fmt("experimental: Back to my settings after a reset does not name %s: %s", name.c_str(),
+                   Repr(Voice().c_str()).c_str()));
+        Key("enter");
+        if (!OpenAgain(kExpPage))
+            return;
+        ToRows();
+        Expect(Exp_CursorValue() == v1, Fmt("experimental: Back to my settings after a reset leaves %s at %s, not %s",
+                                             name.c_str(), Repr(Exp_CursorValue()).c_str(), Repr(v1.c_str()).c_str()));
+    }
+
     // bind: on the first action of each group, in each column.
     void ToChip(int device, int group, int column) {
         Fresh("Keys and buttons");
@@ -934,6 +1180,7 @@ struct Walker {
                 Settings(kPages[p]);
         Wake();
         Presets();
+        Experimental();
         Binding(twoDevices);
     }
 };
@@ -968,6 +1215,7 @@ int Selftest_Run(const SelftestOptions &opt, const char *self) {
         else
             w.Controls(3, false);
         w.Pages(gameplay);
+        w.ExperimentalPage();
         if (!opt.layoutOnly)
             w.Behaviour(gameplay, twoDevices);
     }

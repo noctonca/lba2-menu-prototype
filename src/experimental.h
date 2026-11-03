@@ -16,6 +16,31 @@ bool Exp_Active();
 void Exp_Update();
 void Exp_Draw();
 void Exp_WriteState(FILE *f);
+// The table as the last Exp_Draw drew it, for the self test: its panel, its lines
+// (group heads and rows) and its status line. false when no table was drawn.
+struct ExpLine {
+    char text[40], value[24];
+    bool head, cursor, changed;
+    bool first;          // the first row of its group
+    int x0, y0, x1, y1;  // the line's strip (the cursor's plasma when it is the cursor)
+    int textLeft, textRight;  // the name
+    int valueLeft, valueRight;  // the value, and on the cursor line its marks with it
+};
+struct ExpTable {
+    int x0, y0, x1, y1;  // the panel
+    int scale, statusTop;
+    int valueEdge;       // where every value ends
+    int marksRight;      // where the cursor line's right mark ends
+    const char *status;
+    int statusLeft, statusRight;
+    int count;           // lines drawn
+    const ExpLine *lines;
+    int total, scroll;   // lines in the table, the first one drawn
+};
+bool Exp_Table(ExpTable *out);
+const char *Exp_CursorName();  // the console name under the cursor, "" on the list's groups
+const char *Exp_CursorValue();
+
 // Where the cursor is ("Auto camera | cam_ease_ms"), and how deep within the page.
 int Exp_Where(char *buf, size_t n);
 // The page closed and every value at its default, as a fresh start has it.

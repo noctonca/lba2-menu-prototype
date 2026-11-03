@@ -169,12 +169,13 @@ than made row by row, in English. Off, the row is not offered.
   lines, which fit two (`short=0` shows them as written, cut).
 
 `./play-experimental.sh` plays both forms at 1920x1080 and 640x480 on the
-same steps, with a trace per round. The self test does not visit the page yet.
+same steps, with a trace per round. The self test visits every row of it (see
+Testing).
 
 ## Testing
 
-`lba2menu --selftest` visits every row of every page and every chip of the
-Controls page at one screen size, for each of seven switch combinations, and
+`lba2menu --selftest` visits every row of every page, every chip of the
+Controls page and every row of Experimental settings at one screen size, for each of seven switch combinations, and
 lists what does not fit: help cut off, rows running into the help or off the
 screen, labels running into their values or their key chips, key names cut in
 their chips. On every screen it also checks that exactly one row or chip has
@@ -191,6 +192,13 @@ are 56 apart and 50 tall; `current:` at most one current-value row in a pane;
 further from the help below than rows are from each other, a column head above
 the rows is nearer them than the row above it, and a column head inside a row
 is in its pane's first row, above its own chip, and clear of the action's name.
+On the Experimental settings table the same rules read its lines: the panel
+clear of the help (and its margins); every line on one strip with its name on
+the label edge (`edge:`); every value ending on one edge and the cursor's marks
+24 in (`trailing:`); no name running into its value (`text spills`); lines 10
+apart at 1x (`pitch:`); and (`table:`) every line inside the panel above the
+status line, the status line inside the panel, and a group's head shown with
+the cursor on the group's first row.
 
 Then it walks the menu by its keys and checks what they do. Each problem a
 walk finds starts with the walk's name:
@@ -209,6 +217,13 @@ walk finds starts with the walk's name:
   setting and the preset back as a fresh install has them, and a Back to my
   settings row comes right after Reset settings; Enter on it puts back the
   setting and Classic, and the row goes.
+- `experimental:` the Experimental settings row shows only with Show
+  experimental settings on; Enter opens the page and Esc comes back to the row;
+  on every row Right and Left change the value and the other key puts it back,
+  the change marks the preset row, and Del puts the default back; Page Down and
+  Page Up stop at the last and first rows; Modern puts a changed value back to
+  its default, Back to my settings names it and puts it back; Reset settings
+  does the same, and the cursor stays on Reset settings.
 - `bind:` on the first action of each group, in each column: Enter waits and
   the voice asks for the key; Esc cancels; the other device's input is ignored;
   a key another action has goes in, both chips go red and the help names the
@@ -228,7 +243,8 @@ screen it was found on:
   the seven; any switch of `state` can go in. The seven are the chosen
   layouts and their variants; the help line and prompt bar (`band=0`) and all
   key columns side by side (`devices=0`) were not chosen and are left out.
-- `--only PAGE` keeps one page (`"Keys and buttons"` for the Controls page).
+- `--only PAGE` keeps one page (`"Keys and buttons"` for the Controls page,
+  `"Experimental settings"`). `--combo exptable=0` tests the list form.
   The `esc:` and `reach:` walk needs every page, so it runs only without it.
 - `--layout-only` leaves out the walks by keys.
 - Add `--headless` and `; shot x.png` to an `again` line for a picture.

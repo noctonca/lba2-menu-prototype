@@ -394,17 +394,13 @@ static void Say() {
 
 // ───────────────────────────── Drawing ─────────────────────────────
 
-// What was drawn, for `state`.
-struct DrawnLine {
-    char text[40];
-    char value[24];
-    bool head, cursor, changed;
-    int x0, y0, x1, y1;
-};
-static DrawnLine g_lines[48];
+// What was drawn, for `state` and the self test.
+static ExpLine g_lines[64];
 static int g_lineCount;
 static char g_status[96];
 static int g_total;  // the table's lines, heads included
+static ExpTable g_table;
+static bool g_tableShown;
 
 static S32 Scale() { return Menu_GetSwitch("chip"); }
 
@@ -461,18 +457,28 @@ static void DrawTable(S32 px0, S32 px1, S32 py0, S32 py1) {
         visible = total;
     g_visible = visible;
 
+    g_tableShown = true;
+    g_table.x0 = px0, g_table.y0 = py0, g_table.x1 = px1, g_table.y1 = py1;
+    g_table.scale = s;
+    g_table.statusTop = statusTop;
+    g_table.valueEdge = valueRight;
+    g_table.marksRight = valueRight + 12 * s;
+    g_table.total = total;
+    g_table.scroll = g_scroll;
     MemoClip();
     SetClip(px0 + 1, py0 + 1, px1 - 1, py1 - 1);
     for (int k = g_scroll; k < g_scroll + visible; k++) {
         S32 y = bodyTop + (k - g_scroll) * pitch;
-        DrawnLine &d = g_lines[g_lineCount < 47 ? g_lineCount++ : 47];
+        ExpLine &d = g_lines[g_lineCount < 63 ? g_lineCount++ : 63];
         memset(&d, 0, sizeof d);
         d.x0 = px0 + 8, d.x1 = px1 - 8, d.y0 = y - s, d.y1 = y + 9 * s - 1;
+        d.textLeft = nameX;
         if (line[k] < 0) {
             const char *name = kGroups[-1 - line[k]].name;
             Ui_Small(nameX, y, name, INK_CONFIG_HEAD, s);
             snprintf(d.text, sizeof d.text, "%s", name);
             d.head = true;
+            d.textRight = nameX + Ui_SmallWidth(name, s) - 1;
             continue;
         }
         int i = line[k];
@@ -485,14 +491,21 @@ static void DrawTable(S32 px0, S32 px1, S32 py0, S32 py1) {
         ValueText(i, val, sizeof val);
         S32 vx = valueRight + 1 - Ui_SmallWidth(val, s);
         Ui_Small(vx, y, val, changed ? INK_COUNT : cursor ? INK_WHITE : INK_CONFIG_MENU, s);
+        S32 left = vx, right = vx + Ui_SmallWidth(val, s) - 1;  // what is drawn on the right, for the record
         if (cursor) {
-            Ui_Small(vx - 12 * s, y, "\x11", INK_WHITE, s);
-            Ui_Small(valueRight + 1 + 4 * s, y, "\x10", INK_WHITE, s);
+            left = vx - 12 * s;
+            Ui_Small(left, y, "\x11", INK_WHITE, s);
+            Ui_Small(right + 1 + 4 * s, y, "\x10", INK_WHITE, s);
+            right += 12 * s;
         }
         snprintf(d.text, sizeof d.text, "%s", kTuning[i].name);
         snprintf(d.value, sizeof d.value, "%s", val);
         d.cursor = cursor;
         d.changed = changed;
+        d.first = line[k - 1] < 0;
+        d.textRight = nameX + Ui_SmallWidth(kTuning[i].name, s) - 1;
+        d.valueLeft = left;
+        d.valueRight = right;
     }
 
     // The status line under a groove, as the 1997 screen's status box.
@@ -501,6 +514,11 @@ static void DrawTable(S32 px0, S32 px1, S32 py0, S32 py1) {
     StatusText(g_cursor, g_status, sizeof g_status, px1 - 24 - nameX, s);
     Ui_Small(nameX, statusTop + 5 * s, g_status, INK_CONFIG_HEAD, s);
     RestoreClip();
+    g_table.status = g_status;
+    g_table.statusLeft = nameX;
+    g_table.statusRight = nameX + Ui_SmallWidth(g_status, s) - 1;
+    g_table.count = g_lineCount;
+    g_table.lines = g_lines;
 
     if (visible < total)
         Menu_DrawScrollBar(px1 + 9, py0, py1, g_scroll, visible, total);
@@ -636,6 +654,7 @@ static void DrawColumnExp() {
 
 void Exp_Draw() {
     g_lineCount = 0;
+    g_tableShown = false;
     g_status[0] = 0;
     g_total = 0;
     if (Wide())
@@ -645,6 +664,26 @@ void Exp_Draw() {
 }
 
 // ───────────────────────────── State ─────────────────────────────
+
+bool Exp_Table(ExpTable *out) {
+    if (!g_active || !g_tableShown)
+        return false;
+    *out = g_table;
+    return true;
+}
+
+const char *Exp_CursorName() {
+    int i = CursorTuning();
+    return i >= 0 ? kTuning[i].name : "";
+}
+
+const char *Exp_CursorValue() {
+    static char buf[24];
+    int i = CursorTuning();
+    if (i < 0)
+        return "";
+    return ValueText(i, buf, sizeof buf);
+}
 
 int Exp_Where(char *buf, size_t n) {
     int i = CursorTuning();
@@ -671,15 +710,23 @@ void Exp_WriteState(FILE *f) {
     Menu_JsonString(f, i >= 0 ? kTuning[i].name : "");
     fprintf(f, ",\"scroll\":%d,\"visible\":%d,\"total\":%d,\"status\":", g_scroll, g_visible, g_total);
     Menu_JsonString(f, g_status);
+    if (g_tableShown) {
+        const ExpTable &t = g_table;
+        fprintf(f, ",\"table\":{\"rect\":[%d,%d,%d,%d],\"scale\":%d,\"status_top\":%d,\"value_edge\":%d,"
+                   "\"marks_right\":%d,\"status_left\":%d,\"status_right\":%d}",
+                t.x0, t.y0, t.x1, t.y1, t.scale, t.statusTop, t.valueEdge, t.marksRight, t.statusLeft, t.statusRight);
+    }
     fprintf(f, ",\"lines\":[");
     for (int k = 0; k < g_lineCount; k++) {
-        const DrawnLine &d = g_lines[k];
+        const ExpLine &d = g_lines[k];
         fprintf(f, "%s{\"text\":", k ? "," : "");
         Menu_JsonString(f, d.text);
         fprintf(f, ",\"value\":");
         Menu_JsonString(f, d.value);
-        fprintf(f, ",\"head\":%s,\"cursor\":%s,\"changed\":%s,\"rect\":[%d,%d,%d,%d]}", d.head ? "true" : "false",
-                d.cursor ? "true" : "false", d.changed ? "true" : "false", d.x0, d.y0, d.x1, d.y1);
+        fprintf(f, ",\"head\":%s,\"first\":%s,\"cursor\":%s,\"changed\":%s,\"rect\":[%d,%d,%d,%d],\"text_left\":%d,"
+                   "\"text_right\":%d,\"value_left\":%d,\"value_right\":%d}",
+                d.head ? "true" : "false", d.first ? "true" : "false", d.cursor ? "true" : "false", d.changed ? "true" : "false", d.x0, d.y0, d.x1,
+                d.y1, d.textLeft, d.textRight, d.valueLeft, d.valueRight);
     }
     fprintf(f, "],\"values\":{");
     for (int k = 0; k < TUNING_COUNT; k++)

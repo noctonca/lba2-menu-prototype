@@ -36,6 +36,10 @@ PAGES = ["Options", "Preset", "Language and interface", "Display and graphics", 
 # Actions per group on the Controls page (controls.cpp kActions).
 CONTROL_GROUPS = [5, 6, 4, 7, 4, 4, 6]
 
+# Rows per group on the Experimental settings page (experimental.cpp kTuning).
+EXP_GROUPS = [22, 9, 7, 3]
+EXP_PAGE = "Experimental settings"
+
 # The same seven as selftest.cpp kCombos: the chosen layouts and their variants
 # (band=0 and devices=0 were not chosen, 2026-11-03; --combo still tests them).
 COMBOS = ["band=1,gameplay=0", "band=1,gameplay=1", "help640=1,gameplay=1",
@@ -85,6 +89,20 @@ def controls_lines(columns_kb, columns_pad):
             lines += ["key esc", "wait 1", "key down"]
     return lines
 
+def experimental_lines(table):
+    """Every row of the Experimental settings page, in the table or the list."""
+    lines = [f"open {EXP_PAGE}", "wait 1", "state"]
+    if table:
+        for _ in range(sum(EXP_GROUPS)):
+            lines += ["key down", "wait 1", "state"]
+        return lines
+    for count in EXP_GROUPS:
+        lines += ["wait 1", "state", "key enter", "wait 1"]
+        for _ in range(count):
+            lines += ["wait 1", "state", "key down"]
+        lines += ["key esc", "wait 1", "key down"]
+    return lines
+
 def run_scripts(binary, size, combo, only, shots):
     switches = parse_combo(combo)
     tag = f"{size}-{'-'.join(f'{k}{v}' for k, v in switches.items())}"
@@ -103,6 +121,10 @@ def run_scripts(binary, size, combo, only, shots):
             lines += ["key down", "wait 1", "state"]
         if shots:
             lines += [f"shot {shots}/{tag}-{page.replace(' ', '_')}.png"]
+    if not only or only == EXP_PAGE:
+        lines += experimental_lines(switches.get("exptable", 1))
+        if shots:
+            lines += [f"shot {shots}/{tag}-Experimental_settings.png"]
     lines.append("quit")
     p = subprocess.run([binary, "--headless", "--size", size, "--script", "/dev/stdin"],
                        input="\n".join(lines) + "\n", capture_output=True, text=True, timeout=300)
@@ -144,10 +166,14 @@ def check(state):
     for k in chips:
         if not k["fits"]:
             problems.append(f"key name cut in its chip: {k['action']!r} {k['column']} {k['name']!r}")
-    # One cursor: exactly one row or chip wears it.
-    if state["rows"] or chips:
+    exp = state.get("experimental", {})
+    table = exp.get("table")
+    lines = exp.get("lines", []) if table else []
+    # One cursor: exactly one row, chip or table line wears it.
+    if state["rows"] or chips or table:
         cursors = sum(r["fill"] == "cursor" for r in state["rows"])
         cursors += sum(k["fill"] in ("cursor", "waiting") for k in chips)
+        cursors += sum(l["cursor"] for l in lines)
         if cursors != 1:
             problems.append(f"{cursors} cursors on the screen")
     # A red chip under the cursor says in the help what else has its key.
@@ -159,6 +185,45 @@ def check(state):
     for a, col, other in controls.get("conflicts", []):
         if other not in clashing:
             problems.append(f"clash one way: {a!r} {col} is also {other!r}, which shows no clash")
+    # The Experimental settings table: its panel clear of the canvas edge and the help, its
+    # lines on one strip, the names on the label edge, the values on one trailing edge clear
+    # of the names, 10 apart at 1x, inside the panel above the status line, which fits; the
+    # cursor's group head shown when the cursor is on the group's first row.
+    if table:
+        s = table["scale"]
+        tx0, ty0, tx1, ty1 = table["rect"]
+        if ty1 >= H or tx1 >= W or tx0 < 0:
+            problems.append(f"row off the canvas: 'table' {table['rect']}")
+        if v["where"] != "none" and ty1 >= hy0 and ty0 <= hy1 and tx1 >= hx0 and tx0 <= hx1:
+            problems.append(f"row overlaps the {v['where']} by {ty1 - hy0 + 1} px: 'table'")
+        if v["where"] != "none" and 0 <= hy0 - ty1 - 1 <= 5:
+            problems.append(f"proximity: {hy0 - ty1 - 1} px between table and the {v['where']}, rows are 5 apart")
+        if table["status_right"] > tx1 - 24:
+            problems.append(f"table: the status line ends at x {table['status_right']}, past {tx1 - 24}: {exp['status']!r}")
+        for i, l in enumerate(lines):
+            x0, y0, x1, y1 = l["rect"]
+            if (x0, x1) != (tx0 + 8, tx1 - 8):
+                problems.append(f"edge: {l['text']!r} at x {x0}..{x1}, the table's lines at {tx0 + 8}..{tx1 - 8}")
+            if l["text_left"] != tx0 + 16:
+                problems.append(f"edge: {l['text']!r} starts at x {l['text_left']}, not {tx0 + 16}")
+            if y0 <= ty0 or y1 >= table["status_top"]:
+                problems.append(f"table: {l['text']!r} [{y0}..{y1}] outside the panel's lines "
+                                f"({ty0 + 1}..{table['status_top'] - 1})")
+            if y1 - y0 != 10 * s - 1:
+                problems.append(f"pitch: {l['text']!r} is {y1 - y0 + 1} tall, not {10 * s}")
+            if i and y0 - lines[i - 1]["rect"][1] != 10 * s:
+                problems.append(f"pitch: {l['text']!r} starts {y0 - lines[i - 1]['rect'][1]} below the line above, "
+                                f"not {10 * s}")
+            if l["head"]:
+                continue
+            want = tx1 - 24 if l["cursor"] else table["value_edge"]
+            if l["value_right"] != want:
+                problems.append(f"trailing: {l['text']!r} ends at x {l['value_right']}, not {want}")
+            if l["text_right"] + 8 * s >= l["value_left"]:
+                problems.append(f"text spills {l['text_right'] + 8 * s - l['value_left'] + 1} px: "
+                                f"{l['text']!r} {l['value']!r}")
+            if l["cursor"] and l["first"] and not (i and lines[i - 1]["head"]):
+                problems.append(f"table: {l['text']!r} is first in its group, and its group's head is not shown")
     # The rows by pane, in draw order (the first-launch title is not a pane).
     panes = {}
     for r in state["rows"]:
@@ -191,6 +256,8 @@ def check(state):
         boxes += [(h["text"], h["rect"]) for h in controls.get("heads", [])]
         if v["where"] != "none":
             boxes.append(("help", v["rect"]))
+        if table:
+            boxes.append(("table", table["rect"]))
         for what, (x0, y0, x1, y1) in boxes:
             if x0 < 32 or y0 < 24 or x1 > W - 33 or y1 > H - 25:
                 problems.append(f"margin: {what!r} [{x0}, {y0}, {x1}, {y1}] in the margin")
@@ -260,7 +327,7 @@ def check(state):
 # ───────────────────────────── Checking the command lines ─────────────────────────────
 
 # The walks by keys name themselves at the start of each problem they find.
-WALKS = {"esc", "reach", "setting", "preset", "bind", "walk"}
+WALKS = {"esc", "reach", "setting", "preset", "bind", "walk", "experimental"}
 
 def check_again(line, again):
     """None when the command line opens a screen with this problem, else what it showed."""
