@@ -62,7 +62,11 @@ the call is answered.
   the wide layout every label starts at x0 + 16. **[self test: edge]**
 - **Margins:** 32 at the sides, 24 at the top and bottom of the wide canvas.
   Nothing is drawn in them: rows, column heads, chips, the band.
-  **[self test: margin]** *(review rule 8, open call 1)*
+  **[self test: margin]** *(review rule 8, open call 1)* The scroll bar sits
+  beside the rows, 9 to the right: on the wide canvas inside the margins; at
+  640x480 in the 1997 screen's right gap, with the rows kept centred (decided
+  2026-11-03 from a side-by-side of beside, inside, none and a two-line help
+  window).
 - **A value never moves** when its row takes the cursor: the change marks sit
   in the row's padding, outside the value. *(review rule 4)*
 - **One trailing edge:** in the wide layout, values and key chips end 24 in
