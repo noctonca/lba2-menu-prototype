@@ -1,16 +1,21 @@
 #!/bin/bash
-# Play test: the help in the band. Two rounds on the same steps, one window
-# each; close the window to go on to the next round.
-#   ./play-help.sh [--size 1920x1080]
+# Play test: the help, on the original 640x480 layout and on a wide screen.
+# Two rounds per size on the same steps, one window each; close the window to
+# go on to the next round.
+#   ./play-help.sh                      640x480, then 1920x1080
+#   ./play-help.sh --size 2560x1440     one size only
 # Round 1 is the help as first written; round 2 is as decided (2026-11-03), the
 # default: one message at a time (a key clash's note alone, a dimmed row saying
 # why) and the shorter help, so a translation half as long again still fits.
-# Keys 7 and 8 turn each on and off in any round (F1 lists them).
+# Keys 7 and 8 turn each on and off in any round (F1 lists them). At 640x480
+# the help shows in the 1997 dialogue window on every page (switch help640, F8);
+# without it only Keys and buttons has help there, as 1997 had none.
 # Writes .runs/help/<time>/round-<n>-<name>/trace.log for reading back.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
-size="1920x1080"
-[[ "${1:-}" == "--size" ]] && size="$2"
+sizes=(640x480 1920x1080)
+[[ "${1:-}" == "--size" ]] && sizes=("$2")
+size="${sizes[0]}"
 
 cmake --build "$here/build" >/dev/null
 run="$here/.runs/help/$(date +%Y%m%d-%H%M%S)"
@@ -25,7 +30,7 @@ if ! "$run/lba2menu" --headless --size "$size" --do "wait 1; state; quit" 2>/dev
 fi
 
 cat <<'STEPS'
-Steps, the same in each round (the window opens on the Options hub):
+Steps, the same in each round (the window opens on Options):
   1. Read the help of the Settings row, then Enter: read Modern and Classic.
      Down to Classic, Enter: read the question. Choose "No, keep Modern".
   2. Esc back. Down to Display and graphics, Enter. Read every row's help,
@@ -40,16 +45,19 @@ STEPS
 
 before=(--switch clash=0 --switch short=0)
 round=1
-for name in as-written decided; do
-    dir="$run/round-$round-$name"
-    mkdir -p "$dir"
-    args=()
-    [[ "$name" == as-written ]] && args=("${before[@]}")
-    echo
-    echo "Round $round: $name."
-    read -r -p "Press Enter to open it. " _
-    "$run/lba2menu" --size "$size" ${args[@]+"${args[@]}"} --trace "$dir/trace.log" >"$dir/out.log" 2>&1 || true
-    round=$((round + 1))
+for size in "${sizes[@]}"; do
+    for name in as-written decided; do
+        dir="$run/round-$round-$size-$name"
+        mkdir -p "$dir"
+        args=()
+        [[ "$name" == as-written ]] && args=("${before[@]}")
+        [[ "$size" == 640x480 ]] && args+=(--switch help640=1)
+        echo
+        echo "Round $round: $size, $name."
+        read -r -p "Press Enter to open it. " _
+        "$run/lba2menu" --size "$size" ${args[@]+"${args[@]}"} --trace "$dir/trace.log" >"$dir/out.log" 2>&1 || true
+        round=$((round + 1))
+    done
 done
 echo
 echo "Traces: $run"
