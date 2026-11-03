@@ -1019,12 +1019,13 @@ struct SwitchDef {
     const char *name;
     int *value;
     int min, max;
+    int start;  // the value a fresh start has
 };
 static const SwitchDef kSwitches[] = {
-    {"band", &sw_band, 0, 1},       {"typing", &sw_typing, 0, 2}, {"chip", &sw_chip, 1, 2},
-    {"word", &sw_word, 0, 2},       {"island", &sw_island, 0, 1}, {"help640", &sw_help640, 0, 1},
-    {"gameplay", &sw_gameplay, 0, 1}, {"overlay", &sw_overlay, 0, 1},
-    {"devices", &sw_devices, 0, 1},   {"padnames", &sw_padnames, 0, 3},
+    {"band", &sw_band, 0, 1, 1},           {"typing", &sw_typing, 0, 2, 0},   {"chip", &sw_chip, 1, 2, 2},
+    {"word", &sw_word, 0, 2, 0},           {"island", &sw_island, 0, 1, 0},   {"help640", &sw_help640, 0, 1, 0},
+    {"gameplay", &sw_gameplay, 0, 1, 0},   {"overlay", &sw_overlay, 0, 1, 0},
+    {"devices", &sw_devices, 0, 1, 1},     {"padnames", &sw_padnames, 0, 3, 0},
 };
 
 bool Menu_SetSwitch(const char *name, int v) {
@@ -1072,6 +1073,7 @@ bool Menu_Open(const char *name) {
             g_closed = false;
             g_depth = 1;
             g_focus = F_LEFT;
+            g_leftCursor = 0;  // the same place whatever was open before
             if (Wide() && p != P_HUB) {
                 // Put the left cursor on the page's category; focus the right pane.
                 bool found = false;
@@ -1110,6 +1112,44 @@ bool Menu_Set(const char *id, int value) {
     return false;
 }
 
+void Menu_Reset() {
+    for (size_t i = 0; i < sizeof kSwitches / sizeof kSwitches[0]; i++)
+        *kSwitches[i].value = kSwitches[i].start;
+    Engine_UseMenuPalette();
+    Engine_ResetInput();
+    Controls_Reset();
+    g_confirm = false;
+    g_confirmCursor = 0;
+    g_closed = false;
+    g_haveBefore = false;
+    g_scroll = 0;
+    g_toast[0] = 0;
+    g_toastUntil = 0;
+    memset(g_cursorStack, 0, sizeof g_cursorStack);
+    Menu_Init(false);
+}
+
+int Menu_DrawnRows(const DrawnRow **rows) {
+    *rows = g_drawn;
+    return g_drawnCount;
+}
+
+void Menu_Help(MenuHelp *h) {
+    h->where = g_helpBox.shown ? g_helpBox.kind : "none";
+    h->x0 = g_helpBox.x0;
+    h->y0 = g_helpBox.y0;
+    h->x1 = g_helpBox.x1;
+    h->y1 = g_helpBox.y1;
+    h->needed = g_voiceNeeded;
+    h->max = g_voiceMax;
+    h->width = g_voiceWidth;
+    h->text = g_voice.text;
+}
+
+const char *Menu_PageName() {
+    return Controls_Active() ? "Keys and buttons" : g_first ? "First launch" : g_pages[Wide() ? RightPage() : TopPage()].name;
+}
+
 void Menu_JsonString(FILE *f, const char *s) {
     fputc('"', f);
     for (; *s; s++) {
@@ -1132,9 +1172,7 @@ void Menu_WriteState(FILE *f) {
             (unsigned)Engine_Scale(Engine_PhysW(), Engine_PhysH()));
     Menu_JsonString(f, g_closed ? "closed" : g_first ? "first-launch" : Wide() ? "wide" : "column");
     fprintf(f, ",\"page\":");
-    Menu_JsonString(f, Controls_Active() ? "Keys and buttons"
-                       : g_first          ? "First launch"
-                                          : g_pages[Wide() ? RightPage() : TopPage()].name);
+    Menu_JsonString(f, Menu_PageName());
     fprintf(f, ",\"focus\":\"%s\",\"cursor\":%d,\"left_cursor\":%d,\"scroll\":%d,\"confirm\":%s",
             Wide() ? (g_focus == F_LEFT ? "left" : "right") : "column", g_cursor, g_leftCursor, g_scroll,
             g_confirm ? "true" : "false");

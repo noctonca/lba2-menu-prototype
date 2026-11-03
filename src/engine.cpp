@@ -373,8 +373,22 @@ bool Engine_BeginFrame() {
 
 bool Engine_Pressed(UiKey k) { return s_pressed[k]; }
 
+static bool s_headless;
+
+void Engine_SetHeadless(bool on) { s_headless = on; }
+
 void Engine_Present() {
-    BoxStaticFullflip();
+    if (!s_headless)
+        BoxStaticFullflip();
+}
+
+void Engine_ResetInput() {
+    memset(s_down, 0, sizeof s_down);
+    memset(s_pressed, 0, sizeof s_pressed);
+    memset(s_injected, 0, sizeof s_injected);
+    memset(s_rawDown, 0, sizeof s_rawDown);
+    s_rawPressed = s_rawInjected = 0;
+    s_lastPad = false;
 }
 
 void Engine_DrawBackground() {

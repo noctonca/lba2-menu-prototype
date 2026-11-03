@@ -34,3 +34,14 @@ void Menu_Say(const char *text);
 void Menu_PageEntered();
 
 void Menu_JsonString(FILE *f, const char *s);
+
+// What the last Menu_Draw recorded, for the self test (selftest.cpp).
+int Menu_DrawnRows(const DrawnRow **rows);
+struct MenuHelp {
+    const char *where;  // band, help-line, dialogue, or none
+    int x0, y0, x1, y1;
+    int needed, max, width;
+    const char *text;
+};
+void Menu_Help(MenuHelp *out);
+const char *Menu_PageName();  // as `state` names it

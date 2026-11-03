@@ -1,20 +1,61 @@
 #!/usr/bin/env python3
-"""Visit every row of every Options page at several screen sizes and switch
-settings, and list what does not fit: help cut off, rows running into the help
-or off the canvas, labels running into their values or out of their row.
+"""Visit every row of every Options page and every chip of the Controls page at
+several screen sizes and switch settings, and list what does not fit: help cut
+off, rows running into the help or off the canvas, labels running into their
+values or out of their row, key names cut in their chips.
 
-    tools/sweep.py [--bin build/lba2menu] [--sizes 640x480,1920x1080] [--shots DIR] [--jobs N]
+    tools/sweep.py [--bin build/lba2menu] [--sizes 640x480,1920x1080] [--jobs N]
+                   [--combo band=1,gameplay=0 ...] [--only PAGE] [--again]
+                   [--scripts [--shots DIR]] [--check-again]
 
-Each (size, switches) run is its own process; --jobs of them run at once.
+By default each (size, combo) is one `lba2menu --selftest` process, and --jobs
+of them run at once. --again prints, under each problem, the command line that
+opens the screen it was found on (add --headless and `; shot x.png` to the --do
+list for a picture). --only keeps one page ("Keys and buttons", "Sound" ...).
+
+--scripts walks the same screens from outside instead: a script per run, read
+back through `state` lines and checked here. Slower; it is the cross-check that
+the self test and the script path agree, and the only way to take --shots.
+
+--check-again runs every problem's command line headless and checks that the
+screen it opens has the problem.
 """
-import argparse, json, os, subprocess, sys
+import argparse, json, os, shlex, subprocess, sys
 from concurrent.futures import ThreadPoolExecutor
 
 PAGES = ["Options", "Preset", "Language and interface", "Display and graphics", "Sound",
          "Controls and camera", "Advanced and reset", "Gameplay"]
 
-# Actions per group on the Controls page (controls.cpp kGroups).
+# Actions per group on the Controls page (controls.cpp kActions).
 CONTROL_GROUPS = [5, 6, 4, 7, 4, 4, 6]
+
+# The same eight as selftest.cpp kCombos.
+COMBOS = ["band=1,gameplay=0", "band=1,gameplay=1", "band=0,gameplay=1", "help640=1,gameplay=1",
+          "devices=0", "padnames=2", "padnames=3", "chip=1"]
+
+def parse_combo(spec):
+    return {k: int(v) for k, v in (part.split("=") for part in spec.split(","))}
+
+# ───────────────────────────── The self test ─────────────────────────────
+
+def run_selftest(binary, size, combo, only):
+    """Problems as {line: again-command} from one --selftest process."""
+    cmd = [binary, "--selftest", "--size", size, "--combo", combo]
+    if only:
+        cmd += ["--only", only]
+    p = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    if p.returncode not in (0, 1):
+        raise SystemExit(f"{' '.join(cmd)} failed ({p.returncode}):\n{p.stderr}")
+    found, last = {}, None
+    for line in p.stdout.splitlines():
+        if line.startswith("    again: "):
+            found[last] = line[len("    again: "):]
+        elif not line.endswith("checks"):
+            last = line
+            found[line] = None
+    return found
+
+# ───────────────────────────── The script path ─────────────────────────────
 
 def controls_lines(columns_kb, columns_pad):
     """Every chip of every group, on each device the view shows."""
@@ -34,35 +75,37 @@ def controls_lines(columns_kb, columns_pad):
             lines += ["key esc", "wait 1", "key down"]
     return lines
 
-def run(binary, size, switches, shots):
+def run_scripts(binary, size, combo, only, shots):
+    switches = parse_combo(combo)
+    tag = f"{size}-{'-'.join(f'{k}{v}' for k, v in switches.items())}"
     lines = [f"switch {k} {v}" for k, v in switches.items()] + ["switch typing 2", "wait 1"]
-    plan = []
-    if switches.get("devices", 1):
-        lines += controls_lines(2, 1)
-    else:
-        lines += controls_lines(3, None)
-    if shots:
-        tag = f"{size}-{'-'.join(f'{k}{v}' for k, v in switches.items())}-Keys_and_buttons"
-        lines += [f"shot {shots}/{tag}.png"]
+    if not only or only == "Keys and buttons":
+        lines += controls_lines(2, 1) if switches.get("devices", 1) else controls_lines(3, None)
+        if shots:
+            lines += [f"shot {shots}/{tag}-Keys_and_buttons.png"]
     for page in PAGES:
         if page == "Gameplay" and not switches.get("gameplay"):
             continue
+        if only and only != page:
+            continue
         lines += [f"open {page}", "wait 1", "state"]
-        plan.append((page, 0))
         for i in range(1, 12):
             lines += ["key down", "wait 1", "state"]
-            plan.append((page, i))
         if shots:
-            tag = f"{size}-{'-'.join(f'{k}{v}' for k, v in switches.items())}-{page.replace(' ', '_')}"
-            lines += [f"shot {shots}/{tag}.png"]
+            lines += [f"shot {shots}/{tag}-{page.replace(' ', '_')}.png"]
     lines.append("quit")
-    script = "\n".join(lines) + "\n"
     p = subprocess.run([binary, "--headless", "--size", size, "--script", "/dev/stdin"],
-                       input=script, capture_output=True, text=True, timeout=300)
-    states = [json.loads(l[6:]) for l in p.stdout.splitlines() if l.startswith("state ")]
-    return states
+                       input="\n".join(lines) + "\n", capture_output=True, text=True, timeout=300)
+    found = {}
+    label = json.dumps(switches)
+    for l in p.stdout.splitlines():
+        if l.startswith("state "):
+            st = json.loads(l[6:])
+            for prob in check(st):
+                found[f"{size} {label} [{st['page']}] {prob}"] = None
+    return found
 
-def check(state, where):
+def check(state):
     problems = []
     W, H = state["logical"]
     v = state["voice"]
@@ -82,31 +125,74 @@ def check(state, where):
             problems.append(f"key name cut in its chip: {k['action']!r} {k['column']} {k['name']!r}")
     return problems
 
+# ───────────────────────────── Checking the command lines ─────────────────────────────
+
+def check_again(line, again):
+    """None when the command line opens a screen with this problem, else what it showed."""
+    if not again:
+        return "no command line"
+    args = shlex.split(again)
+    i = args.index("--do")
+    args[i + 1] += "; wait 1; state"
+    p = subprocess.run(args[:1] + ["--headless"] + args[1:], capture_output=True, text=True, timeout=60)
+    states = [json.loads(l[6:]) for l in p.stdout.splitlines() if l.startswith("state ")]
+    if not states:
+        return f"no state ({p.returncode}): {p.stderr.strip()[-200:]}"
+    st = states[-1]
+    page = line.split(" [", 1)[1].split("] ", 1)[0]
+    problem = line.split("] ", 1)[1]
+    if st["page"] != page:
+        return f"on page {st['page']!r}"
+    if problem.startswith("walk did not reach"):
+        return None
+    if problem not in check(st):
+        return "problem not on that screen"
+    return None
+
 def main():
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--bin", default=os.path.join(os.path.dirname(__file__), "..", "build", "lba2menu"))
     ap.add_argument("--sizes", default="640x480,1280x720,1280x800,1920x1080,2400x1080")
-    ap.add_argument("--shots")
+    ap.add_argument("--combo", action="append", help="name=v,name=v (repeat; default: the eight)")
+    ap.add_argument("--only", help="one page by name")
+    ap.add_argument("--again", action="store_true", help="print the command line that shows each problem")
+    ap.add_argument("--scripts", action="store_true", help="walk through scripts instead of --selftest")
+    ap.add_argument("--shots", help="with --scripts: a PNG of each page")
+    ap.add_argument("--check-again", action="store_true", help="replay every problem's command line")
     ap.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     a = ap.parse_args()
+    if a.shots and not a.scripts:
+        ap.error("--shots needs --scripts")
+    if a.check_again and a.scripts:
+        ap.error("--check-again needs the self test (no --scripts)")
     if a.shots:
         os.makedirs(a.shots, exist_ok=True)
-    combos = [{"band": 1, "gameplay": 0}, {"band": 1, "gameplay": 1}, {"band": 0, "gameplay": 1},
-              {"help640": 1, "gameplay": 1}, {"devices": 0}, {"padnames": 2}, {"padnames": 3},
-              {"chip": 1}]
-    jobs = [(size, sw) for size in a.sizes.split(",") for sw in combos]
-    with ThreadPoolExecutor(max_workers=max(1, a.jobs)) as pool:
-        results = list(pool.map(lambda j: run(a.bin, j[0], j[1], a.shots), jobs))
+    combos = a.combo or COMBOS
+    jobs = [(size, c) for size in a.sizes.split(",") for c in combos]
+    if a.scripts:
+        work = lambda j: run_scripts(a.bin, j[0], j[1], a.only, a.shots)
+    else:
+        work = lambda j: run_selftest(a.bin, j[0], j[1], a.only)
     found = {}
-    for (size, sw), states in zip(jobs, results):
-        for st in states:
-            for prob in check(st, size):
-                key = (size, json.dumps(sw), st["page"], prob)
-                found.setdefault(key, 0)
-                found[key] += 1
-    for (size, sw, page, prob) in sorted(found):
-        print(f"{size} {sw} [{page}] {prob}")
+    with ThreadPoolExecutor(max_workers=max(1, a.jobs)) as pool:
+        for result in pool.map(work, jobs):
+            for line, again in result.items():
+                found.setdefault(line, again)
+    for line in sorted(found):
+        print(line)
+        if a.again and found[line]:
+            print(f"    again: {found[line]}")
     print(f"{len(found)} problem(s)")
+    if a.check_again:
+        items = sorted(found.items())
+        with ThreadPoolExecutor(max_workers=max(1, a.jobs)) as pool:
+            verdicts = list(pool.map(lambda kv: check_again(*kv), items))
+        bad = [(line, v) for (line, _), v in zip(items, verdicts) if v]
+        for line, v in bad:
+            print(f"again does not show it ({v}): {line}")
+        print(f"{len(items) - len(bad)} of {len(items)} command lines show their problem")
+        if bad:
+            return 2
     return 1 if found else 0
 
 if __name__ == "__main__":

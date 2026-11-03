@@ -1,7 +1,17 @@
 // LBA2 Options menu prototype on lba2cc's LIB386.
 //
 //   lba2menu [--data DIR] [--size WxH] [--first] [--headless] [--fixed-dt MS]
-//            [--script FILE] [--stdin] [--control FILE] [--trace FILE] [--switch name=v ...]
+//            [--script FILE] [--do "cmd; cmd"] [--stdin] [--control FILE] [--trace FILE]
+//            [--switch name=v ...]
+//   lba2menu --selftest [--size WxH] [--combo name=v,name=v ...] [--only PAGE] [--no-again]
+//
+// --do: commands as a script would hold them, separated by ';', run after --script.
+// Without --headless the window stays up afterwards, on the screen they lead to.
+//
+// --selftest: walk every chip of the Controls page and every row of every page at
+// this size, for each switch combination (tools/sweep.py's eight, or the --combo
+// ones), check that everything fits, print each problem with the command line
+// that shows it, and exit 1 if there were any. --only keeps one page.
 //
 // --control FILE: lines appended to FILE run as commands while the window is up,
 // so a driver can steer a session someone is watching. Replies go to stdout.
@@ -19,6 +29,7 @@
 //   quit
 #include "engine.h"
 #include "menu.h"
+#include "selftest.h"
 #include "shot.h"
 #include "trace.h"
 
@@ -148,9 +159,10 @@ static void Relaunch(int argc, char **argv, U32 w, U32 h) {
 int main(int argc, char **argv) {
     std::string data = ExpandHome(getenv("LBA2_GAME_DIR") ? getenv("LBA2_GAME_DIR") : kDefaultData);
     U32 w = 640, h = 480, fixedDt = 0;
-    bool first = false, headless = false, live = false;
+    bool first = false, headless = false, live = false, selftest = false;
     const char *script = NULL, *trace = NULL, *control = NULL;
-    std::vector<std::string> switches;
+    std::vector<std::string> switches, inline_cmds;
+    SelftestOptions test;
 
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i];
@@ -186,18 +198,48 @@ int main(int argc, char **argv) {
         } else if (!strcmp(a, "--switch")) {
             switches.push_back(v);
             i++;
+        } else if (!strcmp(a, "--do")) {
+            // Split on ';' into script lines.
+            std::string all = v;
+            size_t at = 0;
+            while (at <= all.size()) {
+                size_t semi = all.find(';', at);
+                std::string cmd = all.substr(at, semi == std::string::npos ? std::string::npos : semi - at);
+                size_t b = cmd.find_first_not_of(' '), e = cmd.find_last_not_of(' ');
+                if (b != std::string::npos)
+                    inline_cmds.push_back(cmd.substr(b, e - b + 1));
+                if (semi == std::string::npos)
+                    break;
+                at = semi + 1;
+            }
+            i++;
+        } else if (!strcmp(a, "--selftest")) {
+            selftest = headless = true;
+        } else if (!strcmp(a, "--combo")) {
+            test.combos.push_back(v);
+            i++;
+        } else if (!strcmp(a, "--only")) {
+            test.only = v;
+            i++;
+        } else if (!strcmp(a, "--no-again")) {
+            test.again = false;
         } else {
             fprintf(stderr, "unknown argument %s\n", a);
             return 2;
         }
     }
 
+    if (selftest && (!switches.empty() || script || !inline_cmds.empty() || first)) {
+        fprintf(stderr, "--selftest takes --combo and --only, not --switch, --script, --do or --first\n");
+        return 2;
+    }
     if (headless) {
         setenv("SDL_VIDEO_DRIVER", "dummy", 1);
         if (!fixedDt)
             fixedDt = 16;
     }
     Trace_Open(trace);
+    Trace_Quiet(selftest);
 
     EngineConfig cfg;
     cfg.dataDir = data.c_str();
@@ -208,11 +250,18 @@ int main(int argc, char **argv) {
     // lba2cc turns vsync on with the renderer, and on the dummy driver SDL fakes it by
     // sleeping a refresh per present: 90% of a headless run. The fixed clock keeps runs
     // repeatable without it (lba2cc does the same for --exit runs, CONTROL.CPP).
-    if (headless)
+    if (headless) {
         Window_SetVSync(0);
+        Engine_SetHeadless(true);
+    }
     if (fixedDt)
         Engine_SetFixedDt(fixedDt);
     Menu_Init(first);
+    if (selftest) {
+        int result = Selftest_Run(test, argv[0]);
+        Engine_Shutdown();
+        return result;
+    }
     for (size_t i = 0; i < switches.size(); i++) {
         char name[32];
         int value;
@@ -237,6 +286,7 @@ int main(int argc, char **argv) {
         }
         fclose(f);
     }
+    run.lines.insert(run.lines.end(), inline_cmds.begin(), inline_cmds.end());
     int liveFd = -1;
     if (live) {
         liveFd = 0;

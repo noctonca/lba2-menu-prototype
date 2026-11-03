@@ -79,6 +79,7 @@ memory like the other settings.
 Every run can be steered and read back without a person at the keys.
 
     build/lba2menu --headless --script steps.txt     # no window, fixed 16 ms clock
+    build/lba2menu --do "open Sound; key down 2"     # commands inline; the window stays up on that screen
     build/lba2menu --control FILE                    # append commands to FILE while the window is up
 
 Commands, one per line: `key <up|down|left|right|enter|esc|tab|del|f1..f11> [count]`,
@@ -102,10 +103,34 @@ Commands, one per line: `key <up|down|left|right|enter|esc|tab|del|f1..f11> [cou
   the same pictures every time. They run with vsync off, as fast as the
   machine draws.
 
-`tools/sweep.py` visits every row of every page and every chip of the Controls
-page at several screen sizes and switch settings, and lists what does not fit:
-help cut off, rows running into the help or off the screen, labels running into
-their values or their key chips, key names cut in their chips.
+## Testing
+
+`lba2menu --selftest` visits every row of every page and every chip of the
+Controls page at one screen size, for each of eight switch combinations, and
+lists what does not fit: help cut off, rows running into the help or off the
+screen, labels running into their values or their key chips, key names cut in
+their chips. It runs in one process without drawing to a window, and exits 1
+when it finds a problem. Under each problem it prints a command line that
+opens the screen it was found on:
+
+    $ build/lba2menu --selftest --size 1920x1080 --combo band=1,gameplay=0 --only Sound
+    1920x1080 {"band": 1, "gameplay": 0} [Sound] text spills 15 px: 'Master volume' '100'
+        again: build/lba2menu --size 1920x1080 --switch band=1 --switch gameplay=0 --switch typing=2 --do "open Sound"
+
+- `--combo name=v,name=v` (repeatable) tests those switch settings instead of
+  the eight; any switch of `state` can go in.
+- `--only PAGE` keeps one page (`"Keys and buttons"` for the Controls page).
+- Add `--headless` and `; shot x.png` to an `again` line for a picture.
+
+`tools/sweep.py` runs the self test for five screen sizes and the eight
+combinations, one process each, in parallel (about 3 seconds on the Mac), and
+takes `--sizes`, `--combo`, `--only` and `--again` the same way.
+
+- `--scripts` walks the same screens from outside: a script per run, read back
+  through `state`. It is slower (about 10 seconds) and must list the same
+  problems; it is the only way to take `--shots`.
+- `--check-again` replays every problem's `again` line and checks that the
+  screen it opens has the problem.
 
 ## Checked against the game
 

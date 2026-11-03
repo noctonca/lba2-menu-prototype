@@ -229,6 +229,7 @@ static int g_scroll;
 static bool g_waiting;
 static U32 g_waitStart, g_waitFrame;
 static char g_lastBound[96];
+static bool g_bindingsReady;
 
 static bool Wide() { return Engine_LogicalW() >= 840; }
 
@@ -290,10 +291,9 @@ void Controls_Open() {
     g_scroll = 0;
     g_waiting = false;
     g_lastBound[0] = 0;
-    static bool once;
-    if (!once) {
+    if (!g_bindingsReady) {
         ResetBindings();
-        once = true;
+        g_bindingsReady = true;
     }
     Menu_PageEntered();
     Trace("controls open device=%s", DeviceName(g_device));
@@ -309,6 +309,13 @@ void Controls_Close() {
 }
 
 bool Controls_Active() { return g_active; }
+
+void Controls_Reset() {
+    g_active = g_waiting = g_focusRight = false;
+    g_device = g_group = g_colCursor = g_row = g_column = g_scroll = 0;
+    g_lastBound[0] = 0;
+    g_bindingsReady = false;
+}
 
 // ───────────────────────────── Input ─────────────────────────────
 
@@ -675,6 +682,17 @@ void Controls_Draw() {
 }
 
 // ───────────────────────────── State ─────────────────────────────
+
+int Controls_Chips(ChipView *out, int max) {
+    int n = g_chipCount < max ? g_chipCount : max;
+    for (int i = 0; i < n; i++) {
+        out[i].action = kActions[g_chips[i].action].name;
+        out[i].column = ColumnHead(g_chips[i].column);
+        out[i].name = g_chips[i].name;
+        out[i].fits = g_chips[i].fits;
+    }
+    return n;
+}
 
 void Controls_WriteState(FILE *f) {
     char buf[32];

@@ -50,6 +50,7 @@ add_executable(lba2menu
     src/ui.cpp
     src/trace.cpp
     src/shot.cpp
+    src/selftest.cpp
     ${LBA2CC_GAME_SOURCES}
 )
 target_include_directories(lba2menu PRIVATE

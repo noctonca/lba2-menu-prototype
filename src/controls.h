@@ -15,3 +15,14 @@ bool Controls_Active();
 void Controls_Update();
 void Controls_Draw();
 void Controls_WriteState(FILE *f);
+
+// Bindings back to the defaults and the page closed, as a fresh start has it.
+void Controls_Reset();
+// The chips the last Controls_Draw drew, for the self test.
+struct ChipView {
+    const char *action;
+    const char *column;
+    const char *name;
+    bool fits;
+};
+int Controls_Chips(ChipView *out, int max);

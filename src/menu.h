@@ -4,6 +4,8 @@
 #include <stdio.h>
 
 void Menu_Init(bool firstLaunch);
+// Everything back as a fresh start has it: switches, settings, bindings, pages.
+void Menu_Reset();
 void Menu_Update();  // reads this frame's keys
 void Menu_Draw();
 

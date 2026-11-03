@@ -24,6 +24,10 @@ U32 Engine_PhysH();
 // One frame: pump events, update key edges. Returns false when the window closes.
 bool Engine_BeginFrame();
 void Engine_Present();
+// Headless: no window to show, so a present only costs time. Shots read Log, not the screen.
+void Engine_SetHeadless(bool on);
+// Forget held keys and what was touched last, as a fresh start has it.
+void Engine_ResetInput();
 U32 Engine_TimeMs();
 
 // Keys pressed this frame (edge, with key repeat for held arrows).
