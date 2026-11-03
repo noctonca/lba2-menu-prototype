@@ -514,9 +514,10 @@ static void Say() {
     static char buf[256];
     const char *text = "";
     if (g_waiting) {
-        snprintf(buf, sizeof buf, "Press a %s for %s", CursorColumn() < 2 ? "key" : "button",
-                 kActions[CursorAction()].name);
-        text = buf;
+        // The way out, said (decided 2026-11-03): a pad has no button that cannot
+        // be bound, so the Gamepad view says to wait; the keyboard has Esc. The
+        // action is the row under the cursor, so the prompt fits one line.
+        text = CursorColumn() < 2 ? "Press a key, or Esc to keep it." : "Press a button, or wait to keep it.";
     } else if (!g_focusRight) {
         if (Wide() || g_colCursor > 0)
             text = kGroups[g_group].help;

@@ -134,8 +134,11 @@ memory like the other settings.
 - Tab (the pad's View button) switches Keyboard and Gamepad; the page opens on
   the one touched last.
 - Enter waits for a key: the chip takes the current-value plasma and the voice
-  asks for it. Esc cancels, and so does waiting 5 seconds. A pad view only takes
-  pad input, a keyboard view only keys.
+  asks for it and says the way out: "Press a key, or Esc to keep it." on the
+  keyboard view, "Press a button, or wait to keep it." on the pad view, since a
+  pad has no button that cannot be bound (decided 2026-11-03). Esc cancels, and
+  so does waiting 5 seconds. A pad view only takes pad input, a keyboard view
+  only keys.
 - Del (Backspace on a Mac keyboard, X on a pad) clears a chip.
 - A key on two actions frames both chips red, and the voice names the other
   action.

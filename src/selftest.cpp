@@ -1149,7 +1149,8 @@ struct Walker {
         Key("enter");
         if (!Expect(Waiting(), "bind: Enter does not wait for a key"))
             return;
-        Expect(Voice().compare(0, 8, "Press a ") == 0, Fmt("bind: the voice does not ask for the key: %s", Repr(Voice().c_str()).c_str()));
+        const char *ask = pad ? "Press a button, or wait to keep it." : "Press a key, or Esc to keep it.";
+        Expect(Voice() == ask, Fmt("bind: the voice does not ask for the key and say the way out: %s", Repr(Voice().c_str()).c_str()));
         Check();
         Key("esc");
         if (!Expect(!Waiting(), "bind: Esc leaves the wait for a key going"))

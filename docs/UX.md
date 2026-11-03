@@ -208,7 +208,9 @@ voice. A setting exists only if players really disagree about it.
 
 **Postel's Law** (be liberal in what you accept).
 - Keys and pad both work everywhere, except while a binding waits: then only
-  the device the view shows. Esc, or 5 s, gives up the wait.
+  the device the view shows. Esc, or 5 s, gives up the wait, and the voice
+  says so: "Press a button, or wait to keep it." No pad button is kept back
+  for cancelling (decided 2026-11-03).
 - A key already in use is refused: the old key stays and the voice says what
   to do, "Clear C on Protection spell first." No side effects: a swap would
   change an action the player is not looking at, and a clash would fire two
@@ -314,4 +316,5 @@ Every page, both layouts (640x480 and 1920x1080 at least), both palettes
 7. The legend lists exactly the keys the row takes.
 8. Copy: what a setting does in the player's words; no help cut off.
 9. *Play*: reading from a sofa distance, cursor feel and key repeat, the typed
-   voice while scrolling, the wait for a key with a pad only.
+   voice while scrolling, the wait for a key with a pad only (decided: the
+   prompt says to wait).
