@@ -219,6 +219,15 @@ static int ConflictOf(int action, int column) {
     return -1;
 }
 
+// Another action that already has this key or button on the same device, or -1.
+static int HolderOf(int action, int column, int code) {
+    int lo = column < 2 ? 0 : 2;
+    for (int a = 0; a < ACTION_COUNT; a++)
+        if (a != action && (g_bind[a][lo] == code || g_bind[a][lo + 1] == code))
+            return a;
+    return -1;
+}
+
 // ───────────────────────────── State ─────────────────────────────
 
 static bool g_active;
@@ -232,6 +241,13 @@ static int g_scroll;
 static bool g_waiting;
 static U32 g_waitStart, g_waitFrame;
 static char g_lastBound[96];
+// A key refused because another action has it (switch keyrule 0): said in the
+// voice while the cursor stays on the chip it was meant for.
+static struct {
+    int action = -1, column, holder;
+    char key[32];
+} g_refused;
+
 static bool g_bindingsReady;
 
 static bool Wide() { return Menu_Wide(); }
@@ -311,6 +327,7 @@ void Controls_Open() {
     g_scroll = 0;
     g_waiting = false;
     g_lastBound[0] = 0;
+    g_refused.action = -1;
     if (!g_bindingsReady) {
         ResetBindings();
         g_bindingsReady = true;
@@ -335,6 +352,7 @@ void Controls_Reset() {
     g_active = g_waiting = g_focusRight = false;
     g_device = g_group = g_colCursor = g_row = g_column = g_scroll = 0;
     g_lastBound[0] = 0;
+    g_refused.action = -1;
     g_bindingsReady = false;
 }
 
@@ -342,6 +360,20 @@ void Controls_Reset() {
 
 static void Bind(int action, int column, int code) {
     char name[32], was[32];
+    // No side effects (decided 2026-11-03): a key another action has is refused,
+    // the old key stays, and the voice says which action has it and what to do.
+    int holder = HolderOf(action, column, code);
+    if (holder >= 0 && Menu_GetSwitch("keyrule") == 0) {
+        if (column < 2)
+            KeyName(code, name, sizeof name);
+        else
+            PadName(code, name, sizeof name);
+        g_refused.action = action, g_refused.column = column, g_refused.holder = holder;
+        snprintf(g_refused.key, sizeof g_refused.key, "%s", name);
+        Trace("bind refused action=\"%s\" column=\"%s\" key=\"%s\" holder=\"%s\"", kActions[action].name,
+              ColumnHead(column), name, kActions[holder].name);
+        return;
+    }
     if (column < 2) {
         KeyName(g_bind[action][column], was, sizeof was);
         g_bind[action][column] = code;
@@ -362,6 +394,7 @@ static void Bind(int action, int column, int code) {
 }
 
 static void StartWaiting() {
+    g_refused.action = -1;
     g_waiting = true;
     g_waitStart = Engine_TimeMs();
     g_waitFrame = Engine_Frame();
@@ -490,7 +523,13 @@ static void Say() {
     } else {
         int a = CursorAction(), c = CursorColumn();
         int other = ConflictOf(a, c);
-        if (other >= 0) {
+        if (g_refused.action >= 0 && (g_refused.action != a || g_refused.column != c))
+            g_refused.action = -1;  // the cursor moved on
+        if (g_refused.action >= 0) {
+            const Action &h = kActions[g_refused.holder];
+            snprintf(buf, sizeof buf, "Clear %s on %s first.", g_refused.key, h.name);
+            text = buf;
+        } else if (other >= 0) {
             char name[32];
             ChipText(a, c, name, sizeof name);
             // One message at a time (switch clash): the note replaces the help.

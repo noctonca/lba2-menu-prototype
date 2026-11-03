@@ -209,8 +209,11 @@ voice. A setting exists only if players really disagree about it.
 **Postel's Law** (be liberal in what you accept).
 - Keys and pad both work everywhere, except while a binding waits: then only
   the device the view shows. Esc, or 5 s, gives up the wait.
-- A key already in use is taken and both chips go red, rather than refused
-  *(open call: refused, swapped, or allowed and marked)*.
+- A key already in use is refused: the old key stays and the voice says what
+  to do, "Clear C on Protection spell first." No side effects: a swap would
+  change an action the player is not looking at, and a clash would fire two
+  actions in play (decided 2026-11-03; the 1997 binding screen refuses too).
+  Red stays for a clash that comes in from an edited lba2.cfg.
 
 **Cognitive Load, Occam's Razor.** Every row earns its place. The voice says
 what a setting does in the player's terms ("Footsteps, doors, magic."), not

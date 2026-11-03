@@ -27,7 +27,7 @@
 // (2026-11-03) and are left out; --combo still tests them.
 static const char *kCombos[] = {
     "band=1,gameplay=0", "band=1,gameplay=1", "help640=0,gameplay=1", "padnames=2",
-    "padnames=3",        "chip=1,tablefont=2",            "heads=0",
+    "padnames=3",        "chip=1,tablefont=2,keyrule=1",            "heads=0",
 };
 
 static const char *kPages[] = {
@@ -1166,10 +1166,29 @@ struct Walker {
             return;
         Key("esc");
 
-        // A key another action has: the chip takes it, both go red, the help says so.
         const char *partner = pad ? "Talk and search" : "Jetpack";
         char want[32];
         Controls_Binding(partner, pad ? 2 : 0, want, sizeof want);
+        if (Menu_GetSwitch("keyrule") == 0) {
+            // A key another action has is refused: the chip keeps its key, nothing
+            // goes red, and the help names the action that has it.
+            std::string kept = ChipText();
+            Key("enter");
+            Press(pad ? "pad:a" : "J");
+            if (!Expect(!Waiting() && ChipText() == kept,
+                        Fmt("bind: %s, another action's, replaced %s (chip %s)", Repr(want).c_str(), Repr(kept.c_str()).c_str(),
+                            Repr(ChipText().c_str()).c_str())))
+                return;
+            Check();
+            Expect(!ChipRed() && !Clashes(partner), Fmt("bind: a refused %s left a clash", Repr(want).c_str()));
+            Expect(Voice() == std::string("Clear ") + want + " on " + partner + " first.",
+                   Fmt("bind: the help does not say %s has it: %s", partner, Repr(Voice().c_str()).c_str()));
+            Key("del");
+            Expect(ChipText().empty(), Fmt("bind: Del leaves %s", Repr(ChipText().c_str()).c_str()));
+            return;
+        }
+
+        // Allowed (keyrule 1): the chip takes it, both go red, the help says so.
         Key("enter");
         Press(pad ? "pad:a" : "J");
         if (!Expect(!Waiting() && ChipText() == want,

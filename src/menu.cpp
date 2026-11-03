@@ -207,7 +207,7 @@ struct Page {
 static Page g_pages[P_COUNT];
 
 // Switches.
-static int sw_band = 1, sw_typing = 0, sw_chip = 2, sw_tablefont = 1, sw_word = 0, sw_island = 0, sw_help640 = 1,
+static int sw_band = 1, sw_typing = 0, sw_chip = 2, sw_tablefont = 1, sw_keyrule = 0, sw_word = 0, sw_island = 0, sw_help640 = 1,
            sw_gameplay = 0, sw_overlay = 0;
 // Composition (2026-11-03 design pass): sheet, legend, bg, scale (scale remakes the canvas).
 static int sw_sheet = 1, sw_legend = 1, sw_bg = 1, sw_scale = 1, sw_bandshade = 15, sw_panes = 1;
@@ -1645,7 +1645,7 @@ struct SwitchDef {
     int start;  // the value a fresh start has
 };
 static const SwitchDef kSwitches[] = {
-    {"band", &sw_band, 0, 1, 1},           {"typing", &sw_typing, 0, 2, 0},   {"chip", &sw_chip, 1, 2, 2},   {"tablefont", &sw_tablefont, 1, 2, 1},
+    {"band", &sw_band, 0, 1, 1},           {"typing", &sw_typing, 0, 2, 0},   {"chip", &sw_chip, 1, 2, 2},   {"tablefont", &sw_tablefont, 1, 2, 1}, {"keyrule", &sw_keyrule, 0, 1, 0},
     {"word", &sw_word, 0, 3, 0},           {"island", &sw_island, 0, 1, 0},   {"help640", &sw_help640, 0, 1, 1},
     {"gameplay", &sw_gameplay, 0, 1, 0},   {"overlay", &sw_overlay, 0, 1, 0},
     {"devices", &sw_devices, 0, 1, 1},     {"padnames", &sw_padnames, 0, 3, 0},   {"heads", &sw_heads, 0, 1, 1},

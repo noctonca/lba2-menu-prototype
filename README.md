@@ -101,6 +101,7 @@ own switches are on F1 to F12 and 0 to 9.
 | 6 | `bandshade` | the band darkened to level 15 / 11 |
 | 7 | `clash` | a key clash's note alone in the voice / added after the action's help |
 | 8 | `short` | the shorter help, for translation, and a dimmed row saying why it is dimmed / the help as first written |
+| | `keyrule` | a key another action has is refused and the help says where to clear it (decided) / taken, both chips red |
 | 9 | `narrow` | 640 wide: key chips 116 wide, so "Behaviour action" clears them / 120 |
 | 0 | `exptable` | Experimental settings: one dense table in the 8x8 font (decided) / the game-font list, a page per group |
 | | `fpsrow` | the Frame rate row on Display and graphics, under Vsync (decided) / on Advanced and reset (no key: `--switch fpsrow=1`) |
@@ -294,8 +295,9 @@ walk finds starts with the walk's name:
   preset row as it was.
 - `bind:` on the first action of each group, in each column: Enter waits and
   the voice asks for the key; Esc cancels; the other device's input is ignored;
-  a key another action has goes in, both chips go red and the help names the
-  other action; Del clears it. Also: Forward's Key 2 put in Key 1 leaves Key 2
+  a key another action has is refused (the chip keeps its key, nothing goes
+  red, the help says "Clear J on Jetpack first."); with `keyrule=1` it goes
+  in, both chips go red and the help names the other action; Del clears it. Also: Forward's Key 2 put in Key 1 leaves Key 2
   empty, and the wait gives up after 5 s.
 
 It runs in one process without drawing to a window (nor drawing the
