@@ -119,10 +119,13 @@ static void KeyName(int code, char *out, size_t n) {
         const char *from, *to;
     } kShort[] = {
         {"Left Alt", "Alt"},       {"Right Alt", "Alt Gr"},  {"Left Ctrl", "Ctrl"},   {"Right Ctrl", "R Ctrl"},
-        {"Left Shift", "Shift"},   {"Right Shift", "R Shift"}, {"Left GUI", "Cmd"},  {"Right GUI", "R Cmd"},
+        {"Left Shift", "Shift"},   {"Right Shift", "RShift"}, {"Left GUI", "Cmd"},  {"Right GUI", "R Cmd"},
         {"Return", "Enter"},       {"Keypad Enter", "NumEnt"}, {"Backspace", "Bksp"}, {"Delete", "Del"},
         {"Insert", "Ins"},         {"PageUp", "PgUp"},       {"PageDown", "PgDn"},   {"Escape", "Esc"},
         {"CapsLock", "Caps"},      {"Numlock", "NumLk"},
+        // A chip holds 6 letters: the keys whose SDL names are longer.
+        {"PrintScreen", "PrtSc"},  {"ScrollLock", "ScrLk"},
+        {"NonUSBackslash", "ISO \\"}, {"Application", "Apps"},  // SDL has a "Menu" key too
     };
     for (size_t i = 0; i < sizeof kShort / sizeof kShort[0]; i++) {
         if (!strcmp(sdl, kShort[i].from)) {

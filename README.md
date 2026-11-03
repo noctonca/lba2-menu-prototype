@@ -144,7 +144,7 @@ the 1997 game's six languages were compared for the help review.
 ## Testing
 
 `lba2menu --selftest` visits every row of every page and every chip of the
-Controls page at one screen size, for each of nine switch combinations, and
+Controls page at one screen size, for each of seven switch combinations, and
 lists what does not fit: help cut off, rows running into the help or off the
 screen, labels running into their values or their key chips, key names cut in
 their chips. On every screen it also checks that exactly one row or chip has
@@ -195,13 +195,15 @@ screen it was found on:
         again: build/lba2menu --size 1920x1080 --switch band=1 --switch gameplay=0 --switch typing=2 --do "open Sound"
 
 - `--combo name=v,name=v` (repeatable) tests those switch settings instead of
-  the nine; any switch of `state` can go in.
+  the seven; any switch of `state` can go in. The seven are the chosen
+  layouts and their variants; the help line and prompt bar (`band=0`) and all
+  key columns side by side (`devices=0`) were not chosen and are left out.
 - `--only PAGE` keeps one page (`"Keys and buttons"` for the Controls page).
   The `esc:` and `reach:` walk needs every page, so it runs only without it.
 - `--layout-only` leaves out the walks by keys.
 - Add `--headless` and `; shot x.png` to an `again` line for a picture.
 
-`tools/sweep.py` runs the self test for five screen sizes and the nine
+`tools/sweep.py` runs the self test for five screen sizes and the seven
 combinations, one process each, in parallel (about 3 seconds on the Mac), and
 takes `--sizes`, `--combo`, `--only`, `--again` and `--layout-only` the same way.
 

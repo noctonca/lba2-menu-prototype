@@ -36,9 +36,10 @@ PAGES = ["Options", "Preset", "Language and interface", "Display and graphics", 
 # Actions per group on the Controls page (controls.cpp kActions).
 CONTROL_GROUPS = [5, 6, 4, 7, 4, 4, 6]
 
-# The same nine as selftest.cpp kCombos.
-COMBOS = ["band=1,gameplay=0", "band=1,gameplay=1", "band=0,gameplay=1", "help640=1,gameplay=1",
-          "devices=0", "padnames=2", "padnames=3", "chip=1", "heads=0"]
+# The same seven as selftest.cpp kCombos: the chosen layouts and their variants
+# (band=0 and devices=0 were not chosen, 2026-11-03; --combo still tests them).
+COMBOS = ["band=1,gameplay=0", "band=1,gameplay=1", "help640=1,gameplay=1",
+          "padnames=2", "padnames=3", "chip=1", "heads=0"]
 
 def parse_combo(spec):
     return {k: int(v) for k, v in (part.split("=") for part in spec.split(","))}
@@ -287,7 +288,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--bin", default=os.path.join(os.path.dirname(__file__), "..", "build", "lba2menu"))
     ap.add_argument("--sizes", default="640x480,1280x720,1280x800,1920x1080,2400x1080")
-    ap.add_argument("--combo", action="append", help="name=v,name=v (repeat; default: the nine)")
+    ap.add_argument("--combo", action="append", help="name=v,name=v (repeat; default: the seven)")
     ap.add_argument("--only", help="one page by name")
     ap.add_argument("--again", action="store_true", help="print the command line that shows each problem")
     ap.add_argument("--layout-only", action="store_true", help="the layout walk only, no walks by keys")
