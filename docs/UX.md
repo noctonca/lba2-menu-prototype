@@ -32,10 +32,17 @@ the call is answered.
   (X). There is no hover and no touch in this menu. A key held repeats after
   350 ms, every 90 ms (arrows only).
 - **The canvas.** 640x480 at 1x is the 1997 canvas and the one-column layout:
-  it must look as today's Options do. From a logical width of 840 the wide
-  layout takes over: two panes and a band. Scale is a whole step only
-  (1920x1080 is logical 960x540 at 2x). Every number below is in logical
-  pixels.
+  it must look as today's Options do. Screens 3:2 or wider take the wide
+  layout: one 960x540 composition (one pane at a time, centred, and a band) at
+  the largest whole step that fits, centred both ways on the rest of the
+  screen, as 1997 centred its 640x480 canvas. Narrower screens (4:3, 5:4) take
+  the one column at the largest whole step that fits 640x480. Scale is a whole
+  step only (1920x1080 is 960x540 at 2x; 2560x1440, 3440x1440 and 2560x1600
+  are 2x with a border; 3840x2160 is 4x). Every number below is in logical
+  pixels, measured from the composition's top left (decided 2026-11-03).
+- **The picture** behind the menu is scaled evenly to cover the screen and
+  cropped, never stretched. It fills the whole screen, border included
+  (decided 2026-11-03).
 - **Two distances.** A desk at arm's length and a sofa at a few metres. Rules
   about legibility are written for the sofa.
 
@@ -44,8 +51,10 @@ the call is answered.
 | Layout | Edge | x (at logical 960) | What sits on it |
 |---|---|---|---|
 | One column | row box | W/2 - 275 .. W/2 + 275 (45 .. 595 at 640) | every row; labels centred, as 1997 |
-| Wide | margin | 32 and W - 33 | the outer edge of every pane and of the band |
-| Wide | label edge | pane x0 + 16 | every label in a pane, and the band's voice |
+| Wide | margin | 32 and W - 33 (W = 960) | the outer edge of the band |
+| Wide | pane | W/2 - 320 .. W/2 + 319 (160 .. 799 at 960) | every row; the page's title centred on it |
+| Wide | label edge | pane x0 + 16 | every label in the pane |
+| Wide | voice edge | 48 (the band's x0 + 16) | the band's voice |
 | Wide | value edge | row x1 - 24 | the right end of every value (text, slider, steps) |
 | Wide, Controls | value edge | row x1 - 24 | the right end of the last key chip, as values |
 
@@ -64,14 +73,21 @@ the call is answered.
   chips, in the 8x8 font at 1x: the one place 1x is used on the wide canvas,
   since 2x does not fit between a row's frame and its chip. Both panes then
   start at y 24 and their rows line up (decided 2026-11-03, switch `heads`;
-  0 shows the head line above). The pad column's head reads "Gamepad", so the
+  0 shows the head line above). With one pane at a time the group's name is
+  the title and the actions start one pitch below it. The pad column's head reads "Gamepad", so the
   page names the device it shows.
-- **A question takes the right pane** in the wide layout: its answers replace
-  the pane's rows, on the label edge, and the voice asks it in the band. At
+- **A question takes the page's place** in the wide layout: its answers replace
+  the page's rows under its title, on the label edge, and the voice asks it in
+  the band. At
   640x480 it stays the centred box (decided 2026-11-03).
-- The panes' split may differ by page: Options splits 464:416 (right pane at
-  512), Controls 304:576 (right pane at 352), because Controls needs the room
-  for two chip columns beside an action's name (decided 2026-11-03).
+- **One pane at a time** (decided 2026-11-03, switch `panes`): the hub's
+  categories, then a page, as the 1997 menu goes from a page to a sub-page.
+  Two panes side by side left the page 416 pixels at 960 wide, short of what
+  six English labels and their values need (up to 556); one pane is 640 wide
+  and holds them with 84 to spare. A page's name is its title (the brand
+  book's Title, +4,+4 shadow), in the seventh row's place: a page shows six
+  rows under it, the hub seven and no title. A longer page scrolls (Weapons,
+  seven actions). The hub no longer previews a category's rows.
 
 ## Vertical rhythm
 
@@ -118,7 +134,8 @@ is no pointer, so the cost of a target is the number of key presses to it.
 
 **Miller's Law, Chunking** (working memory holds about 7 chunks).
 - A page holds at most 7 rows, 8 on the 640x480 canvas with its Return row
-  (the brand book's "a plain menu does not scroll"). More means a sub-page.
+  (the brand book's "a plain menu does not scroll"); on the wide canvas, 6
+  under the page's title, 7 on the hub. More means a sub-page.
 - The Controls page chunks 36 actions into 7 groups of 4 to 7.
 
 **Jakob's Law** (people expect it to work like what they know). Two things
@@ -133,7 +150,10 @@ they know: the 1997 menus, and every console game's menu.
 
 **Law of Proximity** (near things read as a group). See vertical rhythm. The
 voice and the legend share the band because both speak about the row under
-the cursor.
+the cursor. The legend is stacked at the band's right, one key per line, so
+the voice keeps the band's width (decided 2026-11-03: a legend in a row left
+the voice 248 to 312 px on the Controls page). The first launch's question
+sits inside the composition, in the band's place.
 
 **Law of Similarity** (what looks alike is taken to work alike).
 - One style per role: labels white in the game font; values in a column on the
@@ -210,14 +230,14 @@ is read; help cut off is not. **[self test: help cut off]**
 What each key does, and where the cursor goes. The walks of the self test
 check the parts marked.
 
-- **Up and Down** move the cursor in the focused pane, wrapping.
+- **Up and Down** move the cursor on the page, wrapping.
 - **Left and Right** change the value of a setting row, and the other key puts
-  it back; a dimmed row ignores them. **[self test: setting]** In the wide
-  hub's left pane, Right opens the category, as Enter does.
+  it back; a dimmed row ignores them. **[self test: setting]** On the wide
+  hub, Right opens the category, as Enter does.
 - **Enter** opens a page, or acts on the row; a choice row also cycles
   forward. Every page is reached from the hub by Enter. **[self test: reach]**
 - **Esc steps back one level**: out of a wait for a key, out of a question
-  (as No), out of the right pane, out of a sub-page, and last out of the
+  (as No), out of a page back to the hub, out of a sub-page, and last out of the
   Options. It returns the cursor to the row that opened the level.
   **[self test: esc]**
 - **A question starts on its safe answer** (No, keep Modern), and Esc answers
@@ -250,10 +270,11 @@ check the parts marked.
   filled against an empty frame instead (decided 2026-11-03). Lit steps take
   that plasma, as the 1997 slider fill does; a dimmed slider is drawn without
   it, in the dimmed grey (5.6:1 against its empty track).
-- The band is darkened further than the 640x480 dialogue window, so the voice
-  and the legend pass their contrast bars over light skies (decided
-  2026-11-03). The 640x480 dialogue window keeps the 1997
-  level.
+- The band is darkened to level 15, further than the 640x480 dialogue window,
+  so the voice and the legend pass their contrast bars over light skies and
+  the foam of the menu picture: at level 11 the voice measured 1.24:1 over
+  the foam, at 15 it holds 3.15:1 or more at every screen size (decided
+  2026-11-03). The 640x480 dialogue window keeps the 1997 level.
 
 ## Visual QA checklist
 

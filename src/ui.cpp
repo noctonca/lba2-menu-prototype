@@ -57,6 +57,15 @@ void Ui_TextShadow(S32 x, S32 y, const char *s, U8 colour) {
     Font(x, y, s);
 }
 
+S32 Ui_Title(S32 x0, S32 x1, S32 y, const char *s) {
+    S32 x = (x0 + x1 + 1) / 2 - Ui_TextWidth(s) / 2;
+    ColorFont(INK_BLACK);
+    Font(x + 4, y + 4, s);
+    ColorFont(INK_WHITE);
+    Font(x, y, s);
+    return y + 56;  // the title takes one row's pitch
+}
+
 static void Triangle(S32 tipX, S32 yc, S32 dir, U8 colour) {
     // 10 wide, 19 tall, pointing left (dir -1) or right (dir +1): about the
     // weight of the corner arrow sprites at the game font's size.

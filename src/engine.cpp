@@ -59,9 +59,36 @@ static U32 s_repeatAt[KEY_COUNT];
 static const U32 kScancode[KEY_COUNT] = {
     K_UP, K_DOWN, K_LEFT, K_RIGHT, K_ENTER, K_ESC, K_TAB, K_SUPPR,
     K_F1, K_F2, K_F3, K_F4, K_F5, K_F6, K_F7, K_F8, K_F9, K_F10, K_F11, K_F12,
+    K_1, K_2, K_3, K_4, K_5, K_6,
 };
 
+static int s_scaleRule = 1;
+void Engine_SetScaleRule(int rule) { s_scaleRule = rule; }
+int Engine_ScaleRule() { return s_scaleRule; }
+
+// Rule 1: a screen 3:2 or wider takes the wide composition (960x540) at the
+// largest whole step it fits; a squarer screen, or one too small for 960x540,
+// takes the one column at the largest step that holds 640x480.
+static bool WideByRule(U32 w, U32 h, U32 *scale) {
+    if (s_scaleRule != 1 || w * 2 < h * 3)
+        return false;
+    U32 wx = w / 960, wy = h / 540;
+    U32 ws = wx < wy ? wx : wy;
+    if (ws < 1)
+        return false;
+    *scale = ws;
+    return true;
+}
+
+bool Engine_RuleChoseWide() {
+    U32 s;
+    return WideByRule(s_physW, s_physH, &s);
+}
+
 U32 Engine_Scale(U32 w, U32 h) {
+    U32 ws;
+    if (WideByRule(w, h, &ws))
+        return ws;
     U32 sx = w / 640, sy = h / 480;
     U32 s = sx < sy ? sx : sy;
     return s < 1 ? 1 : s;
@@ -198,6 +225,7 @@ static U32 s_frame;
 static const char *kKeyNames[KEY_COUNT] = {
     "up", "down", "left", "right", "enter", "esc", "tab", "del",
     "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12",
+    "1", "2", "3", "4", "5", "6",
 };
 
 void Engine_Inject(UiKey k) { s_injected[k] = true; }
@@ -395,11 +423,38 @@ void Engine_ResetInput() {
     s_lastPad = false;
 }
 
+static int s_bgFit = 1;
+void Engine_SetBackgroundFit(int fit) { s_bgFit = fit; }
+
 void Engine_DrawBackground() {
     if (!s_pixels)
         return;
-    // Nearest-neighbour stretch of the 640x480 image, as Image_LoadStretched does.
     U8 *dst = (U8 *)Log;
+    if (s_bgFit == 1) {
+        // Cover: one factor for both axes, the larger of W/640 and H/480 (as a
+        // fraction num/den), the overflow cropped evenly; nearest neighbour.
+        U32 num, den;
+        if (s_logW * 480 >= s_logH * 640) {
+            num = s_logW;
+            den = 640;
+        } else {
+            num = s_logH;
+            den = 480;
+        }
+        // Scaled size 640*num/den x 480*num/den; offsets centre it.
+        U32 ox = (640 * num / den - s_logW) / 2, oy = (480 * num / den - s_logH) / 2;
+        for (U32 y = 0; y < s_logH; y++) {
+            U32 sy = (y + oy) * den / num;
+            const U8 *row = s_menuImage + (sy < 480 ? sy : 479) * 640;
+            U8 *out = dst + TabOffLine[y];
+            for (U32 x = 0; x < s_logW; x++) {
+                U32 sx = (x + ox) * den / num;
+                out[x] = row[sx < 640 ? sx : 639];
+            }
+        }
+        return;
+    }
+    // Nearest-neighbour stretch of the 640x480 image, as Image_LoadStretched does.
     for (U32 y = 0; y < s_logH; y++) {
         const U8 *row = s_menuImage + (y * 480 / s_logH) * 640;
         U8 *out = dst + TabOffLine[y];

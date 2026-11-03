@@ -25,8 +25,8 @@ enum { ROW_H = 50, ROW_GAP = 6, ROW_PITCH = 56 };
 
 void Ui_RowBackground(S32 x0, S32 y0, S32 x1, S32 y1, RowFill fill);
 // Frame + darkened inside: PANEL_SHADE_LVL, the 1997 dialogue window's level, or
-// BAND_SHADE_LVL for the wide band, darker (the rows' MENU_SHADE_LVL) so the
-// voice holds 3:1 and the legend 4.5:1 over light skies.
+// BAND_SHADE_LVL for the wide band before 2026-11-03 (the rows' MENU_SHADE_LVL);
+// the band now takes 15 (switch bandshade), which holds 3:1 over the foam too.
 enum { BAND_SHADE_LVL = 11 };
 void Ui_Panel(S32 x0, S32 y0, S32 x1, S32 y1, S32 level);
 
@@ -35,6 +35,9 @@ S32 Ui_TextWidth(const char *s);
 S32 Ui_TextInkWidth(const char *s);
 void Ui_Text(S32 x, S32 y, const char *s, U8 colour);
 void Ui_TextShadow(S32 x, S32 y, const char *s, U8 colour);  // dialogue shadow +2,+4
+// A page title (the brand book's Title): white, the title shadow +4,+4, centred on
+// x0..x1, its text cell from y. Returns where the rows below may start.
+S32 Ui_Title(S32 x0, S32 x1, S32 y, const char *s);
 
 // Two solid triangles, kin of the corner arrow sprites, either side of a value.
 void Ui_ChangeMarks(S32 leftX, S32 rightX, S32 yCentre);

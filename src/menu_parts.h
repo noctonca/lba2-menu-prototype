@@ -25,6 +25,21 @@ DrawnRow &Menu_Record(const char *pane, const char *label, const char *value, Ro
 void Menu_RowLabelCentred(S32 x0, S32 x1, S32 yc, const char *s, U8 colour);
 void Menu_DrawScrollBar(S32 x0, S32 y0, S32 y1, int first, int visible, int total);
 
+// Whether pages take the wide layout, and the frame it is composed in. With the
+// `sheet` switch off, the frame is the whole canvas (the wide layout from 840
+// logical pixels, stretched to the margins). With it on, the wide layout is one
+// 960x540 composition, centred on any larger canvas as the 1997 640x480 one is,
+// and a canvas it does not fit takes the one column.
+bool Menu_Wide();
+struct WideFrame {
+    S32 x0, y0, w, h;
+};
+WideFrame Menu_WideFrame();
+// The `panes` switch: 1 (decided 2026-11-03) one pane at a time, centred, DRILL_W
+// wide: the hub, then a page, as the 1997 menu goes; 0 two panes side by side.
+int Menu_Panes();
+enum { DRILL_W = 640 };
+
 // The foot of a wide page: the band (voice + legend) or the help line and the
 // prompt bar, as the `band` switch says. Returns the y the rows must stay above.
 S32 Menu_WideRowsLimit();
@@ -32,6 +47,7 @@ void Menu_DrawFoot(const char **keys, const char **words, int n);
 // The one-column dialogue window with the voice in it. Returns its top.
 S32 Menu_DialogueTop();
 void Menu_DrawDialogue();
+void Menu_DrawDialogueIn(S32 x0, S32 y0, S32 x1, S32 y1);
 
 // Say a line in the voice, typed or not as the `typing` switch says.
 void Menu_Say(const char *text);

@@ -231,7 +231,7 @@ static U32 g_waitStart, g_waitFrame;
 static char g_lastBound[96];
 static bool g_bindingsReady;
 
-static bool Wide() { return Engine_LogicalW() >= 840; }
+static bool Wide() { return Menu_Wide(); }
 
 // Wide, with heads=1: the column names sit inside the first row, so the actions start on the
 // top margin level with the groups. The one column keeps its heads above, as 1997's page.
@@ -658,18 +658,26 @@ static void DrawActions(S32 x0, S32 x1, S32 headsTop, S32 limit, const char *pan
 }
 
 static void DrawWideControls() {
-    S32 W = (S32)Engine_LogicalW();
     // The groups and the column heads start on the top margin, as Options' panes do; seven
     // groups from 24 end at 410, clear of the band at 430. The actions start under their heads,
     // or with the heads inside their first row (heads=1), level with the groups.
-    const S32 side = 32, top = 24, gap = 16;
-    S32 inner = W - 2 * side - gap;
+    WideFrame f = Menu_WideFrame();
+    const S32 side = 32, gap = 16;
+    const S32 top = f.y0 + 24;
+    S32 inner = f.w - 2 * side - gap;
     S32 leftW = inner * 304 / 880;
-    S32 lx0 = side, lx1 = side + leftW - 1;
-    S32 rx0 = lx1 + 1 + gap, rx1 = W - side - 1;
+    S32 lx0 = f.x0 + side, lx1 = lx0 + leftW - 1;
+    S32 rx0 = lx1 + 1 + gap, rx1 = f.x0 + f.w - side - 1;
+    bool drawLeft = true, drawRight = true;
+    if (Menu_Panes()) {
+        lx0 = rx0 = f.x0 + (f.w - DRILL_W) / 2;
+        lx1 = rx1 = lx0 + DRILL_W - 1;
+        drawLeft = !g_focusRight;
+        drawRight = g_focusRight;
+    }
 
     S32 y = top;
-    for (int g = 0; g < GROUP_COUNT; g++) {
+    for (int g = 0; drawLeft && g < GROUP_COUNT; g++) {
         RowFill fill = FILL_SHADE;
         if (g == g_group)
             fill = g_focusRight ? FILL_CURRENT : FILL_CURSOR;
@@ -680,7 +688,12 @@ static void DrawWideControls() {
         d.textRight = lx0 + 16 + Ui_TextWidth(kGroups[g].name);
         y += ROW_PITCH;
     }
-    DrawActions(rx0, rx1, top, Menu_WideRowsLimit(), "controls-right");
+    if (drawRight) {
+        S32 atop = top;
+        if (Menu_Panes())
+            atop = Ui_Title(rx0, rx1, top, kGroups[g_group].name);
+        DrawActions(rx0, rx1, atop, Menu_WideRowsLimit(), "controls-right");
+    }
 
     const char *keys[4], *words[4];
     int nk;

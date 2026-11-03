@@ -50,7 +50,7 @@
 static const char *kDefaultData = "~/code/lba-hacking/assets/lba2-activision-us-cd";
 
 static const U32 kSizes[][2] = {
-    {640, 480}, {1280, 720}, {1280, 800}, {1920, 1080}, {2400, 1080}, {2560, 1440},
+    {640, 480}, {1280, 720}, {1280, 800}, {1920, 1080}, {2400, 1080}, {2560, 1440}, {3440, 1440}, {3840, 2160},
 };
 
 struct Runner {
@@ -94,6 +94,9 @@ static bool RunCommand(Runner &r, const char *line) {
         r.waitFrames = 1;
     } else if (!strcmp(cmd, "wait")) {
         r.waitFrames = (U32)atoi(a);
+    } else if (!strcmp(cmd, "measure")) {
+        printf("measure ");
+        Menu_WriteMeasure(stdout);
     } else if (!strcmp(cmd, "state")) {
         printf("state ");
         Menu_WriteState(stdout);
@@ -133,10 +136,11 @@ static std::string ExpandHome(const char *p) {
 }
 
 // F2: start again at the next size, keeping the other arguments.
-static void Relaunch(int argc, char **argv, U32 w, U32 h) {
+// Start again at another screen size or scale rule, with the switches as they are now.
+static void Relaunch(int argc, char **argv, U32 w, U32 h, int scaleRule) {
     std::vector<std::string> args;
     for (int i = 0; i < argc; i++) {
-        if (!strcmp(argv[i], "--size") && i + 1 < argc) {
+        if ((!strcmp(argv[i], "--size") || !strcmp(argv[i], "--switch")) && i + 1 < argc) {
             i++;
             continue;
         }
@@ -148,6 +152,16 @@ static void Relaunch(int argc, char **argv, U32 w, U32 h) {
     snprintf(size, sizeof size, "%ux%u", (unsigned)w, (unsigned)h);
     args.push_back("--size");
     args.push_back(size);
+    std::vector<std::string> sw;
+    Menu_SwitchArgs(sw);
+    for (size_t i = 0; i < sw.size(); i++) {
+        if (!sw[i].compare(0, 6, "scale="))
+            continue;
+        args.push_back("--switch");
+        args.push_back(sw[i]);
+    }
+    args.push_back("--switch");
+    args.push_back("scale=" + std::to_string(scaleRule));
     std::vector<char *> cargs;
     for (size_t i = 0; i < args.size(); i++)
         cargs.push_back((char *)args[i].c_str());
@@ -198,7 +212,10 @@ int main(int argc, char **argv) {
             trace = v;
             i++;
         } else if (!strcmp(a, "--switch")) {
-            switches.push_back(v);
+            if (!strncmp(v, "scale=", 6))
+                Engine_SetScaleRule(atoi(v + 6));  // the canvas depends on it: before Engine_Init
+            else
+                switches.push_back(v);
             i++;
         } else if (!strcmp(a, "--do")) {
             // Split on ';' into script lines.
@@ -366,8 +383,21 @@ int main(int argc, char **argv) {
                 if (kSizes[i][0] == w && kSizes[i][1] == h)
                     at = i;
             const U32 *nx = kSizes[(at + 1) % count];
-            Relaunch(argc, argv, nx[0], nx[1]);
+            Relaunch(argc, argv, nx[0], nx[1], Engine_ScaleRule());
         }
+        // The composition switches (design pass, 2026-11-03).
+        if (Engine_Pressed(KEY_1))
+            Menu_SetSwitch("sheet", !Menu_GetSwitch("sheet"));
+        if (Engine_Pressed(KEY_2))
+            Menu_SetSwitch("legend", !Menu_GetSwitch("legend"));
+        if (Engine_Pressed(KEY_3))
+            Menu_SetSwitch("bg", !Menu_GetSwitch("bg"));
+        if (Engine_Pressed(KEY_4))
+            Relaunch(argc, argv, w, h, !Engine_ScaleRule());
+        if (Engine_Pressed(KEY_5))
+            Menu_SetSwitch("panes", !Menu_GetSwitch("panes"));
+        if (Engine_Pressed(KEY_6))
+            Menu_SetSwitch("bandshade", Menu_GetSwitch("bandshade") ? 0 : 15);
 
         Menu_Update();
         Menu_Draw();

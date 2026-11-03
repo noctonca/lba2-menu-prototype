@@ -38,12 +38,13 @@ Game data: `LBA2_GAME_DIR`, or `--data DIR`; the default is
 `~/code/lba-hacking/assets/lba2-activision-us-cd` (a disc image is mounted as
 the engine does).
 
-Keys: arrows, Enter, Esc; a pad's d-pad or left stick, A and B.
+Keys: arrows, Enter, Esc; a pad's d-pad or left stick, A and B. The prototype's
+own switches are on F1 to F12 and 1 to 6.
 
 | Key | Switch | What it changes |
 | --- | --- | --- |
 | F1 | `overlay` | this list on screen |
-| F2 | | the next screen size (640x480, 1280x720, 1280x800, 1920x1080, 2400x1080, 2560x1440) |
+| F2 | | the next screen size (640x480, 1280x720, 1280x800, 1920x1080, 2400x1080, 2560x1440, 3440x1440, 3840x2160) |
 | F3 | `band` | one band (help + legend) / a help line and a prompt bar |
 | F4 | `typing` | help typed on every cursor move / on entering a page only / not typed |
 | F5 | `chip` | the 8x8 key font at 2x / 1x |
@@ -54,6 +55,18 @@ Keys: arrows, Enter, Esc; a pad's d-pad or left stick, A and B.
 | F10 | `devices` | Controls: one device per view, Tab switches / Key 1, Key 2 and Gamepad side by side |
 | F11 | `padnames` | the pad's names: the connected pad's / Xbox / PlayStation / Nintendo |
 | F12 | `heads` | Controls, wide: the column names inside the first row, above its chips / a line of heads above the rows |
+| 1 | `sheet` | wide: one 960x540 composition, centred on any larger screen / stretched to the screen's margins |
+| 2 | `legend` | the band's legend stacked at its right / in a row beside the voice |
+| 3 | `bg` | the background scaled evenly and cropped / stretched, as lba2cc does |
+| 4 | `scale` | screens 3:2 or wider take the 960x540 composition at the largest whole step it fits, others the one column / the plan's rule (relaunches) |
+| 5 | `panes` | wide: one pane at a time, centred, the page's name as a title / two panes side by side |
+| 6 | `bandshade` | the band darkened to level 15 / 11 |
+
+Keys 1 to 6 are the composition review of 2026-11-03 (wide and large screens).
+All six are decided and on by default; each key turns its part off to compare.
+F2 keeps every switch as it steps through the sizes. `./play-composition.sh`
+plays the wide layout as it was before the review, then as decided, on the
+same steps, with a trace per round.
 
 ## The Controls page
 
@@ -86,8 +99,13 @@ Every run can be steered and read back without a person at the keys.
 Commands, one per line: `key <up|down|left|right|enter|esc|tab|del|f1..f12> [count]`,
 `press <key>` (a raw key for rebinding: an SDL name such as `J`, `Left Alt` or
 `Keypad 5`, or `pad:a`, `pad:lb`, `pad:lstick-up` ...),
-`wait <frames>`, `state`, `shot <path.png> [scale]`, `switch <name> <value>`,
+`wait <frames>`, `state`, `measure`, `shot <path.png> [scale]`, `switch <name> <value>`,
 `set <setting> <value>`, `open <page name>`, `quit`.
+
+`measure` prints the width in the game font of every setting's label, its
+widest value and its help, and of the hub's rows, for sizing panes.
+`--switch scale=N` is read before the window opens (the canvas depends on it);
+`switch scale` at run time changes nothing.
 
 - `state` prints one JSON line: layout, sizes, page, focus, cursor, every row
   drawn (label, value, fill, rectangle, dimmed, changed, change marks, whether

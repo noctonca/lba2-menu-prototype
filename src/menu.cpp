@@ -184,6 +184,8 @@ static Page g_pages[P_COUNT];
 // Switches.
 static int sw_band = 1, sw_typing = 0, sw_chip = 2, sw_word = 0, sw_island = 0, sw_help640 = 0,
            sw_gameplay = 0, sw_overlay = 0;
+// Composition (2026-11-03 design pass): sheet, legend, bg, scale (scale is set at launch).
+static int sw_sheet = 1, sw_legend = 1, sw_bg = 1, sw_scale = 1, sw_bandshade = 15, sw_panes = 1;
 
 static const char *kWords[3] = {"Settings", "Preset", "Rules"};
 
@@ -354,9 +356,28 @@ static bool g_pageEntered; // typing mode 1: type once on entering a page
 static char g_toast[128];
 static U32 g_toastUntil;
 
-static bool Wide() {
+bool Menu_Wide() {
+    if (Engine_ScaleRule() == 1)
+        return Engine_RuleChoseWide();
+    if (sw_sheet)
+        return Engine_LogicalW() >= 960 && Engine_LogicalH() >= 540;
     return Engine_LogicalW() >= 840;
 }
+
+WideFrame Menu_WideFrame() {
+    S32 W = (S32)Engine_LogicalW(), H = (S32)Engine_LogicalH();
+    WideFrame f = {0, 0, W, H};
+    if (sw_sheet) {
+        f.w = 960;
+        f.h = 540;
+        f.x0 = (W - 960) / 2;
+        f.y0 = (H - 540) / 2;
+    }
+    return f;
+}
+
+static bool Wide() { return Menu_Wide(); }
+int Menu_Panes() { return sw_panes; }
 
 static void Toast(const char *fmt, const char *a, int v) {
     snprintf(g_toast, sizeof g_toast, fmt, a, v);
@@ -399,17 +420,19 @@ static S32 LegendWidth(const char **keys, const char **words, int n, S32 scale);
 
 // Whether a line for the row under the cursor fits the voice it will be said in:
 // the band beside the legend, the help line, or the 640x480 dialogue window.
+static S32 BandVoiceWidth(const char **keys, const char **words, int nk);
+
 static bool VoiceFits(const char *text, const Row *r) {
     S32 W = (S32)Engine_LogicalW();
     if (!Wide())
         return Voice_Lines(text, W - 49) <= 3;
+    W = Menu_WideFrame().w;
     if (!sw_band)
         return Voice_Lines(text, W - 64) <= 1;
     const char *keys[4], *words[4];
     int nk;
     LegendFor(r, keys, words, &nk);
-    S32 voiceW = W - 64 - LegendWidth(keys, words, nk, sw_chip) - 48;  // as Menu_DrawFoot
-    return Voice_Lines(text, voiceW < 620 ? voiceW : 620) <= 2;
+    return Voice_Lines(text, BandVoiceWidth(keys, words, nk)) <= 2;  // as Menu_DrawFoot
 }
 
 static const char *HelpFor(const Row *r) {
@@ -502,6 +525,7 @@ static void Pop() {
 }
 
 void Menu_Init(bool firstLaunch) {
+    sw_scale = Engine_ScaleRule();
     for (int s = 0; s < S_COUNT; s++)
         g_val[s] = kSettings[s].fresh;
     g_preset = 0;
@@ -888,11 +912,28 @@ static void LegendFor(const Row *r, const char **keys, const char **words, int *
 
 static S32 LegendWidth(const char **keys, const char **words, int n, S32 scale) {
     S32 w = 0;
+    if (sw_legend) {
+        // Stacked: the widest chip, the gap, the widest word.
+        S32 chipW = 0, wordW = 0;
+        for (int i = 0; i < n; i++) {
+            S32 c = Ui_ChipWidth(keys[i], scale), t = Ui_SmallWidth(words[i], scale);
+            chipW = c > chipW ? c : chipW;
+            wordW = t > wordW ? t : wordW;
+        }
+        return n ? chipW + 4 * scale + wordW : 0;
+    }
     for (int i = 0; i < n; i++)
         w += Ui_ChipWidth(keys[i], scale) + 4 * scale + Ui_SmallWidth(words[i], scale) + (i + 1 < n ? 12 * scale : 0);
     return w;
 }
 
+static void LegendRecord(int i, const char *key, const char *word) {
+    char item[48];
+    snprintf(item, sizeof item, "%s[%s] %s", i ? "  " : "", key[0] == '\x11' ? "<>" : key[0] == '\x18' ? "^v" : key, word);
+    strncat(g_legend, item, sizeof g_legend - strlen(g_legend) - 1);
+}
+
+// In a row: chip, word, chip, word, centred on yc.
 static void DrawLegend(S32 x, S32 yc, const char **keys, const char **words, int n, S32 scale) {
     g_legend[0] = 0;
     for (int i = 0; i < n; i++) {
@@ -900,9 +941,26 @@ static void DrawLegend(S32 x, S32 yc, const char **keys, const char **words, int
         x += Ui_Chip(x, yc - chipH / 2, keys[i], scale) + 4 * scale;
         Ui_Small(x, yc - 4 * scale, words[i], INK_CONFIG_MENU, scale);
         x += Ui_SmallWidth(words[i], scale) + 12 * scale;
-        char item[48];
-        snprintf(item, sizeof item, "%s[%s] %s", i ? "  " : "", keys[i][0] == '\x11' ? "<>" : keys[i][0] == '\x18' ? "^v" : keys[i], words[i]);
-        strncat(g_legend, item, sizeof g_legend - strlen(g_legend) - 1);
+        LegendRecord(i, keys[i], words[i]);
+    }
+}
+
+// Stacked (the review card's legend): one key a line from y0, the chips ending on
+// one column and the words starting on the next, so the words read as a list.
+static void DrawLegendStacked(S32 x, S32 y0, const char **keys, const char **words, int n, S32 scale) {
+    g_legend[0] = 0;
+    S32 chipW = 0;
+    for (int i = 0; i < n; i++) {
+        S32 c = Ui_ChipWidth(keys[i], scale);
+        chipW = c > chipW ? c : chipW;
+    }
+    S32 chipH = 12 * scale, pitch = chipH + 2;
+    for (int i = 0; i < n; i++) {
+        S32 y = y0 + i * pitch;
+        S32 c = Ui_ChipWidth(keys[i], scale);
+        Ui_Chip(x + chipW - c, y, keys[i], scale);
+        Ui_Small(x + chipW + 4 * scale, y + chipH / 2 - 4 * scale, words[i], INK_CONFIG_MENU, scale);
+        LegendRecord(i, keys[i], words[i]);
     }
 }
 
@@ -936,7 +994,10 @@ S32 Menu_DialogueTop() { return (S32)Engine_LogicalH() - 1 - 137; }
 void Menu_DrawDialogue() {
     // MESSAGE.CPP NormalWinDial: 8 in from the sides, 137 tall, 8 off the bottom.
     S32 W = (S32)Engine_LogicalW(), H = (S32)Engine_LogicalH();
-    S32 x0 = 8, y0 = H - 1 - 137, x1 = W - 1 - 8, y1 = H - 1 - 8;
+    Menu_DrawDialogueIn(8, H - 1 - 137, W - 1 - 8, H - 1 - 8);
+}
+
+void Menu_DrawDialogueIn(S32 x0, S32 y0, S32 x1, S32 y1) {
     Ui_Panel(x0, y0, x1, y1, PANEL_SHADE_LVL);
     g_voiceLines = Voice_Draw(g_voice, x0 + 16, y0 + 12, x1 - x0 - 32, 3, &g_voiceNeeded);
     g_voiceMax = 3;
@@ -950,14 +1011,19 @@ static void DrawColumn() {
     const Page &p = g_first ? g_pages[P_FIRST] : g_pages[TopPage()];
     bool help = g_first || g_confirm || TopPage() == P_PRESET || sw_help640;
 
+    // First launch on a canvas that takes the wide composition sits in its frame,
+    // the dialogue window where the band is on every other page.
+    bool framed = g_first && sw_sheet && Wide();
+    WideFrame fr = Menu_WideFrame();
+    S32 oy = framed ? fr.y0 : 0;
     if (g_first) {
         Box(0, 0, W - 1, H - 1, 0);
         const char *title = "Choose how to play";
         S32 tx = W / 2 - Ui_TextWidth(title) / 2;
         ColorFont(INK_BLACK);
-        Font(tx + 4, 64 + 4, title);  // the title shadow, +4,+4
-        Ui_Text(tx, 64, title, INK_WHITE);
-        Menu_Record("title", title, "", FILL_SHADE, tx, 64, tx + Ui_TextWidth(title), 64 + 38).textLeft = tx;
+        Font(tx + 4, oy + 64 + 4, title);  // the title shadow, +4,+4
+        Ui_Text(tx, oy + 64, title, INK_WHITE);
+        Menu_Record("title", title, "", FILL_SHADE, tx, oy + 64, tx + Ui_TextWidth(title), oy + 64 + 38).textLeft = tx;
     }
 
     if (g_confirm) {
@@ -981,7 +1047,7 @@ static void DrawColumn() {
         if (help || y < top)
             y = top + (bottom - top - stackH) / 2;
         if (g_first)
-            y = 168;
+            y = oy + 168;
         // The 1997 width: LargeurMenu 550, centred.
         S32 x0 = W / 2 - 275, x1 = W / 2 + 275;
         for (int i = g_scroll; i < g_scroll + visible; i++) {
@@ -992,22 +1058,33 @@ static void DrawColumn() {
             Menu_DrawScrollBar(x1 + 9, y - visible * ROW_PITCH, y - visible * ROW_PITCH + stackH - 1, g_scroll, visible,
                           p.count);
     }
-    if (help)
+    if (help && framed)
+        Menu_DrawDialogueIn(fr.x0 + 32, fr.y0 + fr.h - 25 - 137, fr.x0 + fr.w - 33, fr.y0 + fr.h - 25);
+    else if (help)
         Menu_DrawDialogue();
 }
 
 static void DrawWide() {
-    S32 W = (S32)Engine_LogicalW(), H = (S32)Engine_LogicalH();
-    const S32 side = 32, top = 24, gap = 16;
-    S32 inner = W - 2 * side - gap;
+    WideFrame f = Menu_WideFrame();
+    const S32 side = 32, gap = 16;
+    const S32 top = f.y0 + 24;
+    S32 inner = f.w - 2 * side - gap;
     S32 leftW = inner * 464 / 880;
-    S32 lx0 = side, lx1 = side + leftW - 1;
-    S32 rx0 = lx1 + 1 + gap, rx1 = W - side - 1;
+    S32 lx0 = f.x0 + side, lx1 = lx0 + leftW - 1;
+    S32 rx0 = lx1 + 1 + gap, rx1 = f.x0 + f.w - side - 1;
+    bool drawLeft = true, drawRight = true;
+    if (sw_panes) {
+        // One pane at a time, the focused one, centred and as wide as the 1997 canvas.
+        lx0 = rx0 = f.x0 + (f.w - DRILL_W) / 2;
+        lx1 = rx1 = lx0 + DRILL_W - 1;
+        drawLeft = g_focus == F_LEFT && !g_confirm;
+        drawRight = !drawLeft;
+    }
 
     // Left pane: the hub's categories.
     const Page &hub = g_pages[P_HUB];
     S32 y = top;
-    for (int i = 0; i < LeftCount(); i++) {
+    for (int i = 0; drawLeft && i < LeftCount(); i++) {
         RowFill fill = FILL_SHADE;
         if (i == g_leftCursor)
             fill = g_focus == F_LEFT ? FILL_CURSOR : FILL_CURRENT;
@@ -1017,14 +1094,25 @@ static void DrawWide() {
 
     // Right pane: the page of the category under the left cursor, or, while a
     // question is up, its answers in place of the rows.
-    if (g_confirm) {
-        DrawConfirm("right", rx0, rx1, top);
+    if (!drawRight) {
+    } else if (g_confirm) {
+        S32 qtop = top;
+        if (sw_panes)
+            qtop = Ui_Title(rx0, rx1, top, g_pages[RightPage()].name);
+        DrawConfirm("right", rx0, rx1, qtop);
     } else {
         int rp = RightPage();
         const Page &page = g_pages[rp];
         int n = page.count - RightFirst();
         S32 limit = Menu_WideRowsLimit();
-        int visible = (limit - top + ROW_GAP) / ROW_PITCH;
+        S32 rtop = top;
+        if (sw_panes) {
+            // Alone, the page names itself: a title in the seventh row's place.
+            rtop = Ui_Title(rx0, rx1, top, page.name);
+            Menu_Record("title", page.name, "", FILL_SHADE, rx0, top, rx1, top + 38).textLeft =
+                (rx0 + rx1 + 1) / 2 - Ui_TextWidth(page.name) / 2;
+        }
+        int visible = (limit - rtop + ROW_GAP) / ROW_PITCH;
         if (visible > n)
             visible = n;
         if (g_focus == F_RIGHT) {
@@ -1035,7 +1123,7 @@ static void DrawWide() {
         } else {
             g_scroll = 0;
         }
-        y = top;
+        y = rtop;
         for (int i = g_scroll; i < g_scroll + visible; i++) {
             RowFill fill = FILL_SHADE;
             if (g_focus == F_RIGHT && i == g_cursor)
@@ -1044,7 +1132,7 @@ static void DrawWide() {
             y += ROW_PITCH;
         }
         if (visible < n)
-            Menu_DrawScrollBar(rx1 + 9, top, top + visible * ROW_PITCH - ROW_GAP - 1, g_scroll, visible, n);
+            Menu_DrawScrollBar(rx1 + 9, rtop, rtop + visible * ROW_PITCH - ROW_GAP - 1, g_scroll, visible, n);
     }
 
     // Help and legend.
@@ -1055,38 +1143,50 @@ static void DrawWide() {
 }
 
 S32 Menu_WideRowsLimit() {
-    S32 H = (S32)Engine_LogicalH();
+    WideFrame f = Menu_WideFrame();
+    S32 H = f.y0 + f.h;
     return sw_band ? H - 24 - 86 - 16 : H - 168 - 8;
 }
 
+// The voice's width in the band: what the legend leaves, at most the review's 620.
+static S32 BandVoiceWidth(const char **keys, const char **words, int nk) {
+    S32 W = Menu_WideFrame().w;
+    S32 legendW = LegendWidth(keys, words, nk, sw_chip);
+    S32 voiceW = (W - 2 * 32) - legendW - 48;
+    return voiceW > 620 ? 620 : voiceW;
+}
+
 void Menu_DrawFoot(const char **keys, const char **words, int nk) {
-    S32 W = (S32)Engine_LogicalW(), H = (S32)Engine_LogicalH();
+    WideFrame f = Menu_WideFrame();
+    S32 W = f.w, H = f.h;
     const S32 side = 32;
     S32 chip = sw_chip;
-    S32 bandY0 = H - 24 - 86, bandY1 = H - 25;
-    S32 helpLineY = H - 168, promptY = H - 68;
+    S32 bx0 = f.x0 + side, bx1 = f.x0 + W - side - 1;
+    S32 bandY0 = f.y0 + H - 24 - 86, bandY1 = f.y0 + H - 25;
+    S32 helpLineY = f.y0 + H - 168, promptY = f.y0 + H - 68;
     S32 legendW = LegendWidth(keys, words, nk, chip);
     if (sw_band) {
-        Ui_Panel(side, bandY0, W - side - 1, bandY1, BAND_SHADE_LVL);
-        S32 voiceW = (W - 2 * side) - legendW - 48;
-        if (voiceW > 620)
-            voiceW = 620;
-        g_voiceLines = Voice_Draw(g_voice, side + 16, bandY0 + 5, voiceW, 2, &g_voiceNeeded);
+        Ui_Panel(bx0, bandY0, bx1, bandY1, sw_bandshade ? sw_bandshade : BAND_SHADE_LVL);
+        S32 voiceW = BandVoiceWidth(keys, words, nk);
+        g_voiceLines = Voice_Draw(g_voice, bx0 + 16, bandY0 + 5, voiceW, 2, &g_voiceNeeded);
         g_voiceMax = 2;
         g_voiceWidth = voiceW;
-        DrawLegend(W - side - 16 - legendW, (bandY0 + bandY1) / 2, keys, words, nk, chip);
+        if (sw_legend)
+            DrawLegendStacked(bx1 - 24 - legendW + 1, bandY0 + 7, keys, words, nk, chip);
+        else
+            DrawLegend(bx1 + 1 - 16 - legendW, (bandY0 + bandY1) / 2, keys, words, nk, chip);
         g_helpBox.shown = true;
         g_helpBox.kind = "band";
-        g_helpBox.x0 = side; g_helpBox.y0 = bandY0; g_helpBox.x1 = W - side - 1; g_helpBox.y1 = bandY1;
+        g_helpBox.x0 = bx0; g_helpBox.y0 = bandY0; g_helpBox.x1 = bx1; g_helpBox.y1 = bandY1;
     } else {
         // The proposal: a help line, and a prompt bar at the foot.
-        g_voiceLines = Voice_Draw(g_voice, side, helpLineY, W - 2 * side, 1, &g_voiceNeeded);
+        g_voiceLines = Voice_Draw(g_voice, bx0, helpLineY, W - 2 * side, 1, &g_voiceNeeded);
         g_voiceMax = 1;
         g_voiceWidth = W - 2 * side;
-        DrawLegend(side, promptY + 6 * chip, keys, words, nk, chip);
+        DrawLegend(bx0, promptY + 6 * chip, keys, words, nk, chip);
         g_helpBox.shown = true;
         g_helpBox.kind = "help-line";
-        g_helpBox.x0 = side; g_helpBox.y0 = helpLineY; g_helpBox.x1 = W - side - 1; g_helpBox.y1 = helpLineY + 38;
+        g_helpBox.x0 = bx0; g_helpBox.y0 = helpLineY; g_helpBox.x1 = bx1; g_helpBox.y1 = helpLineY + 38;
     }
 }
 
@@ -1102,6 +1202,12 @@ static void DrawOverlay() {
         "F10 Controls: one device per view / all columns",
         "F11 pad names: connected / Xbox / PlayStation / Nintendo",
         "F12 Controls heads: inside the first row / above",
+        "1 wide: one 960x540 composition, centred / stretched",
+        "2 band legend: stacked / in a row",
+        "3 background: even scale, cropped / stretched",
+        "4 scale: largest step the 960x540 fits / 640x480 rule",
+        "5 wide: one pane at a time, with a title / two panes",
+        "6 band: level 15 / 11, as before",
     };
     S32 n = (S32)(sizeof lines / sizeof lines[0]);
     S32 w = 8 * 50 + 16, h = n * 12 + 12;
@@ -1155,6 +1261,8 @@ static const SwitchDef kSwitches[] = {
     {"word", &sw_word, 0, 2, 0},           {"island", &sw_island, 0, 1, 0},   {"help640", &sw_help640, 0, 1, 0},
     {"gameplay", &sw_gameplay, 0, 1, 0},   {"overlay", &sw_overlay, 0, 1, 0},
     {"devices", &sw_devices, 0, 1, 1},     {"padnames", &sw_padnames, 0, 3, 0},   {"heads", &sw_heads, 0, 1, 1},
+    {"sheet", &sw_sheet, 0, 1, 1},         {"legend", &sw_legend, 0, 1, 1},       {"bg", &sw_bg, 0, 1, 1},
+    {"scale", &sw_scale, 0, 1, 1},         {"bandshade", &sw_bandshade, 0, 15, 15}, {"panes", &sw_panes, 0, 1, 1},
 };
 
 bool Menu_SetSwitch(const char *name, int v) {
@@ -1165,6 +1273,10 @@ bool Menu_SetSwitch(const char *name, int v) {
         if (v < s.min || v > s.max)
             v = s.min + ((v - s.min) % (s.max - s.min + 1) + (s.max - s.min + 1)) % (s.max - s.min + 1);
         *s.value = v;
+        if (!strcmp(name, "bg"))
+            Engine_SetBackgroundFit(v);
+        if (!strcmp(name, "scale"))
+            *s.value = Engine_ScaleRule();  // set at launch (--switch scale=N); the canvas cannot change here
         if (!strcmp(name, "island")) {
             if (v)
                 Engine_UseIslandPalette(0);
@@ -1179,6 +1291,14 @@ bool Menu_SetSwitch(const char *name, int v) {
         return true;
     }
     return false;
+}
+
+void Menu_SwitchArgs(std::vector<std::string> &out) {
+    for (size_t i = 0; i < sizeof kSwitches / sizeof kSwitches[0]; i++) {
+        if (!strcmp(kSwitches[i].name, "overlay"))
+            continue;
+        out.push_back(std::string(kSwitches[i].name) + "=" + std::to_string(*kSwitches[i].value));
+    }
 }
 
 int Menu_GetSwitch(const char *name) {
@@ -1244,6 +1364,8 @@ bool Menu_Set(const char *id, int value) {
 void Menu_Reset() {
     for (size_t i = 0; i < sizeof kSwitches / sizeof kSwitches[0]; i++)
         *kSwitches[i].value = kSwitches[i].start;
+    sw_scale = Engine_ScaleRule();  // the canvas was made with it
+    Engine_SetBackgroundFit(sw_bg);
     Engine_UseMenuPalette();
     Engine_ResetInput();
     Controls_Reset();
@@ -1347,6 +1469,44 @@ void Menu_JsonString(FILE *f, const char *s) {
             fputc(c, f);
     }
     fputc('"', f);
+}
+
+// Widths in the game font of every string a page can show, for sizing panes:
+// labels, every value a setting can take (ink), help, category names.
+void Menu_WriteMeasure(FILE *f) {
+    fprintf(f, "{\"settings\":[");
+    for (int s = 0; s < S_COUNT; s++) {
+        const Setting &st = kSettings[s];
+        S32 vmax = 0;
+        if (st.kind == K_CHOICE || st.kind == K_TOGGLE) {
+            for (int v = 0; v <= st.max; v++) {
+                S32 w = Ui_TextInkWidth(st.names[v]);
+                if (w > vmax)
+                    vmax = w;
+            }
+        } else if (st.kind == K_SLIDER) {
+            vmax = 128;
+        } else {
+            S32 left = 0;
+            vmax = -1;  // steps: measured where drawn
+            (void)left;
+        }
+        fprintf(f, "%s{\"id\":\"%s\",\"label\":\"%s\",\"label_w\":%d,\"value_w\":%d,\"help_w\":%d}", s ? "," : "",
+                st.id, st.label, Ui_TextWidth(st.label), vmax, Ui_TextWidth(st.help));
+    }
+    fprintf(f, "],\"hub\":[");
+    for (int i = 0; i < g_pages[P_HUB].count; i++) {
+        const Row &r = g_pages[P_HUB].rows[i];
+        char label[160];
+        if (r.type == R_PRESET_ROW) {
+            snprintf(label, sizeof label, "%s: %s, changed", kWords[sw_word], "Classic");
+        } else {
+            snprintf(label, sizeof label, "%s", r.label);
+        }
+        fprintf(f, "%s{\"label\":\"%s\",\"w\":%d,\"help_w\":%d}", i ? "," : "", label, Ui_TextWidth(label),
+                Ui_TextWidth(r.help ? r.help : ""));
+    }
+    fprintf(f, "]}\n");
 }
 
 void Menu_WriteState(FILE *f) {
