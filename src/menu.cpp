@@ -38,7 +38,7 @@ enum {
     S_RESOLUTION, S_FULLSCREEN, S_VSYNC, S_FPS, S_DETAIL, S_VIDEOS, S_IMAGE,
     S_MASTER, S_SFX, S_VOICES, S_MUSIC,
     S_CAM_OUT, S_CAM_IN, S_INVERT, S_SENS,
-    S_FIXBUGS, S_SHOWEXP,
+    S_FIXBUGS,
     S_DODGE, S_HINTS,
     S_COUNT
 };
@@ -86,8 +86,6 @@ static const Setting kSettings[S_COUNT] = {
      "How fast the camera turns. Only with the Auto camera."},
     {"fix_bugs", "Fix retail bugs", K_TOGGLE, 1, {"Off", "On"}, 1, 0, true,
      "Fixes the 1997 release's known bugs. Off plays them as they were."},
-    {"show_exp", "Show experimental settings", K_TOGGLE, 1, {"Off", "On"}, 0, 0, false,
-     "Settings still being tried. They may change or go."},
     {"dodge", "Dodge", K_CHOICE, 1, {"Classic", "Double tap"}, 0, 0, false,
      "How Twinsen jumps aside in Athletic mode."},
     {"hints", "Behaviour hints", K_TOGGLE, 1, {"Off", "On"}, 0, 0, false,
@@ -309,9 +307,8 @@ static void BuildPages() {
     adv.name = "Advanced and reset";
     AddRow(adv, R_RETURN, "Return to previous menu", 0, "");
     AddSetting(adv, S_FIXBUGS);
-    AddSetting(adv, S_SHOWEXP);
-    if (g_val[S_SHOWEXP])  // off, the page is not offered; its values still apply
-        AddRow(adv, R_ACTION, "Experimental settings", A_EXP, "Tuning values, in English. They may change or go.");
+    // Always offered (decided 2026-11-03): its help carries the warning a switch once did.
+    AddRow(adv, R_ACTION, "Experimental settings", A_EXP, "Unfinished, in English. They may change or go.");
     if (sw_fpsrow)
         AddSetting(adv, S_FPS);
     // The row's value is the version, so a bug report can name the build from the menu.
@@ -983,7 +980,7 @@ void Menu_Update() {
                 else
                     ApplyPreset(1);
                 BuildPages();
-                KeepCursorOn(label);  // a reset can take away a row above it (Experimental settings)
+                KeepCursorOn(label);  // the page was rebuilt; Back to my settings comes and goes
             }
         }
         UpdateVoice();
@@ -1705,8 +1702,6 @@ bool Menu_Open(const char *name) {
         return true;
     }
     if (!strcmp(name, "Experimental settings")) {
-        g_val[S_SHOWEXP] = 1;  // the row is there only then
-        BuildPages();
         Menu_Open("Advanced and reset");
         KeepCursorOn("Experimental settings");  // as Enter on it leaves it
         Exp_Open();

@@ -29,9 +29,8 @@ fi
 
 cat <<'STEPS'
 Steps, the same in each round (the window opens on Options):
-  1. Down to Advanced and reset, Enter. Read the rows: there is no
-     Experimental settings row yet. Down to Show experimental settings,
-     Right: the row appears below it. Down, Enter.
+  1. Down to Advanced and reset, Enter. Down to Experimental settings,
+     read its help, Enter.
   2. Find cam_ease_ms (Auto camera) and turn it up to 450 with Right.
      Find cam_glide (Mouse) and turn it down to 60. In the table, try
      Page Down and Page Up (the pad's LB and RB) on the way.

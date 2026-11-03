@@ -187,12 +187,13 @@ the 1997 game's six languages were compared for the help review.
 
 ## Experimental settings
 
-With Show experimental settings on (Advanced and reset), an Experimental
-settings row opens a page of the 41 tuning values lba2cc's settings tables
-give a console name and no row in Options: the Auto camera (22), the mouse (9),
+An Experimental settings row on Advanced and reset opens a page of the 41
+tuning values lba2cc's settings tables give a console name and no row in Options: the Auto camera (22), the mouse (9),
 the gamepad (7) and graphics (3), with their defaults, ranges and console help
 as lba2cc has them. It is the menu plan's step 8, generated from a table rather
-than made row by row, in English. Off, the row is not offered.
+than made row by row, in English. The row is always there (decided
+2026-11-03, no Show experimental settings switch); its help says the page is
+in English and its settings may change or go.
 
 - Switch `exptable` (key 0): 1, the default and decided (2026-11-03), is the
   plan's dense table in the 8x8 font, as the 1997 key binding screen: a line per value under its group's
@@ -279,13 +280,12 @@ walk finds starts with the walk's name:
   with the Classic camera and wakes with Auto.
 - `preset:` Classic asks first, starting on No, and Esc answers No; Back to my
   settings puts the preset row back; changing Fix retail bugs marks the preset
-  changed. With Classic chosen and Show experimental settings changed, Reset
+  changed. With Classic chosen and Videos (a player's setting) changed, Reset
   settings asks first, starting on No; Esc and No change nothing; Yes puts the
   setting and the preset back as a fresh install has them, and a Back to my
   settings row comes right after Reset settings; Enter on it puts back the
   setting and Classic, and the row goes.
-- `experimental:` the Experimental settings row shows only with Show
-  experimental settings on; Enter opens the page and Esc comes back to the row;
+- `experimental:` Advanced and reset has the Experimental settings row; Enter opens the page and Esc comes back to the row;
   on every row Right and Left change the value and the other key puts it back,
   the change marks the preset row, and Del puts the default back; Page Down and
   Page Up stop at the last and first rows; Modern puts a changed value back to

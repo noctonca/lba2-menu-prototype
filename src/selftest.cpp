@@ -678,7 +678,8 @@ struct Walker {
             return true;
         }
         Check();  // the screen Enter opened
-        bool leaf = EndsWith(opened, "| confirm") || EndsWith(opened, "| waiting");
+        // The Experimental page has its own walk (experimental:), Down there stops at the ends.
+        bool leaf = EndsWith(opened, "| confirm") || EndsWith(opened, "| waiting") || Exp_Active();
         if (!leaf && depth < 6 && !Explore(depth + 1, reached))
             return false;
         Key("esc");
@@ -862,8 +863,9 @@ struct Walker {
         if (!Expect(std::string(Menu_PresetLabel()).find("Classic") != std::string::npos,
                     Fmt("preset: Yes leaves the preset row at %s", Repr(Menu_PresetLabel()).c_str())))
             return;
-        OpenToo("Advanced and reset");
-        const char *setting = "Show experimental settings";
+        // A player's setting, which no preset sets: Reset settings still puts it back.
+        const char *setting = "Videos", *page = "Display and graphics";
+        OpenToo(page);
         if (!MoveTo(setting))
             return;
         std::string v0 = Menu_CursorValue();
@@ -871,6 +873,7 @@ struct Walker {
         std::string mine = Menu_CursorValue(), pMine = Menu_PresetLabel();
         if (!Expect(mine != v0, Fmt("preset: Right does not change %s", setting)))
             return;
+        OpenToo("Advanced and reset");
         if (!MoveTo("Reset settings"))
             return;
         std::string here = Where();
@@ -901,24 +904,27 @@ struct Walker {
                     Fmt("preset: after a reset, the row after Reset settings is %s, not Back to my settings",
                         Repr(Menu_CursorLabel()).c_str())))
             return;
+        OpenToo(page);
         if (!MoveTo(setting))
             return;
         if (!Expect(Menu_CursorValue() == v0, Fmt("preset: Reset settings leaves %s at %s, not %s", setting,
                                                   Repr(Menu_CursorValue()).c_str(), Repr(v0.c_str()).c_str())))
             return;
+        OpenToo("Advanced and reset");
         if (!MoveTo("Back to my settings"))
             return;
         Key("enter");
         Expect(Menu_PresetLabel() == pMine, Fmt("preset: Back to my settings after a reset leaves the preset row at %s, not %s",
                                                 Repr(Menu_PresetLabel()).c_str(), Repr(pMine.c_str()).c_str()));
         Expect(!RowDrawn("Back to my settings"), "preset: Back to my settings stays after it put the settings back");
+        OpenToo(page);
         if (!MoveTo(setting))
             return;
         Expect(Menu_CursorValue() == mine, Fmt("preset: Back to my settings after a reset leaves %s at %s, not %s", setting,
                                                Repr(Menu_CursorValue()).c_str(), Repr(mine.c_str()).c_str()));
     }
 
-    // experimental: the row comes and goes with Show experimental settings; Enter opens the
+    // experimental: the row is always on Advanced and reset; Enter opens the
     // page and Esc comes back to the row; on every row Right and Left change the value and
     // the other key puts it back, and Del puts the default back; Page Down and Page Up go to
     // the ends; a changed value marks the preset changed, Modern and Reset settings put it
@@ -965,14 +971,9 @@ struct Walker {
     void Experimental() {
         if (!Wanted(kExpPage))
             return;
-        const char *row = "Experimental settings", *sw = "Show experimental settings";
+        const char *row = "Experimental settings";
         Fresh("Advanced and reset");
-        if (!Expect(!RowDrawn(row), "experimental: the row shows with Show experimental settings off"))
-            return;
-        if (!MoveTo(sw))
-            return;
-        Key("right");
-        if (!Expect(RowDrawn(row), "experimental: Show experimental settings on does not show the row"))
+        if (!Expect(RowDrawn(row), "experimental: Advanced and reset has no Experimental settings row"))
             return;
         if (!MoveTo(row))
             return;
@@ -986,11 +987,6 @@ struct Walker {
         Key("esc");
         if (!Expect(Where() == here, Fmt("experimental: Esc from the page went to %s, not back to %s",
                                          Repr(Where().c_str()).c_str(), Repr(here.c_str()).c_str())))
-            return;
-        if (!MoveTo(sw))
-            return;
-        Key("left");
-        if (!Expect(!RowDrawn(row), "experimental: the row stays with Show experimental settings off"))
             return;
 
         // Every row.

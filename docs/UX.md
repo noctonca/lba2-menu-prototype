@@ -192,7 +192,7 @@ second border, no shadow on a framed label. Joins checked at 3x.
 
 **Serial Position Effect.** What the one coming back opens Options for goes
 first: Resolution on Display, Master volume on Sound. What is rarely touched
-and costly goes last: Reset settings, Show experimental settings.
+and costly goes last: Experimental settings, Reset settings.
 
 **Aesthetic-Usability Effect.** A row a pixel off makes the port feel
 unfinished, and the review's whole aim is that nothing says "port" louder than
