@@ -27,6 +27,8 @@ void Menu_Draw();
 //   panes    1 = one pane at a time, the page's name as a title (decided 2026-11-03); 0 = two panes
 //   bandshade the band's darkening level; 15 as decided 2026-11-03; 0 = BAND_SHADE_LVL (11), as before
 //   short    1 = the shorter help, for translation (kShortHelp; decided 2026-11-03); 0 = as first written
+//   narrow   (decided 2026-11-03) 1 = one column: key chips 58 wide at 1x (116 at 2x), not 60, so the longest
+//            action name keeps 8 clear of them; 0 = 60
 //   clash    (decided 2026-11-03) 1 = a key clash's note replaces the action's help in the voice; 0 = added after it
 bool Menu_SetSwitch(const char *name, int value);
 // Every switch as "name=value", for a relaunch.

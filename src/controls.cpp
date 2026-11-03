@@ -516,7 +516,9 @@ static S32 ChipScale() { return Menu_GetSwitch("chip"); }
 // column has no value edge and keeps them 12 in, to leave the centred names more room.
 static void ChipLayout(S32 rowX1, const int *cols, int ncols, S32 *x0, S32 *w) {
     S32 s = ChipScale();
-    S32 chipW = 60 * s, step = chipW + 8;
+    // One column, switch narrow: 58 holds the same 6 letters of the 8x8 font as 60 (and the
+    // pad view's one chip the same 14), and leaves "Behaviour action" 8 clear of its chip.
+    S32 chipW = (!Wide() && Menu_GetSwitch("narrow") ? 58 : 60) * s, step = chipW + 8;
     S32 right = rowX1 - (Wide() ? 24 : 12);
     if (ncols == 1) {
         w[0] = 2 * chipW + 8;

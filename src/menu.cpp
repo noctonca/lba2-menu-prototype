@@ -186,7 +186,7 @@ static int sw_band = 1, sw_typing = 0, sw_chip = 2, sw_word = 0, sw_island = 0, 
            sw_gameplay = 0, sw_overlay = 0;
 // Composition (2026-11-03 design pass): sheet, legend, bg, scale (scale is set at launch).
 static int sw_sheet = 1, sw_legend = 1, sw_bg = 1, sw_scale = 1, sw_bandshade = 15, sw_panes = 1;
-static int sw_clash = 1, sw_short = 1;
+static int sw_clash = 1, sw_short = 1, sw_narrow = 1;
 
 static const char *kWords[3] = {"Settings", "Preset", "Rules"};
 
@@ -1241,6 +1241,7 @@ static void DrawOverlay() {
         "6 band: level 15 / 11, as before",
         "7 a key clash: the note alone / after the help",
         "8 help: shorter drafts / as written",
+        "9 640 key chips: 116 wide / 120",
     };
     S32 n = (S32)(sizeof lines / sizeof lines[0]);
     S32 w = 8 * 50 + 16, h = n * 12 + 12;
@@ -1297,6 +1298,7 @@ static const SwitchDef kSwitches[] = {
     {"sheet", &sw_sheet, 0, 1, 1},         {"legend", &sw_legend, 0, 1, 1},       {"bg", &sw_bg, 0, 1, 1},
     {"scale", &sw_scale, 0, 1, 1},         {"bandshade", &sw_bandshade, 0, 15, 15}, {"panes", &sw_panes, 0, 1, 1},
     {"clash", &sw_clash, 0, 1, 1},       {"short", &sw_short, 0, 1, 1},
+    {"narrow", &sw_narrow, 0, 1, 1},
 };
 
 bool Menu_SetSwitch(const char *name, int v) {

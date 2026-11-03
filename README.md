@@ -63,6 +63,7 @@ own switches are on F1 to F12 and 1 to 6.
 | 6 | `bandshade` | the band darkened to level 15 / 11 |
 | 7 | `clash` | a key clash's note alone in the voice / added after the action's help |
 | 8 | `short` | the shorter help, for translation, and a dimmed row saying why it is dimmed / the help as first written |
+| 9 | `narrow` | 640 wide: key chips 116 wide, so "Behaviour action" clears them / 120 |
 
 Keys 1 to 6 are the composition review of 2026-11-03 (wide and large screens).
 All six are decided and on by default; each key turns its part off to compare.
@@ -70,6 +71,7 @@ F2 keeps every switch as it steps through the sizes. `./play-composition.sh`
 plays the wide layout as it was before the review, then as decided, on the
 same steps, with a trace per round.
 
+Key 9 (decided 2026-11-03, on by default) narrows the one-column key chips.
 Keys 7 and 8 are the help review of 2026-11-03, decided and on by default: one
 message at a time in the voice, and help short enough that a translation half
 as long again still fits two lines (the 1997 game's own translations of its

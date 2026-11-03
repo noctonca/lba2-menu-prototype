@@ -422,6 +422,8 @@ int main(int argc, char **argv) {
             Menu_SetSwitch("clash", !Menu_GetSwitch("clash"));
         if (Engine_Pressed(KEY_8))
             Menu_SetSwitch("short", !Menu_GetSwitch("short"));
+        if (Engine_Pressed(KEY_9))
+            Menu_SetSwitch("narrow", !Menu_GetSwitch("narrow"));
 
         Menu_Update();
         Menu_Draw();

@@ -68,7 +68,10 @@ the call is answered.
 - **One trailing edge:** in the wide layout, values and key chips end 24 in
   from their row's right edge on every page, measured to the last pixel drawn.
   **[self test: trailing]** The one-column Controls page keeps its chips 12
-  in: at 640 wide, 24 runs action names into them.
+  in: at 640 wide, 24 runs action names into them. Its chips are 116 wide at
+  2x (120 on the wide canvas), which holds the same 6 letters of the 8x8 font
+  (and 14 in the pad view's one chip) and leaves the longest action name,
+  "Behaviour action", 8 clear of its first chip (decided 2026-11-03).
 - **Controls column heads sit inside the first visible row**, above their
   chips, in the 8x8 font at 1x: the one place 1x is used on the wide canvas,
   since 2x does not fit between a row's frame and its chip. Both panes then

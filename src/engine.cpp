@@ -59,7 +59,7 @@ static U32 s_repeatAt[KEY_COUNT];
 static const U32 kScancode[KEY_COUNT] = {
     K_UP, K_DOWN, K_LEFT, K_RIGHT, K_ENTER, K_ESC, K_TAB, K_SUPPR,
     K_F1, K_F2, K_F3, K_F4, K_F5, K_F6, K_F7, K_F8, K_F9, K_F10, K_F11, K_F12,
-    K_1, K_2, K_3, K_4, K_5, K_6, K_7, K_8,
+    K_1, K_2, K_3, K_4, K_5, K_6, K_7, K_8, K_9,
 };
 
 static int s_scaleRule = 1;
@@ -225,7 +225,7 @@ static U32 s_frame;
 static const char *kKeyNames[KEY_COUNT] = {
     "up", "down", "left", "right", "enter", "esc", "tab", "del",
     "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12",
-    "1", "2", "3", "4", "5", "6", "7", "8",
+    "1", "2", "3", "4", "5", "6", "7", "8", "9",
 };
 
 void Engine_Inject(UiKey k) { s_injected[k] = true; }
