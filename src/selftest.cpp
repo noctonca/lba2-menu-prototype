@@ -1086,6 +1086,53 @@ struct Walker {
                                              name.c_str(), Repr(Exp_CursorValue()).c_str(), Repr(v1.c_str()).c_str()));
     }
 
+    // console: the Console row shows the version; Enter opens the full console after a key and
+    // the read-only one after a pad button; Esc closes the full one and only Esc, any button
+    // the read-only one; the cursor is back on Console. Frame rate does not mark the preset.
+    void Console() {
+        if (!Wanted("Advanced and reset"))
+            return;
+        Fresh("Advanced and reset");
+        if (!MoveTo("Console"))
+            return;
+        std::string here = Where();
+        Expect(Menu_CursorValue()[0] != 0, "console: the Console row shows no version");
+        Key("enter");
+        if (!Expect(!strcmp(Menu_ConsoleMode(), "full"),
+                    Fmt("console: Enter after a key opens %s, not the full console", Menu_ConsoleMode())))
+            return;
+        Check();
+        Key("down");
+        Key("enter");
+        Expect(!strcmp(Menu_ConsoleMode(), "full"), "console: Down or Enter closed the full console");
+        Key("esc");
+        if (!Expect(Where() == here, Fmt("console: Esc from the full console went to %s, not %s", Repr(Where().c_str()).c_str(),
+                                         Repr(here.c_str()).c_str())))
+            return;
+        const char *closers[] = {"pad:b", "pad:dpad-down", "J"};
+        for (int i = 0; i < 3; i++) {
+            Press("pad:a");
+            Key("enter");
+            if (!Expect(!strcmp(Menu_ConsoleMode(), "read-only"),
+                        Fmt("console: Enter after a pad button opens %s, not the read-only console", Menu_ConsoleMode())))
+                return;
+            Check();
+            Press(closers[i]);
+            Expect(Where() == here, Fmt("console: %s leaves the read-only console at %s", closers[i], Repr(Where().c_str()).c_str()));
+        }
+
+        int fpsrow = Menu_GetSwitch("fpsrow");
+        const char *page = fpsrow ? "Advanced and reset" : "Display and graphics";
+        if (!Wanted(page))
+            return;
+        Fresh(page);
+        if (!MoveTo("Frame rate"))
+            return;
+        std::string p0 = Menu_PresetLabel();
+        Key("right");
+        Expect(Menu_PresetLabel() == p0, Fmt("console: Frame rate on changes the preset row to %s", Repr(Menu_PresetLabel()).c_str()));
+    }
+
     // bind: on the first action of each group, in each column.
     void ToChip(int device, int group, int column) {
         Fresh("Keys and buttons");
@@ -1181,6 +1228,7 @@ struct Walker {
         Wake();
         Presets();
         Experimental();
+        Console();
         Binding(twoDevices);
     }
 };

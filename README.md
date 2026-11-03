@@ -65,6 +65,7 @@ own switches are on F1 to F12 and 0 to 9.
 | 8 | `short` | the shorter help, for translation, and a dimmed row saying why it is dimmed / the help as first written |
 | 9 | `narrow` | 640 wide: key chips 116 wide, so "Behaviour action" clears them / 120 |
 | 0 | `exptable` | Experimental settings: one dense table in the 8x8 font (decided) / the game-font list, a page per group |
+| | `fpsrow` | the Frame rate row on Display and graphics, under Vsync (decided) / on Advanced and reset (no key: `--switch fpsrow=1`) |
 
 Keys 1 to 6 are the composition review of 2026-11-03 (wide and large screens).
 All six are decided and on by default; each key turns its part off to compare.
@@ -172,6 +173,29 @@ than made row by row, in English. Off, the row is not offered.
 same steps, with a trace per round. The self test visits every row of it (see
 Testing).
 
+## Frame rate, the console and the version
+
+- **Frame rate** (Display and graphics, under Vsync, decided 2026-11-03;
+  `fpsrow=1` puts it on Advanced and reset to compare) shows the frame count in the bottom left corner, white,
+  in the 8x8 font, as lba2cc's console `fps` and the 1997 SPEED code do. It is
+  not kept in lba2.cfg: off at every start. Presets leave it alone. lba2cc
+  draws it only in play; here it shows over the menu so the row can be judged.
+  On Display it makes seven rows, so at 960x540 the page scrolls (Image is
+  below); on Advanced it makes seven only with Experimental settings and Back
+  to my settings both showing.
+- **Console** (Advanced and reset, above Reset settings) is issue #679's row.
+  Its value is the version, `0.13.3-dev 011394f` (lba2cc's version string and
+  the commit's first 7; a release shows its number alone; an example here), in
+  the dimmed grey: it reads, it does not change. Enter opens the console as
+  lba2cc draws it: the top half, darkened, the 8x8 font, the messages of the
+  launch (examples) with the version and the full commit in the first two
+  lines. After a key it is the full console with the prompt, and Esc closes it
+  (F12 in the game; F12 is a prototype switch here). After a pad button it is
+  read-only, says so on its last line, and any button closes it.
+
+`./play-console.sh` plays both places of Frame rate at 1920x1080 and 640x480 on
+the same steps, with a trace per round.
+
 ## Testing
 
 `lba2menu --selftest` visits every row of every page, every chip of the
@@ -224,6 +248,11 @@ walk finds starts with the walk's name:
   Page Up stop at the last and first rows; Modern puts a changed value back to
   its default, Back to my settings names it and puts it back; Reset settings
   does the same, and the cursor stays on Reset settings.
+- `console:` the Console row shows the version; Enter after a key opens the
+  full console, which Down and Enter leave open and Esc closes; Enter after a
+  pad button opens it read-only, and a pad button, the d-pad or a key closes
+  it; each time the cursor is back on Console. Turning Frame rate on leaves the
+  preset row as it was.
 - `bind:` on the first action of each group, in each column: Enter waits and
   the voice asks for the key; Esc cancels; the other device's input is ignored;
   a key another action has goes in, both chips go red and the help names the

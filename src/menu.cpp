@@ -35,7 +35,7 @@ struct Setting {
 
 enum {
     S_TEXT_LANG, S_VOICE_LANG, S_SUBTITLES,
-    S_RESOLUTION, S_FULLSCREEN, S_VSYNC, S_DETAIL, S_VIDEOS, S_IMAGE,
+    S_RESOLUTION, S_FULLSCREEN, S_VSYNC, S_FPS, S_DETAIL, S_VIDEOS, S_IMAGE,
     S_MASTER, S_SFX, S_VOICES, S_MUSIC,
     S_CAM_OUT, S_CAM_IN, S_INVERT, S_SENS,
     S_FIXBUGS, S_SHOWEXP,
@@ -57,6 +57,9 @@ static const Setting kSettings[S_COUNT] = {
      "Fills the screen, or plays in a window."},
     {"vsync", "Vsync", K_TOGGLE, 1, {"Off", "On"}, 1, 1, false,
      "Stops the picture tearing. Off can raise the frame rate on a slow display."},
+    // Not kept in lba2.cfg: off at every start, as the console's fps and the SPEED code have it.
+    {"fps", "Frame rate", K_TOGGLE, 1, {"Off", "On"}, 0, 0, false,
+     "Shows the frame rate while you play."},
     {"detail", "Detail level", K_STEPS, 3, {"Low", "Medium", "High", "Full"}, 3, 3, false,
      "Rain, shadows and the far islands. Lower it on a slow machine."},
     {"videos", "Videos", K_CHOICE, 1, {"Full screen", "Original size"}, 0, 0, false,
@@ -183,7 +186,8 @@ struct Row {
     const char *help;
 };
 
-enum { A_KEYS, A_RESET, A_EXP };  // R_ACTION: opens Keys and buttons, asks to reset, opens Experimental settings
+enum { A_KEYS, A_RESET, A_EXP, A_CONSOLE };  // R_ACTION: opens Keys and buttons, asks to reset, opens Experimental
+                                              // settings, opens the console
 enum { BACK_PRESET, BACK_RESET };  // R_BACK_TO_MINE: undoes a preset, or a reset
 
 enum { P_HUB, P_PRESET, P_LANG, P_DISPLAY, P_SOUND, P_CONTROLS, P_ADVANCED, P_GAMEPLAY, P_FIRST, P_ORIGINAL, P_COUNT };
@@ -202,6 +206,15 @@ static int sw_band = 1, sw_typing = 0, sw_chip = 2, sw_word = 0, sw_island = 0, 
 // Composition (2026-11-03 design pass): sheet, legend, bg, scale (scale is set at launch).
 static int sw_sheet = 1, sw_legend = 1, sw_bg = 1, sw_scale = 1, sw_bandshade = 15, sw_panes = 1;
 static int sw_clash = 1, sw_short = 1, sw_narrow = 1;
+// Where the Frame rate row sits (no key): 0 Display and graphics, under Vsync (decided 2026-11-03);
+// 1 Advanced and reset.
+static int sw_fpsrow = 0;
+
+// What a build off main says: lba2cc's LBA2_VERSION_STRING and the commit's first 7. A release
+// says its number alone. An example; the prototype has no build of its own to name.
+static const char *kVersion = "0.13.3-dev 011394f";
+static const char *kVersionString = "0.13.3-dev";  // LBA2_VERSION_STRING alone, as the log's first line has it
+static const char *kCommit = "011394fbc247";
 
 static const char *kWords[3] = {"Settings", "Preset", "Rules"};
 
@@ -253,6 +266,8 @@ static void BuildPages() {
     AddSetting(disp, S_RESOLUTION);
     AddSetting(disp, S_FULLSCREEN);
     AddSetting(disp, S_VSYNC);
+    if (!sw_fpsrow)
+        AddSetting(disp, S_FPS);
     AddSetting(disp, S_DETAIL);
     AddSetting(disp, S_VIDEOS);
     AddSetting(disp, S_IMAGE);
@@ -281,6 +296,10 @@ static void BuildPages() {
     AddSetting(adv, S_SHOWEXP);
     if (g_val[S_SHOWEXP])  // off, the page is not offered; its values still apply
         AddRow(adv, R_ACTION, "Experimental settings", A_EXP, "Tuning values, in English. They may change or go.");
+    if (sw_fpsrow)
+        AddSetting(adv, S_FPS);
+    // The row's value is the version, so a bug report can name the build from the menu.
+    AddRow(adv, R_ACTION, "Console", A_CONSOLE, "Messages, and commands from a keyboard.");
     AddRow(adv, R_ACTION, "Reset settings", A_RESET, "Puts every setting back as a fresh install has it.");
     if (ResetBackDiffers())
         AddRow(adv, R_BACK_TO_MINE, "Back to my settings", BACK_RESET, "Puts back what you had before the reset.");
@@ -369,6 +388,10 @@ static void Ask(Question q) {
     Trace("ask %s", q == Q_RESET ? "reset" : "classic");
 }
 static bool g_closed;      // left the Options (shown as a note)
+// The console (#679), opened from its row: by the device used last, the full console
+// (keyboard, touch) or read-only (pad: the messages, and any button closes it).
+enum { CON_CLOSED, CON_FULL, CON_READONLY };
+static int g_console;
 static Voice g_voice;
 static bool g_pageEntered; // typing mode 1: type once on entering a page
 static char g_toast[128];
@@ -735,6 +758,10 @@ static void Activate(const Row &r) {
             Ask(Q_RESET);
         else if (r.arg == A_EXP)
             Exp_Open();
+        else if (r.arg == A_CONSOLE) {
+            g_console = Engine_LastInputWasPad() ? CON_READONLY : CON_FULL;
+            Trace("open console mode=%s", g_console == CON_READONLY ? "read-only" : "full");
+        }
         else
             Controls_Open();
         break;
@@ -788,6 +815,17 @@ void Menu_Update() {
         Exp_Update();
         if (!Exp_Active())
             BuildPages();  // a changed tuning value can change the Back to my settings rows
+        return;
+    }
+    if (g_console) {
+        // Full: Esc closes (F12 in the game; F12 is a prototype switch here). Read-only: anything does.
+        bool any = Engine_RawPressed() != 0;
+        for (int k = 0; k < KEY_COUNT && !any; k++)
+            any = Engine_Pressed((UiKey)k);
+        if (g_console == CON_READONLY ? any : Engine_Pressed(KEY_ESC)) {
+            g_console = CON_CLOSED;
+            Trace("close console");
+        }
         return;
     }
     if (g_closed) {
@@ -932,12 +970,17 @@ static void DrawColumnRow(const Row &r, S32 x0, S32 y0, S32 x1, S32 y1, bool cur
         PresetRowLabel(text, sizeof text);
     else if (r.type == R_SETTING && kSettings[r.arg].kind != K_SLIDER)
         snprintf(text, sizeof text, "%s: %s", r.label, ValueText(r.arg, val, sizeof val));
+    else if (r.type == R_ACTION && r.arg == A_CONSOLE)
+        snprintf(text, sizeof text, "%s: %s", r.label, kVersion);
     else
         snprintf(text, sizeof text, "%s", r.label);
     Menu_RowLabelCentred(x0, x1, yc, text, active ? INK_WHITE : INK_DISABLED);
 
-    DrawnRow &d = Menu_Record("column", text, r.type == R_SETTING ? ValueText(r.arg, val, sizeof val) : "", fill, x0, y0,
-                         x1, y1);
+    DrawnRow &d = Menu_Record("column", text,
+                              r.type == R_SETTING                         ? ValueText(r.arg, val, sizeof val)
+                              : r.type == R_ACTION && r.arg == A_CONSOLE ? kVersion
+                                                                          : "",
+                              fill, x0, y0, x1, y1);
     d.dim = !active;
     d.setting = r.type == R_SETTING;
     d.textLeft = (x0 + x1) / 2 - Ui_TextWidth(text) / 2;
@@ -995,6 +1038,14 @@ static void DrawWideRow(const char *pane, const Row &r, S32 x0, S32 y0, S32 x1, 
             Ui_ChangeMarks(left - 17, valueRight + 17, yc);  // in the padding: the value never moves
             d.marks = true;
         }
+    } else if (r.type == R_ACTION && r.arg == A_CONSOLE) {
+        // The version where a value goes, in the dimmed grey: it reads, it does not change.
+        S32 left = valueRight + 1 - Ui_TextInkWidth(kVersion);
+        if (d.textRight + 8 > left - 17)
+            d.textRight = x1 + (d.textRight + 8 - (left - 17));
+        Ui_Text(left, yc - 18, kVersion, INK_DISABLED);
+        snprintf(d.value, sizeof d.value, "%s", kVersion);
+        d.valueRight = valueRight;
     } else if (r.type == R_PRESET_CHOICE && r.arg == g_preset && PresetChanged()) {
         Ui_Text(valueRight + 1 - Ui_TextInkWidth("Changed"), yc - 18, "Changed", INK_COUNT);
         snprintf(d.value, sizeof d.value, "Changed");
@@ -1022,6 +1073,11 @@ void Menu_DrawScrollBar(S32 x0, S32 y0, S32 y1, int first, int visible, int tota
 // The legend: only the keys the selected row takes.
 static void LegendFor(const Row *r, const char **keys, const char **words, int *n) {
     *n = 0;
+    if (g_console) {
+        keys[*n] = g_console == CON_READONLY ? "Any" : "Esc";
+        words[(*n)++] = "Close";
+        return;
+    }
     if (g_confirm) {
         keys[*n] = "\x18\x19"; words[(*n)++] = "Choose";
         keys[*n] = "Enter"; words[(*n)++] = "Answer";
@@ -1033,7 +1089,7 @@ static void LegendFor(const Row *r, const char **keys, const char **words, int *
             keys[*n] = "\x11\x10";
             words[(*n)++] = (k == K_SLIDER || k == K_STEPS) ? "Adjust" : "Change";
         } else if (r->type == R_CATEGORY || r->type == R_PRESET_ROW ||
-                   (r->type == R_ACTION && (r->arg == A_KEYS || r->arg == A_EXP))) {
+                   (r->type == R_ACTION && (r->arg == A_KEYS || r->arg == A_EXP || r->arg == A_CONSOLE))) {
             keys[*n] = "Enter"; words[(*n)++] = "Open";
         } else if (r->type != R_SETTING) {
             keys[*n] = "Enter"; words[(*n)++] = "Choose";
@@ -1345,6 +1401,7 @@ static void DrawOverlay() {
         "8 help: shorter drafts / as written",
         "9 640 key chips: 116 wide / 120",
         "0 Experimental: dense 8x8 table (decided) / game-font list",
+        "(no key) fpsrow: Frame rate on Display / on Advanced",
     };
     S32 n = (S32)(sizeof lines / sizeof lines[0]);
     S32 w = 8 * 50 + 16, h = n * 12 + 12;
@@ -1352,6 +1409,60 @@ static void DrawOverlay() {
     Ui_Panel(x0, y0, x0 + w, y0 + h, PANEL_SHADE_LVL);
     for (S32 i = 0; i < n; i++)
         Ui_Small(x0 + 8, y0 + 8 + i * 12, lines[i], i ? INK_CONFIG_MENU : INK_CONFIG_HEAD, 1);
+}
+
+// The console as lba2cc draws it (CONSOLE.CPP Console_Draw): the top half of the screen,
+// darkened, the 8x8 font at 9 px a line from x 8, a line under it, the prompt "]> " last.
+// Here on the logical canvas (lba2cc draws it on the render buffer). The messages are
+// examples of what a launch logs.
+static const char *const kConsoleLines[][2] = {
+    {"h", "LBA2 Classic Community %s \xFA macOS arm64 \xFA 10 cores \xFA 16 GB RAM"},
+    {"t", "Built Nov  3 2026 12:00:00 from commit %s"},
+    {"t", "Game data: ~/Games/lba2 (found by: the install folder)"},
+    {"t", "Profile: ~/Library/Application Support/lba2cc"},
+    {"d", "Video: 1920 x 1080 fullscreen, vsync on"},
+    {"t", "Island 0, cube 0: Twinsen's house"},
+    {"t", "Type help for the commands."},
+};
+static S32 g_consoleBottom;  // the line under it, for `state`
+
+static void DrawConsole() {
+    S32 W = (S32)Engine_LogicalW(), H = (S32)Engine_LogicalH();
+    S32 h = H / 2;
+    if (h < 9 * 4)
+        h = 9 * 4;
+    Cadre_Shade(0, 0, W - 1, h - 1, 15);
+    Line(0, h - 1, W - 1, h - 1, INK_WHITE);
+    g_consoleBottom = h - 1;
+    S32 n = (S32)(sizeof kConsoleLines / sizeof kConsoleLines[0]);
+    S32 lines = h / 9 - 1;  // one is the prompt's
+    S32 y = 0;
+    for (S32 i = n > lines ? n - lines : 0; i < n; i++, y += 9) {
+        char line[160];
+        snprintf(line, sizeof line, kConsoleLines[i][1], kConsoleLines[i][0][0] == 'h' ? kVersionString : kCommit);
+        U8 ink = kConsoleLines[i][0][0] == 'h' ? INK_CONFIG_HEAD : kConsoleLines[i][0][0] == 'd' ? INK_DISABLED : INK_WHITE;
+        Ui_Small(8, y, line, ink, 1);
+    }
+    if (g_console == CON_READONLY)
+        Ui_Small(8, y, "Read only. Any button closes it.", INK_CONFIG_HEAD, 1);
+    else
+        Ui_Small(8, y, (Engine_TimeMs() / 500) % 2 ? "]> " : "]> _", INK_WHITE, 1);
+}
+
+// Frame rate on: the count in the bottom left corner, white, the 8x8 font (OBJECT.CPP
+// AffNbFps). lba2cc draws it only in play; here it shows over the menu so the row can be judged.
+static void DrawFps() {
+    static U32 windowStart, frames, shown;
+    U32 now = Engine_TimeMs();
+    frames++;
+    if (now - windowStart >= 1000) {
+        shown = frames * 1000 / (now - windowStart ? now - windowStart : 1);
+        windowStart = now;
+        frames = 0;
+    }
+    char buf[16];
+    snprintf(buf, sizeof buf, "%u ", (unsigned)shown);
+    Ui_Small(0, (S32)Engine_LogicalH() - 8, buf, INK_WHITE, 1);
 }
 
 void Menu_Draw() {
@@ -1377,6 +1488,10 @@ void Menu_Draw() {
         DrawColumn();
     }
 
+    if (g_console)
+        DrawConsole();
+    if (g_val[S_FPS])
+        DrawFps();
     if (sw_overlay)
         DrawOverlay();
     if (g_toast[0] && Engine_TimeMs() < g_toastUntil) {
@@ -1404,6 +1519,7 @@ static const SwitchDef kSwitches[] = {
     {"scale", &sw_scale, 0, 1, 1},         {"bandshade", &sw_bandshade, 0, 15, 15}, {"panes", &sw_panes, 0, 1, 1},
     {"clash", &sw_clash, 0, 1, 1},       {"short", &sw_short, 0, 1, 1},
     {"narrow", &sw_narrow, 0, 1, 1},     {"exptable", &sw_exptable, 0, 1, 1},
+    {"fpsrow", &sw_fpsrow, 0, 1, 0},
 };
 
 bool Menu_SetSwitch(const char *name, int v) {
@@ -1463,6 +1579,13 @@ bool Menu_Open(const char *name) {
         Exp_Open();
         return true;
     }
+    if (!strcmp(name, "Console")) {
+        Menu_Open("Advanced and reset");
+        KeepCursorOn("Console");  // as Enter on it leaves it
+        g_console = Engine_LastInputWasPad() ? CON_READONLY : CON_FULL;
+        return true;
+    }
+    g_console = CON_CLOSED;
     Controls_Close();
     Exp_Close();
     for (int p = 0; p < P_COUNT; p++) {
@@ -1527,6 +1650,7 @@ void Menu_Reset() {
     g_confirm = false;
     g_confirmCursor = 0;
     g_closed = false;
+    g_console = CON_CLOSED;
     g_haveBefore = false;
     g_haveBeforeReset = false;
     g_scroll = 0;
@@ -1591,6 +1715,10 @@ int Menu_Where(char *buf, size_t n) {
         snprintf(buf, n, "%s | %s", Menu_PageName(), inner);
         return Depth() + d;
     }
+    if (g_console) {
+        snprintf(buf, n, "%s | %s | console", Menu_PageName(), Menu_CursorLabel());
+        return Depth() + 1;
+    }
     if (g_confirm)
         snprintf(buf, n, "%s | %s | confirm", Menu_PageName(), g_confirmCursor ? "Yes" : "No");
     else
@@ -1611,6 +1739,10 @@ const char *Menu_CursorValue() {
         if (!strcmp(g_drawn[i].fill, "cursor"))
             return g_drawn[i].value;
     return "";
+}
+
+const char *Menu_ConsoleMode() {
+    return g_console == CON_FULL ? "full" : g_console == CON_READONLY ? "read-only" : "closed";
 }
 
 const char *Menu_PresetLabel() {
@@ -1716,6 +1848,9 @@ void Menu_WriteState(FILE *f) {
     fprintf(f, ",\"rect\":[%d,%d,%d,%d]}", g_helpBox.x0, g_helpBox.y0, g_helpBox.x1, g_helpBox.y1);
     fprintf(f, ",\"legend\":");
     Menu_JsonString(f, g_legend);
+    fprintf(f, ",\"console\":\"%s\",\"console_bottom\":%d,\"version\":", g_console == CON_FULL ? "full" : g_console == CON_READONLY ? "read-only" : "closed",
+            g_console ? (int)g_consoleBottom : -1);
+    Menu_JsonString(f, kVersion);
 
     if (Controls_Active()) {
         fprintf(f, ",\"controls\":");
