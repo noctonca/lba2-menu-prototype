@@ -1,0 +1,3 @@
+[submodule "lba2cc"]
+	path = lba2cc
+	url = https://github.com/LBALab/lba2-classic-community.git
