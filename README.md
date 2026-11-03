@@ -83,7 +83,7 @@ own switches are on F1 to F12 and 0 to 9.
 | F1 | `overlay` | this list on screen |
 | F2 | | the next screen size; Shift+F2 the previous (see Screen sizes) |
 | F3 | `band` | one band (help + legend) / a help line and a prompt bar |
-| F4 | `typing` | help typed on every cursor move / on entering a page only / not typed |
+| F4 | `typing` | help typed on every cursor move (decided) / on entering a page only / not typed |
 | F5 | `chip` | the 8x8 key font at 2x / 1x |
 | F6 | `word` | the preset row: Modern settings (decided) / Settings: Modern / Preset: Modern / Rules: Modern |
 | F7 | `island` | Citadel's palette, as Options opened in play would have |

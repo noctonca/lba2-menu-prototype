@@ -198,8 +198,8 @@ the game does.
 - The cursor plasma and a changed value show on the frame the key lands on.
 - Typed help is not feedback, it is reading: at one letter per 20 ms a
   40-letter line takes 800 ms. Typed again on every cursor move, a player
-  scrolling past rows reads half lines. *(open call 2: typed on every move, on
-  page entry only, or not typed)*
+  scrolling past rows reads half lines. *Decided 2026-11-03: typed on every
+  move, the 1997 voice kept; a player who stops on a row reads it whole.*
 
 **Tesler's Law** (complexity has to live somewhere). The game carries it: two
 presets, a fresh install that plays well, dimmed rows that only mean something
