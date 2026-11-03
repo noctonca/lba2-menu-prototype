@@ -47,6 +47,7 @@ add_executable(lba2menu
     src/cadre.cpp
     src/menu.cpp
     src/controls.cpp
+    src/experimental.cpp
     src/ui.cpp
     src/trace.cpp
     src/shot.cpp

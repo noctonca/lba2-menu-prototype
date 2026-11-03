@@ -3,6 +3,7 @@
 #include "cadre.h"
 #include "controls.h"
 #include "engine.h"
+#include "experimental.h"
 #include "trace.h"
 #include "menu_parts.h"
 #include "ui.h"
@@ -87,9 +88,11 @@ static const Setting kSettings[S_COUNT] = {
 static int g_val[S_COUNT];
 static int g_preset;  // 0 Modern, 1 Classic
 static int g_before[S_COUNT];  // before a preset was chosen: the preset page's Back to my settings
+static int g_beforeExp[EXP_MAX];  // the tuning values then
 static int g_beforePreset;
 static bool g_haveBefore;
 static int g_beforeReset[S_COUNT];  // before Reset settings: the Advanced page's Back to my settings
+static int g_beforeResetExp[EXP_MAX];
 static int g_beforeResetPreset;
 static bool g_haveBeforeReset;
 
@@ -102,17 +105,26 @@ static int PresetValue(int preset, int s) {
     return preset == 1 ? st.classic : st.fresh;
 }
 
-// "Changed": the player's values differ from the chosen preset in a setting presets set.
+// "Changed": the player's values differ from the chosen preset in a setting presets set,
+// or a tuning value differs from its default (a preset puts every one back).
 static bool PresetChanged() {
     for (int s = 0; s < S_COUNT; s++)
         if (kSettings[s].presetSets && g_val[s] != PresetValue(g_preset, s))
             return true;
-    return false;
+    return Exp_AnyChanged();
+}
+
+// The tuning values that differ between a copy and now.
+static bool ExpDiffers(const int *was) {
+    int now[EXP_MAX];
+    Exp_Get(now);
+    return memcmp(was, now, sizeof(int) * Exp_Count()) != 0;
 }
 
 static void ApplyPreset(int p) {
     if (!g_haveBefore) {
         memcpy(g_before, g_val, sizeof g_val);
+        Exp_Get(g_beforeExp);
         g_beforePreset = g_preset;
         g_haveBefore = true;
     }
@@ -120,6 +132,7 @@ static void ApplyPreset(int p) {
     for (int s = 0; s < S_COUNT; s++)
         if (kSettings[s].presetSets)
             g_val[s] = PresetValue(p, s);
+    Exp_Defaults();
     Trace("apply preset=%s", kPresetNames[p]);
 }
 
@@ -129,7 +142,7 @@ static bool BackDiffers() {
     for (int s = 0; s < S_COUNT; s++)
         if (kSettings[s].presetSets && g_before[s] != g_val[s])
             return true;
-    return false;
+    return ExpDiffers(g_beforeExp);
 }
 
 // Reset settings puts every setting and the preset back; its undo covers them all.
@@ -138,20 +151,22 @@ static bool ResetBackDiffers() {
         return false;
     if (g_beforeResetPreset != g_preset)
         return true;
-    return memcmp(g_beforeReset, g_val, sizeof g_val) != 0;
+    return memcmp(g_beforeReset, g_val, sizeof g_val) != 0 || ExpDiffers(g_beforeResetExp);
 }
 
 static void ResetSettings() {
-    bool fresh = g_preset == 0;
+    bool fresh = g_preset == 0 && !Exp_AnyChanged();
     for (int s = 0; s < S_COUNT; s++)
         fresh = fresh && g_val[s] == kSettings[s].fresh;
     if (!fresh) {  // a second reset with nothing changed keeps the first one's undo
         memcpy(g_beforeReset, g_val, sizeof g_val);
+        Exp_Get(g_beforeResetExp);
         g_beforeResetPreset = g_preset;
         g_haveBeforeReset = true;
     }
     for (int s = 0; s < S_COUNT; s++)
         g_val[s] = kSettings[s].fresh;
+    Exp_Defaults();
     g_preset = 0;
     g_haveBefore = false;
     Trace("reset settings");
@@ -168,7 +183,7 @@ struct Row {
     const char *help;
 };
 
-enum { A_KEYS, A_RESET };  // R_ACTION: opens Keys and buttons, or asks to reset
+enum { A_KEYS, A_RESET, A_EXP };  // R_ACTION: opens Keys and buttons, asks to reset, opens Experimental settings
 enum { BACK_PRESET, BACK_RESET };  // R_BACK_TO_MINE: undoes a preset, or a reset
 
 enum { P_HUB, P_PRESET, P_LANG, P_DISPLAY, P_SOUND, P_CONTROLS, P_ADVANCED, P_GAMEPLAY, P_FIRST, P_ORIGINAL, P_COUNT };
@@ -264,6 +279,8 @@ static void BuildPages() {
     AddRow(adv, R_RETURN, "Return to previous menu", 0, "");
     AddSetting(adv, S_FIXBUGS);
     AddSetting(adv, S_SHOWEXP);
+    if (g_val[S_SHOWEXP])  // off, the page is not offered; its values still apply
+        AddRow(adv, R_ACTION, "Experimental settings", A_EXP, "Tuning values, in English. They may change or go.");
     AddRow(adv, R_ACTION, "Reset settings", A_RESET, "Puts every setting back as a fresh install has it.");
     if (ResetBackDiffers())
         AddRow(adv, R_BACK_TO_MINE, "Back to my settings", BACK_RESET, "Puts back what you had before the reset.");
@@ -452,13 +469,22 @@ static const char *HelpFor(const Row *r) {
                 strncat(list, kSettings[s].label, sizeof list - strlen(list) - 1);
             }
         }
+        int now[EXP_MAX];
+        Exp_Get(now);
+        for (int i = 0; i < Exp_Count(); i++) {
+            if (g_beforeExp[i] != now[i]) {
+                if (list[0])
+                    strncat(list, ", ", sizeof list - strlen(list) - 1);
+                strncat(list, Exp_Name(i), sizeof list - strlen(list) - 1);
+            }
+        }
         snprintf(buf, sizeof buf, "Puts back what you had: %s.", list);
         return buf;
     }
     if (r->type == R_BACK_TO_MINE && r->arg == BACK_RESET && ResetBackDiffers()) {
         // Every setting that differs, and the preset; as many named as the voice
         // holds, the rest counted.
-        const char *names[S_COUNT + 1];
+        const char *names[S_COUNT + 1 + EXP_MAX];
         char preset[48];
         int n = 0;
         if (g_beforeResetPreset != g_preset) {
@@ -469,6 +495,11 @@ static const char *HelpFor(const Row *r) {
         for (int s = 0; s < S_COUNT; s++)
             if (g_beforeReset[s] != g_val[s])
                 names[n++] = kSettings[s].label;
+        int now[EXP_MAX];
+        Exp_Get(now);
+        for (int i = 0; i < Exp_Count(); i++)
+            if (g_beforeResetExp[i] != now[i])
+                names[n++] = Exp_Name(i);
         for (int shown = n; shown > 0; shown--) {
             char list[200] = "";
             for (int i = 0; i < shown; i++) {
@@ -510,6 +541,31 @@ static const char *const kShortHelp[][2] = {
     {"Talking, fighting, and the screens you open in play.", "Talking, fighting and the game's screens."},
     {"The game menu, pause, help, saving and loading.", "Game menu, pause, help, save and load."},
     {"Does what the behaviour does: jump, hit or hide.", "Jumps, hits or hides, by behaviour."},
+    // Experimental settings: the console help that needs more than the band's two lines
+    // (English only, so no room is kept for a translation). The range is on the status line.
+    {"Auto cam: eased obstruction clearance in place of the classic search",
+     "Auto cam: ease clear of what hides the hero, not the classic search"},
+    {"Prototype: hold a latching shot's world yaw while the hero is inside its box",
+     "Prototype: hold a latching shot's world yaw while the hero is in its box"},
+    {"Hold the manual camera rotation (free-camera); off = classic auto-recenter drift",
+     "Hold the camera where you turned it; off = the classic recentre drift"},
+    {"Orbit follow-through: % of orbit speed kept per frame after release (0 = stop dead)",
+     "Orbit speed kept each frame after you let go, in % (0 = stop dead)"},
+    {"Auto cam: give a scripted shot's yaw and pitch back when the hero leaves its box",
+     "Auto cam: give a scripted shot's angles back as the hero leaves its box"},
+    {"Cap on recompose strength so tall res converges (0 = pure linear; 70 ~= 816p)",
+     "Caps the HD recompose so tall screens converge (0 = pure linear)"},
+    {"Prototype: hold the camera's world direction while the hero turns (off = it turns with him)",
+     "Prototype: hold the camera's world direction while the hero turns"},
+    {"cam_world_anchor with cam_hold_angle 0: units walked forward that pace the return behind the hero (0 = none)",
+     "cam_world_anchor, cam_hold_angle 0: units walked that pace the return"},
+    {"Auto cam: time constant of the turn behind the hero, ms (0 = per-frame lerp, 300 = retail, 600 = the lerp at "
+     "60 fps)",
+     "Auto cam: time constant of the turn behind the hero, ms (300 = retail)"},
+    {"Auto cam: time constant of the look-at point trailing the hero, ms (0 = pinned to him, 300 = retail)",
+     "Auto cam: time constant of the look-at point trailing the hero, ms (300 = retail)"},
+    {"Auto cam and interior follow: blend into and out of a scripted shot or camera zone over this many ms (0 = cut)",
+     "Blend into and out of a scripted shot or camera zone, ms (0 = cut)"},
 };
 
 void Menu_Say(const char *text) {
@@ -518,6 +574,24 @@ void Menu_Say(const char *text) {
             if (!strcmp(text, kShortHelp[i][0]))
                 text = kShortHelp[i][1];
     }
+    // The game font has no =, ~ or + (each draws as a stray mark); the console help has all three.
+    static char said[512];
+    size_t o = 0;
+    for (const char *p = text; *p && o + 8 < sizeof said; p++) {
+        if (!strncmp(p, " + ", 3)) {
+            memcpy(said + o, " and ", 5), o += 5, p += 2;
+        } else if (!strncmp(p, " ~= ", 4)) {
+            memcpy(said + o, " about ", 7), o += 7, p += 3;
+        } else if (!strncmp(p, " = ", 3)) {
+            memcpy(said + o, ": ", 2), o += 2, p += 2;
+        } else if (*p == '=') {
+            memcpy(said + o, ": ", 2), o += 2;
+        } else {
+            said[o++] = *p;
+        }
+    }
+    said[o] = 0;
+    text = said;
     bool typed = sw_typing == 0 || (sw_typing == 1 && g_pageEntered);
     if (strcmp(g_voice.text, text) != 0) {
         Voice_Say(g_voice, text, typed);
@@ -642,10 +716,12 @@ static void Activate(const Row &r) {
     case R_BACK_TO_MINE:
         if (r.arg == BACK_RESET) {
             memcpy(g_val, g_beforeReset, sizeof g_val);
+            Exp_Put(g_beforeResetExp);
             g_preset = g_beforeResetPreset;
             g_haveBeforeReset = false;
         } else {
             memcpy(g_val, g_before, sizeof g_val);
+            Exp_Put(g_beforeExp);
             g_preset = g_beforePreset;
             g_haveBefore = false;
         }
@@ -657,6 +733,8 @@ static void Activate(const Row &r) {
     case R_ACTION:
         if (r.arg == A_RESET)
             Ask(Q_RESET);
+        else if (r.arg == A_EXP)
+            Exp_Open();
         else
             Controls_Open();
         break;
@@ -687,9 +765,29 @@ static void Move(int dir) {
     Trace("cursor %s", r ? (r->type == R_PRESET_ROW ? "preset row" : r->label) : "-");
 }
 
+// After the page changed shape: the cursor back on the row it was on, if it is still there.
+static void KeepCursorOn(const char *label) {
+    if (!label || g_first || (Wide() && g_focus == F_LEFT))
+        return;
+    const Page &p = g_pages[Wide() ? RightPage() : TopPage()];
+    int first = Wide() ? RightFirst() : 0;
+    for (int i = first; i < p.count; i++) {
+        if (p.rows[i].label && !strcmp(p.rows[i].label, label)) {
+            g_cursor = i - first;
+            return;
+        }
+    }
+}
+
 void Menu_Update() {
     if (Controls_Active()) {
         Controls_Update();
+        return;
+    }
+    if (Exp_Active()) {
+        Exp_Update();
+        if (!Exp_Active())
+            BuildPages();  // a changed tuning value can change the Back to my settings rows
         return;
     }
     if (g_closed) {
@@ -712,11 +810,14 @@ void Menu_Update() {
             g_confirm = false;
             Trace("answer %s", g_confirmCursor ? "yes" : "no");
             if (g_confirmCursor) {
+                const Row *was = CursorRow();
+                const char *label = was ? was->label : NULL;
                 if (g_question == Q_RESET)
                     ResetSettings();
                 else
                     ApplyPreset(1);
                 BuildPages();
+                KeepCursorOn(label);  // a reset can take away a row above it (Experimental settings)
             }
         }
         UpdateVoice();
@@ -761,7 +862,7 @@ void Menu_Update() {
     } else if (g_cursor >= n) {
         g_cursor = n - 1;
     }
-    if (!Controls_Active())  // Keys and buttons just opened: its help, not this row's
+    if (!Controls_Active() && !Exp_Active())  // a page just opened: its help, not this row's
         UpdateVoice();
 }
 
@@ -931,7 +1032,8 @@ static void LegendFor(const Row *r, const char **keys, const char **words, int *
             Kind k = kSettings[r->arg].kind;
             keys[*n] = "\x11\x10";
             words[(*n)++] = (k == K_SLIDER || k == K_STEPS) ? "Adjust" : "Change";
-        } else if (r->type == R_CATEGORY || r->type == R_PRESET_ROW || (r->type == R_ACTION && r->arg == A_KEYS)) {
+        } else if (r->type == R_CATEGORY || r->type == R_PRESET_ROW ||
+                   (r->type == R_ACTION && (r->arg == A_KEYS || r->arg == A_EXP))) {
             keys[*n] = "Enter"; words[(*n)++] = "Open";
         } else if (r->type != R_SETTING) {
             keys[*n] = "Enter"; words[(*n)++] = "Choose";
@@ -1242,6 +1344,7 @@ static void DrawOverlay() {
         "7 a key clash: the note alone / after the help",
         "8 help: shorter drafts / as written",
         "9 640 key chips: 116 wide / 120",
+        "0 Experimental: dense 8x8 table (decided) / game-font list",
     };
     S32 n = (S32)(sizeof lines / sizeof lines[0]);
     S32 w = 8 * 50 + 16, h = n * 12 + 12;
@@ -1266,6 +1369,8 @@ void Menu_Draw() {
                       DIALOGUE_HERO * 16 + 12);
     } else if (Controls_Active()) {
         Controls_Draw();
+    } else if (Exp_Active()) {
+        Exp_Draw();
     } else if (Wide() && !g_first) {
         DrawWide();
     } else {
@@ -1298,7 +1403,7 @@ static const SwitchDef kSwitches[] = {
     {"sheet", &sw_sheet, 0, 1, 1},         {"legend", &sw_legend, 0, 1, 1},       {"bg", &sw_bg, 0, 1, 1},
     {"scale", &sw_scale, 0, 1, 1},         {"bandshade", &sw_bandshade, 0, 15, 15}, {"panes", &sw_panes, 0, 1, 1},
     {"clash", &sw_clash, 0, 1, 1},       {"short", &sw_short, 0, 1, 1},
-    {"narrow", &sw_narrow, 0, 1, 1},
+    {"narrow", &sw_narrow, 0, 1, 1},     {"exptable", &sw_exptable, 0, 1, 1},
 };
 
 bool Menu_SetSwitch(const char *name, int v) {
@@ -1350,7 +1455,16 @@ bool Menu_Open(const char *name) {
         Controls_Open();
         return true;
     }
+    if (!strcmp(name, "Experimental settings")) {
+        g_val[S_SHOWEXP] = 1;  // the row is there only then
+        BuildPages();
+        Menu_Open("Advanced and reset");
+        KeepCursorOn("Experimental settings");  // as Enter on it leaves it
+        Exp_Open();
+        return true;
+    }
     Controls_Close();
+    Exp_Close();
     for (int p = 0; p < P_COUNT; p++) {
         if (g_pages[p].name && !strcmp(g_pages[p].name, name)) {
             g_first = false;
@@ -1394,6 +1508,10 @@ bool Menu_Set(const char *id, int value) {
         Trace("set %s=%d (control)", id, value);
         return true;
     }
+    if (Exp_Set(id, value)) {
+        BuildPages();
+        return true;
+    }
     return false;
 }
 
@@ -1405,6 +1523,7 @@ void Menu_Reset() {
     Engine_UseMenuPalette();
     Engine_ResetInput();
     Controls_Reset();
+    Exp_Reset();
     g_confirm = false;
     g_confirmCursor = 0;
     g_closed = false;
@@ -1437,7 +1556,7 @@ void Menu_Help(MenuHelp *h) {
 const char *Menu_Layout() { return g_closed ? "closed" : g_first ? "first-launch" : Wide() ? "wide" : "column"; }
 
 const char *Menu_PageName() {
-    return Controls_Active() ? "Keys and buttons" : g_first ? "First launch" : g_pages[Wide() ? RightPage() : TopPage()].name;
+    return Controls_Active() ? "Keys and buttons" : Exp_Active() ? "Experimental settings" : g_first ? "First launch" : g_pages[Wide() ? RightPage() : TopPage()].name;
 }
 
 // One for the hub; each page pushed, the wide right pane and a question add one.
@@ -1449,7 +1568,7 @@ static int Depth() {
 
 const char *Menu_CursorLabel() {
     static char buf[160];
-    const Row *r = Controls_Active() || g_closed ? NULL : CursorRow();
+    const Row *r = Controls_Active() || Exp_Active() || g_closed ? NULL : CursorRow();
     if (!r)
         return "";
     return r->type == R_PRESET_ROW ? PresetRowLabel(buf, sizeof buf) : r->label;
@@ -1466,6 +1585,12 @@ int Menu_Where(char *buf, size_t n) {
         snprintf(buf, n, "%s | %s", Menu_PageName(), inner);
         return Depth() + d;
     }
+    if (Exp_Active()) {
+        char inner[200];
+        int d = Exp_Where(inner, sizeof inner);
+        snprintf(buf, n, "%s | %s", Menu_PageName(), inner);
+        return Depth() + d;
+    }
     if (g_confirm)
         snprintf(buf, n, "%s | %s | confirm", Menu_PageName(), g_confirmCursor ? "Yes" : "No");
     else
@@ -1474,7 +1599,7 @@ int Menu_Where(char *buf, size_t n) {
 }
 
 bool Menu_CursorSetting(bool *active) {
-    const Row *r = Controls_Active() || g_closed ? NULL : CursorRow();
+    const Row *r = Controls_Active() || Exp_Active() || g_closed ? NULL : CursorRow();
     if (!r || r->type != R_SETTING)
         return false;
     *active = RowActive(*r);
@@ -1557,7 +1682,7 @@ void Menu_WriteState(FILE *f) {
     fprintf(f, ",\"focus\":\"%s\",\"cursor\":%d,\"left_cursor\":%d,\"scroll\":%d,\"confirm\":%s",
             Wide() ? (g_focus == F_LEFT ? "left" : "right") : "column", g_cursor, g_leftCursor, g_scroll,
             g_confirm ? "true" : "false");
-    const Row *r = Controls_Active() ? NULL : CursorRow();
+    const Row *r = Controls_Active() || Exp_Active() ? NULL : CursorRow();
     fprintf(f, ",\"cursor_row\":");
     Menu_JsonString(f, r ? (r->type == R_PRESET_ROW ? PresetRowLabel(buf, sizeof buf) : r->label) : "");
     fprintf(f, ",\"preset\":\"%s\",\"preset_changed\":%s,\"preset_row\":", kPresetNames[g_preset],
@@ -1595,6 +1720,10 @@ void Menu_WriteState(FILE *f) {
     if (Controls_Active()) {
         fprintf(f, ",\"controls\":");
         Controls_WriteState(f);
+    }
+    if (Exp_Active()) {
+        fprintf(f, ",\"experimental\":");
+        Exp_WriteState(f);
     }
     fprintf(f, ",\"switches\":{");
     for (size_t i = 0; i < sizeof kSwitches / sizeof kSwitches[0]; i++)

@@ -39,7 +39,7 @@ Game data: `LBA2_GAME_DIR`, or `--data DIR`; the default is
 the engine does).
 
 Keys: arrows, Enter, Esc; a pad's d-pad or left stick, A and B. The prototype's
-own switches are on F1 to F12 and 1 to 6.
+own switches are on F1 to F12 and 0 to 9.
 
 | Key | Switch | What it changes |
 | --- | --- | --- |
@@ -64,6 +64,7 @@ own switches are on F1 to F12 and 1 to 6.
 | 7 | `clash` | a key clash's note alone in the voice / added after the action's help |
 | 8 | `short` | the shorter help, for translation, and a dimmed row saying why it is dimmed / the help as first written |
 | 9 | `narrow` | 640 wide: key chips 116 wide, so "Behaviour action" clears them / 120 |
+| 0 | `exptable` | Experimental settings: one dense table in the 8x8 font (decided) / the game-font list, a page per group |
 
 Keys 1 to 6 are the composition review of 2026-11-03 (wide and large screens).
 All six are decided and on by default; each key turns its part off to compare.
@@ -140,6 +141,35 @@ the 1997 game's six languages were compared for the help review.
 - Headless runs use a fixed clock and a fixed plasma seed, so a script gives
   the same pictures every time. They run with vsync off, as fast as the
   machine draws.
+
+## Experimental settings
+
+With Show experimental settings on (Advanced and reset), an Experimental
+settings row opens a page of the 41 tuning values lba2cc's settings tables
+give a console name and no row in Options: the Auto camera (22), the mouse (9),
+the gamepad (7) and graphics (3), with their defaults, ranges and console help
+as lba2cc has them. It is the menu plan's step 8, generated from a table rather
+than made row by row, in English. Off, the row is not offered.
+
+- Switch `exptable` (key 0): 1, the default and decided (2026-11-03), is the
+  plan's dense table in the 8x8 font, as the 1997 key binding screen: a line per value under its group's
+  head, the cursor a plasma strip, a status line with the default, the range and
+  the lba2.cfg key when it fits. 0 is the game-font list: the groups, then a
+  page of rows per group. F5 draws the table's font at 1x (31 lines in view on
+  a wide screen) or 2x (14).
+- Left and Right change a value, Enter turns a switch, Del puts the default
+  back, Page Up and Page Down (the pad's LB and RB) move a window at a time.
+  A changed value takes the count colour.
+- A changed value marks the preset changed. Choosing a preset, and Reset
+  settings, put every value back to its default; Back to my settings puts them
+  back and names them.
+- The help is the console help, said in the voice. The game font has no `=`,
+  `~` or `+`, so the voice says them as `:`, "about" and "and". Eleven console
+  helps need three or four lines of the voice; switch `short` gives them shorter
+  lines, which fit two (`short=0` shows them as written, cut).
+
+`./play-experimental.sh` plays both forms at 1920x1080 and 640x480 on the
+same steps, with a trace per round. The self test does not visit the page yet.
 
 ## Testing
 
