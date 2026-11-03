@@ -58,6 +58,7 @@ static const Setting kSettings[S_COUNT] = {
      {"640 x 480", "1280 x 720", "1280 x 800", "1920 x 1080", "2400 x 1080", "2560 x 1440", "3440 x 1440", "3840 x 2160"},
      3, 3, false,
      "The size of the picture the game draws."},
+    // Not a stored value either: the row shows the window as it is and turns it.
     {"fullscreen", "Fullscreen", K_TOGGLE, 1, {"Off", "On"}, 1, 1, false,
      "Fills the screen, or plays in a window."},
     {"vsync", "Vsync", K_TOGGLE, 1, {"Off", "On"}, 1, 1, false,
@@ -357,6 +358,8 @@ static const char *ValueText(int s, char *buf, size_t n) {
     const Setting &st = kSettings[s];
     if (s == S_RESOLUTION)
         snprintf(buf, n, "%u x %u", (unsigned)Engine_PhysW(), (unsigned)Engine_PhysH());
+    else if (s == S_FULLSCREEN)
+        snprintf(buf, n, "%s", st.names[Engine_Fullscreen() ? 1 : 0]);
     else if (st.kind == K_SLIDER)
         snprintf(buf, n, "%d", g_val[s]);
     else
@@ -367,7 +370,7 @@ static const char *ValueText(int s, char *buf, size_t n) {
 // "Changed is a colour": differs from a fresh install, or for a setting presets
 // set, from the chosen preset.
 static bool ValueChanged(int s) {
-    if (s == S_RESOLUTION)
+    if (s == S_RESOLUTION || s == S_FULLSCREEN)
         return false;  // the player's screen, not a choice a preset makes
     return g_val[s] != PresetValue(g_preset, s);
 }
@@ -447,8 +450,8 @@ void Menu_Toast(const char *text) { Toast("%s", text, 0); }
 
 void Menu_NoteScreen() {
     char note[64];
-    snprintf(note, sizeof note, "%ux%u (logical %ux%u)", (unsigned)Engine_PhysW(), (unsigned)Engine_PhysH(),
-             (unsigned)Engine_LogicalW(), (unsigned)Engine_LogicalH());
+    snprintf(note, sizeof note, "%ux%u (logical %ux%u)%s", (unsigned)Engine_PhysW(), (unsigned)Engine_PhysH(),
+             (unsigned)Engine_LogicalW(), (unsigned)Engine_LogicalH(), Engine_Fullscreen() ? ", fullscreen" : "");
     Toast("%s", note, 0);
     Trace("screen %s", note);
 }
@@ -785,6 +788,11 @@ void Menu_Init(bool firstLaunch) {
 static void ChangeSetting(int s, int dir) {
     if (s == S_RESOLUTION) {
         if (Engine_StepScreen(dir))
+            Menu_NoteScreen();
+        return;
+    }
+    if (s == S_FULLSCREEN) {
+        if (Engine_SetFullscreen(!Engine_Fullscreen()))
             Menu_NoteScreen();
         return;
     }

@@ -57,6 +57,12 @@ note at the bottom right says the new size and its logical canvas.
   (a dragged size too, "1512 x 904"). It is the player's screen, not a preset's
   choice, so it is never drawn as changed, and presets and Reset settings
   leave it alone.
+- The Fullscreen row turns the window into fullscreen and back, with lba2cc's
+  own call. As in the game, fullscreen and the resolution are separate: the
+  screen size, the canvas and the place in the menu stay, and the picture is
+  letterboxed onto the display (Resolution still steps it there). The row
+  follows macOS's own fullscreen too (the green button, Ctrl+Cmd+F), and like
+  Resolution it is never drawn as changed.
 - `size WxH` does the same from a script or the control file.
 
 `./play-sizes.sh` walks it in one window, with steps, and prints each change

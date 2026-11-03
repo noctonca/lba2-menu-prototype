@@ -124,6 +124,7 @@ static SDL_Window *TheWindow() {
 
 static bool s_headless;
 static int s_winPxW, s_winPxH;  // the window's pixels after the prototype last sized it
+static bool s_fullscreen;       // the window fills the display; the screen size stays as chosen
 
 static void NoteWindowPixels(SDL_Window *win) {
     SDL_GetWindowSizeInPixels(win, &s_winPxW, &s_winPxH);
@@ -131,8 +132,9 @@ static void NoteWindowPixels(SDL_Window *win) {
 
 static void TitleWindow(SDL_Window *win) {
     char title[128];
-    snprintf(title, sizeof title, "LBA2 menu prototype - %ux%u (logical %ux%u)",
-             (unsigned)s_physW, (unsigned)s_physH, (unsigned)s_logW, (unsigned)s_logH);
+    snprintf(title, sizeof title, "LBA2 menu prototype - %ux%u (logical %ux%u)%s",
+             (unsigned)s_physW, (unsigned)s_physH, (unsigned)s_logW, (unsigned)s_logH,
+             s_fullscreen ? ", fullscreen" : "");
     SDL_SetWindowTitle(win, title);
 }
 
@@ -140,6 +142,11 @@ static void SizeWindow() {
     SDL_Window *win = TheWindow();
     if (!win)
         return;
+    if (s_fullscreen) {  // the window is the display; it is sized on the way out
+        NoteWindowPixels(win);
+        TitleWindow(win);
+        return;
+    }
     U32 scale = Engine_Scale(s_physW, s_physH);
     SDL_DisplayID display = SDL_GetDisplayForWindow(win);
     SDL_Rect usable;
@@ -221,13 +228,46 @@ bool Engine_StepScreen(int dir) {
     return Engine_SetScreen(kSizes[next][0], kSizes[next][1], true);
 }
 
+bool Engine_Fullscreen() { return s_fullscreen; }
+
+bool Engine_SetFullscreen(bool on) {
+    if (s_headless) {
+        s_fullscreen = on;
+        return true;
+    }
+    SDL_Window *win = TheWindow();
+    if (!win)
+        return false;
+    SetWindowFullscreen(on);  // lba2cc's own call: the window fills the display, letterboxed
+    SDL_SyncWindow(win);      // macOS animates into its own space; wait for it to land
+    s_fullscreen = (SDL_GetWindowFlags(win) & SDL_WINDOW_FULLSCREEN) != 0;
+    SizeWindow();  // back out: the window the screen size asks for
+    return s_fullscreen == on;
+}
+
 bool Engine_WindowResized(U32 *w, U32 *h) {
     if (s_headless)
         return false;
     SDL_Window *win = TheWindow();
-    int pw = 0, ph = 0;
-    if (!win || !SDL_GetWindowSizeInPixels(win, &pw, &ph) || (pw == s_winPxW && ph == s_winPxH))
+    if (!win)
         return false;
+    // Fullscreen turned on or off outside the menu (the window's green button,
+    // Ctrl+Cmd+F): follow it, and do not take the new size for a drag.
+    const bool fs = (SDL_GetWindowFlags(win) & SDL_WINDOW_FULLSCREEN) != 0;
+    if (fs != s_fullscreen) {
+        s_fullscreen = fs;
+        SDL_SyncWindow(win);
+        SizeWindow();
+        return false;
+    }
+    int pw = 0, ph = 0;
+    if (!SDL_GetWindowSizeInPixels(win, &pw, &ph) || (pw == s_winPxW && ph == s_winPxH))
+        return false;
+    if (s_fullscreen) {  // the display's size, not a screen chosen by hand
+        s_winPxW = pw;
+        s_winPxH = ph;
+        return false;
+    }
     s_winPxW = pw;
     s_winPxH = ph;
     *w = (U32)pw;

@@ -36,6 +36,10 @@ void Engine_SizeAt(int i, U32 *physW, U32 *physH);
 // one nearest below the current screen (a dragged window can sit between two).
 bool Engine_StepScreen(int dir);
 bool Engine_ShiftHeld();
+// The window fills the display (lba2cc's SetWindowFullscreen) or not. The screen
+// size, the canvas and the menu stay; the picture is letterboxed onto the display.
+bool Engine_SetFullscreen(bool on);
+bool Engine_Fullscreen();
 
 U32 Engine_LogicalW();
 U32 Engine_LogicalH();
