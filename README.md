@@ -84,7 +84,8 @@ own switches are on F1 to F12 and 0 to 9.
 | F2 | | the next screen size; Shift+F2 the previous (see Screen sizes) |
 | F3 | `band` | one band (help + legend) / a help line and a prompt bar |
 | F4 | `typing` | help typed on every cursor move (decided) / on entering a page only / not typed |
-| F5 | `chip` | the 8x8 key font at 2x / 1x |
+| F5 | `chip` | the 8x8 key font at 2x (decided) / 1x |
+| Shift+F5 | `tablefont` | the Experimental table's 8x8 font at 1x (decided) / 2x |
 | F6 | `word` | the preset row: Modern settings (decided) / Settings: Modern / Preset: Modern / Rules: Modern |
 | F7 | `island` | Citadel's palette, as Options opened in play would have |
 | F8 | `help640` | help in the dialogue window on every one-column page (decided) / only where it must show |
@@ -193,8 +194,9 @@ than made row by row, in English. Off, the row is not offered.
   plan's dense table in the 8x8 font, as the 1997 key binding screen: a line per value under its group's
   head, the cursor a plasma strip, a status line with the default, the range and
   the lba2.cfg key when it fits. 0 is the game-font list: the groups, then a
-  page of rows per group. F5 draws the table's font at 1x (31 lines in view on
-  a wide screen) or 2x (14).
+  page of rows per group. The table's font is 1x (31 lines in view on a wide
+  screen; decided 2026-11-03, as the 1997 key binding screen); Shift+F5 draws
+  it at 2x (14) to compare.
 - Left and Right change a value, Enter turns a switch, Del puts the default
   back, Page Up and Page Down (the pad's LB and RB) move a window at a time.
   A changed value takes the count colour.

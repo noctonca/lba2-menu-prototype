@@ -27,7 +27,7 @@
 // (2026-11-03) and are left out; --combo still tests them.
 static const char *kCombos[] = {
     "band=1,gameplay=0", "band=1,gameplay=1", "help640=0,gameplay=1", "padnames=2",
-    "padnames=3",        "chip=1",            "heads=0",
+    "padnames=3",        "chip=1,tablefont=2",            "heads=0",
 };
 
 static const char *kPages[] = {

@@ -43,7 +43,7 @@ EXP_PAGE = "Experimental settings"
 # The same seven as selftest.cpp kCombos: the chosen layouts and their variants
 # (band=0 and devices=0 were not chosen, 2026-11-03; --combo still tests them).
 COMBOS = ["band=1,gameplay=0", "band=1,gameplay=1", "help640=0,gameplay=1",
-          "padnames=2", "padnames=3", "chip=1", "heads=0"]
+          "padnames=2", "padnames=3", "chip=1,tablefont=2", "heads=0"]
 
 def parse_combo(spec):
     return {k: int(v) for k, v in (part.split("=") for part in spec.split(","))}

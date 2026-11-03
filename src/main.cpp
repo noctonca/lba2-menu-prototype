@@ -25,7 +25,7 @@
 //   wait <frames>        let frames pass
 //   state                print the state as one JSON line: "state {...}"
 //   shot <path> [scale]  write the screen as a PNG (logical size x scale)
-//   switch <name> <v>    band typing chip word island help640 gameplay overlay devices padnames heads
+//   switch <name> <v>    band typing chip tablefont word island help640 gameplay overlay devices padnames heads
 //   set <setting> <v>    a fake setting by id (see `state`)
 //   open <page name>     jump to a page ("Display and graphics", "Keys and buttons", "original", ...)
 //   size <WxH>           another screen size, in place: the page, cursor and values stay
@@ -357,8 +357,10 @@ int main(int argc, char **argv) {
             Menu_SetSwitch("band", !Menu_GetSwitch("band"));
         if (Engine_Pressed(KEY_F4))
             Menu_SetSwitch("typing", Menu_GetSwitch("typing") + 1);
-        if (Engine_Pressed(KEY_F5))
-            Menu_SetSwitch("chip", Menu_GetSwitch("chip") == 2 ? 1 : 2);
+        if (Engine_Pressed(KEY_F5)) {
+            const char *sw = Engine_ShiftHeld() ? "tablefont" : "chip";
+            Menu_SetSwitch(sw, Menu_GetSwitch(sw) == 2 ? 1 : 2);
+        }
         if (Engine_Pressed(KEY_F6))
             Menu_SetSwitch("word", Menu_GetSwitch("word") + 1);
         if (Engine_Pressed(KEY_F7))

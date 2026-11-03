@@ -414,7 +414,9 @@ static int g_total;  // the table's lines, heads included
 static ExpTable g_table;
 static bool g_tableShown;
 
-static S32 Scale() { return Menu_GetSwitch("chip"); }
+// The table is drawn at 1x on every canvas, as the 1997 key binding screen (decided
+// 2026-11-03); switch tablefont 2 draws it at 2x to compare.
+static S32 Scale() { return Menu_GetSwitch("tablefont"); }
 
 static S32 PanelShade() {
     int b = Menu_GetSwitch("bandshade");

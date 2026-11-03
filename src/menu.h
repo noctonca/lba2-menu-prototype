@@ -13,7 +13,8 @@ void Menu_Draw();
 // control channel and the trace use.
 //   band     1 = one band (help + legend), 0 = help line + prompt bar   (open call 1)
 //   typing   0 = type on every cursor move, 1 = type on page entry only, 2 = no typing (2)
-//   chip     8x8 font scale on the logical canvas, 1 or 2                (3)
+//   chip     8x8 font scale on the logical canvas, 1 or 2 (2 decided)     (3)
+//   tablefont  the Experimental table's 8x8 font scale, 1 or 2 (1 decided)
 //   word     preset row word: 0 Settings, 1 Preset, 2 Rules              (6)
 //   island   1 = Citadel's palette (Options opened in play), 0 = menu palette
 //   help640  1 = help in the dialogue window on every one-column page (decided);

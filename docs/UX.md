@@ -279,7 +279,8 @@ check the parts marked.
   on Citadel Island (F7).
 - Minimum contrast against what is behind the text, measured from a
   screenshot: 3:1 for the game font (38 px line, large text), 4.5:1 for the
-  8x8 font at 2x (16 px). Disabled text stays readable and differs from
+  8x8 font at 2x (16 px) and at 1x (the Experimental table: at least 5.6:1
+  where the clouds show lightest through its panel, measured 2026-11-03). Disabled text stays readable and differs from
   enabled at a glance.
 - A state shown by a fill, not text (a lit step against an unlit one, a dimmed
   slider against a live one), differs by 3:1 or more, on the cursor plasma
