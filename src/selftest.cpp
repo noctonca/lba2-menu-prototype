@@ -26,7 +26,7 @@
 // and prompt bar (band=0) and all key columns side by side (devices=0) were not chosen
 // (2026-11-03) and are left out; --combo still tests them.
 static const char *kCombos[] = {
-    "band=1,gameplay=0", "band=1,gameplay=1", "help640=1,gameplay=1", "padnames=2",
+    "band=1,gameplay=0", "band=1,gameplay=1", "help640=0,gameplay=1", "padnames=2",
     "padnames=3",        "chip=1",            "heads=0",
 };
 

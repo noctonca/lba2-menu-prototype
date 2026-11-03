@@ -87,7 +87,7 @@ own switches are on F1 to F12 and 0 to 9.
 | F5 | `chip` | the 8x8 key font at 2x / 1x |
 | F6 | `word` | the preset row: Modern settings (decided) / Settings: Modern / Preset: Modern / Rules: Modern |
 | F7 | `island` | Citadel's palette, as Options opened in play would have |
-| F8 | `help640` | help in the dialogue window on every one-column page |
+| F8 | `help640` | help in the dialogue window on every one-column page (decided) / only where it must show |
 | F9 | `gameplay` | the Gameplay category |
 | F10 | `devices` | Controls: one device per view, Tab switches / Key 1, Key 2 and Gamepad side by side |
 | F11 | `padnames` | the pad's names: the connected pad's / Xbox / PlayStation / Nintendo |

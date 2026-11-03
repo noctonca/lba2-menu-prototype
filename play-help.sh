@@ -8,8 +8,8 @@
 # default: one message at a time (a key clash's note alone, a dimmed row saying
 # why) and the shorter help, so a translation half as long again still fits.
 # Keys 7 and 8 turn each on and off in any round (F1 lists them). At 640x480
-# the help shows in the 1997 dialogue window on every page (switch help640, F8);
-# without it only Keys and buttons has help there, as 1997 had none.
+# the help shows in the 1997 dialogue window on every page (switch help640, F8,
+# decided 2026-11-03); F8 off leaves help only where it must show.
 # Writes .runs/help/<time>/round-<n>-<name>/trace.log for reading back.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -51,7 +51,6 @@ for size in "${sizes[@]}"; do
         mkdir -p "$dir"
         args=()
         [[ "$name" == as-written ]] && args=("${before[@]}")
-        [[ "$size" == 640x480 ]] && args+=(--switch help640=1)
         echo
         echo "Round $round: $size, $name."
         read -r -p "Press Enter to open it. " _

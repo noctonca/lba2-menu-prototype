@@ -16,7 +16,8 @@ void Menu_Draw();
 //   chip     8x8 font scale on the logical canvas, 1 or 2                (3)
 //   word     preset row word: 0 Settings, 1 Preset, 2 Rules              (6)
 //   island   1 = Citadel's palette (Options opened in play), 0 = menu palette
-//   help640  1 = help in the dialogue window on every one-column page
+//   help640  1 = help in the dialogue window on every one-column page (decided);
+//            0 = only first launch, questions, the preset page and Keys and buttons
 //   gameplay 1 = show the Gameplay category
 //   overlay  1 = show the prototype's key list
 //   sheet    1 = the wide layout is one 960x540 composition, centred; 0 = stretched to the margins
