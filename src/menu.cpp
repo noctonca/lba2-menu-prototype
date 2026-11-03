@@ -216,7 +216,17 @@ static const char *kVersion = "0.13.3-dev 011394f";
 static const char *kVersionString = "0.13.3-dev";  // LBA2_VERSION_STRING alone, as the log's first line has it
 static const char *kCommit = "011394fbc247";
 
+// The preset row: 0 names the preset ("Modern settings", decided 2026-11-03); 1-3 the earlier
+// word-and-colon forms to compare ("Settings: Modern", "Preset: Modern", "Rules: Modern").
 static const char *kWords[3] = {"Settings", "Preset", "Rules"};
+
+static const char *FormatPresetRow(char *buf, size_t n, const char *name, bool changed) {
+    if (sw_word == 0)
+        snprintf(buf, n, "%s settings%s", name, changed ? ", changed" : "");
+    else
+        snprintf(buf, n, "%s: %s%s", kWords[sw_word - 1], name, changed ? ", changed" : "");
+    return buf;
+}
 
 static void AddRow(Page &p, RowType t, const char *label, int arg, const char *help) {
     Row &r = p.rows[p.count++];
@@ -335,8 +345,7 @@ static bool RowActive(const Row &r) {
 }
 
 static const char *PresetRowLabel(char *buf, size_t n) {
-    snprintf(buf, n, "%s: %s%s", kWords[sw_word], kPresetNames[g_preset], PresetChanged() ? ", changed" : "");
-    return buf;
+    return FormatPresetRow(buf, n, kPresetNames[g_preset], PresetChanged());
 }
 
 static const char *ValueText(int s, char *buf, size_t n) {
@@ -511,8 +520,8 @@ static const char *HelpFor(const Row *r) {
         char preset[48];
         int n = 0;
         if (g_beforeResetPreset != g_preset) {
-            snprintf(preset, sizeof preset, "%s %c%s", kPresetNames[g_beforeResetPreset], kWords[sw_word][0] + 32,
-                     kWords[sw_word] + 1);  // "Classic settings"
+            const char *w = sw_word == 0 ? "settings" : kWords[sw_word - 1];
+            snprintf(preset, sizeof preset, "%s %c%s", kPresetNames[g_beforeResetPreset], w[0] | 32, w + 1);  // "Classic settings"
             names[n++] = preset;
         }
         for (int s = 0; s < S_COUNT; s++)
@@ -1512,7 +1521,7 @@ struct SwitchDef {
 };
 static const SwitchDef kSwitches[] = {
     {"band", &sw_band, 0, 1, 1},           {"typing", &sw_typing, 0, 2, 0},   {"chip", &sw_chip, 1, 2, 2},
-    {"word", &sw_word, 0, 2, 0},           {"island", &sw_island, 0, 1, 0},   {"help640", &sw_help640, 0, 1, 0},
+    {"word", &sw_word, 0, 3, 0},           {"island", &sw_island, 0, 1, 0},   {"help640", &sw_help640, 0, 1, 0},
     {"gameplay", &sw_gameplay, 0, 1, 0},   {"overlay", &sw_overlay, 0, 1, 0},
     {"devices", &sw_devices, 0, 1, 1},     {"padnames", &sw_padnames, 0, 3, 0},   {"heads", &sw_heads, 0, 1, 1},
     {"sheet", &sw_sheet, 0, 1, 1},         {"legend", &sw_legend, 0, 1, 1},       {"bg", &sw_bg, 0, 1, 1},
@@ -1792,7 +1801,7 @@ void Menu_WriteMeasure(FILE *f) {
         const Row &r = g_pages[P_HUB].rows[i];
         char label[160];
         if (r.type == R_PRESET_ROW) {
-            snprintf(label, sizeof label, "%s: %s, changed", kWords[sw_word], "Classic");
+            FormatPresetRow(label, sizeof label, "Classic", true);
         } else {
             snprintf(label, sizeof label, "%s", r.label);
         }

@@ -220,7 +220,7 @@ the engine's.
 itself in the voice as the cursor lands on it; there is no help page.
 
 **Goal-Gradient, Zeigarnik.** The preset row says when the player's settings
-are no longer the preset ("Settings: Modern, changed"), and the changed values
+are no longer the preset ("Modern settings, changed"), and the changed values
 are in `ink-count`.
 
 **Peak-End Rule.** First launch ends with the game, not with a settings
