@@ -478,7 +478,11 @@ static void Say() {
         if (other >= 0) {
             char name[32];
             ChipText(a, c, name, sizeof name);
-            snprintf(buf, sizeof buf, "%s %s is also %s.", kActions[a].help, name, kActions[other].name);
+            // One message at a time (switch clash): the note replaces the help.
+            if (Menu_GetSwitch("clash"))
+                snprintf(buf, sizeof buf, "%s is also %s.", name, kActions[other].name);
+            else
+                snprintf(buf, sizeof buf, "%s %s is also %s.", kActions[a].help, name, kActions[other].name);
             text = buf;
         } else {
             text = kActions[a].help;

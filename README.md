@@ -61,12 +61,21 @@ own switches are on F1 to F12 and 1 to 6.
 | 4 | `scale` | screens 3:2 or wider take the 960x540 composition at the largest whole step it fits, others the one column / the plan's rule (relaunches) |
 | 5 | `panes` | wide: one pane at a time, centred, the page's name as a title / two panes side by side |
 | 6 | `bandshade` | the band darkened to level 15 / 11 |
+| 7 | `clash` | a key clash's note alone in the voice / added after the action's help |
+| 8 | `short` | the shorter help, for translation, and a dimmed row saying why it is dimmed / the help as first written |
 
 Keys 1 to 6 are the composition review of 2026-11-03 (wide and large screens).
 All six are decided and on by default; each key turns its part off to compare.
 F2 keeps every switch as it steps through the sizes. `./play-composition.sh`
 plays the wide layout as it was before the review, then as decided, on the
 same steps, with a trace per round.
+
+Keys 7 and 8 are the help review of 2026-11-03, decided and on by default: one
+message at a time in the voice, and help short enough that a translation half
+as long again still fits two lines (the 1997 game's own translations of its
+sentences run 1.1x English typically, up to 1.5x in German). Each key turns
+its part off to compare. `./play-help.sh` plays the help as first written,
+then as decided.
 
 ## The Controls page
 
@@ -99,11 +108,15 @@ Every run can be steered and read back without a person at the keys.
 Commands, one per line: `key <up|down|left|right|enter|esc|tab|del|f1..f12> [count]`,
 `press <key>` (a raw key for rebinding: an SDL name such as `J`, `Left Alt` or
 `Keypad 5`, or `pad:a`, `pad:lb`, `pad:lstick-up` ...),
-`wait <frames>`, `state`, `measure`, `shot <path.png> [scale]`, `switch <name> <value>`,
+`wait <frames>`, `state`, `measure`, `widths <file> [voice width]`, `shot <path.png> [scale]`, `switch <name> <value>`,
 `set <setting> <value>`, `open <page name>`, `quit`.
 
 `measure` prints the width in the game font of every setting's label, its
 widest value and its help, and of the hub's rows, for sizing panes.
+`widths` measures any text the same way: each line of the file is
+`tag<TAB>text` in CP850 (as TEXT.HQR holds it), and it prints the tag, the
+width and the voice lines the text needs (620 wide unless given). It is how
+the 1997 game's six languages were compared for the help review.
 `--switch scale=N` is read before the window opens (the canvas depends on it);
 `switch scale` at run time changes nothing.
 

@@ -186,6 +186,7 @@ static int sw_band = 1, sw_typing = 0, sw_chip = 2, sw_word = 0, sw_island = 0, 
            sw_gameplay = 0, sw_overlay = 0;
 // Composition (2026-11-03 design pass): sheet, legend, bg, scale (scale is set at launch).
 static int sw_sheet = 1, sw_legend = 1, sw_bg = 1, sw_scale = 1, sw_bandshade = 15, sw_panes = 1;
+static int sw_clash = 1, sw_short = 1;
 
 static const char *kWords[3] = {"Settings", "Preset", "Rules"};
 
@@ -439,6 +440,9 @@ static const char *HelpFor(const Row *r) {
     static char buf[256];
     if (!r)
         return "";
+    // One message at a time: a dimmed row says why it is dimmed, not what it does.
+    if (sw_short && r->type == R_SETTING && !RowActive(*r))
+        return "Only with the Auto camera.";
     if (r->type == R_BACK_TO_MINE && r->arg == BACK_PRESET && BackDiffers()) {
         char list[160] = "";
         for (int s = 0; s < S_COUNT; s++) {
@@ -486,7 +490,34 @@ static const char *HelpFor(const Row *r) {
     return r->help ? r->help : "";
 }
 
+// Shorter help for translation (switch short, decided 2026-11-03): English at most about 750 px,
+// so a translation half as long again still fits the voice's two lines.
+static const char *const kShortHelp[][2] = {
+    {"Stops the picture tearing. Off can raise the frame rate on a slow display.", "Stops the picture tearing."},
+    {"Rain, shadows and the far islands. Lower it on a slow machine.", "Rain, shadows and the far islands."},
+    {"Sharp pixels as in 1997, or smoothed when scaled.", "Sharp pixels, or smoothed when scaled."},
+    {"Fixes the 1997 release's known bugs. Off plays them as they were.", "Off plays the 1997 bugs as they were."},
+    {"Settings still being tried. They may change or go.", "Settings still being tried."},
+    {"Classic holds still and cuts; Auto turns to follow you.", "Classic cuts; Auto follows you."},
+    {"Turns the camera the other way. Only with the Auto camera.", "Turns the camera the other way."},
+    {"How fast the camera turns. Only with the Auto camera.", "How fast the camera turns."},
+    {"Choose how to play: the 1997 rules, or with the known bugs fixed.", "The 1997 rules, or with the bugs fixed."},
+    {"How Twinsen moves and what the game tells you.", "The dodge and behaviour hints."},
+    {"The original, with its known bugs fixed. What a fresh install plays.", "The original, with its known bugs fixed."},
+    {"The rules of the 1997 CD release, bugs and all. Nothing else changes.", "The 1997 CD rules, bugs and all."},
+    {"Puts back the settings you had before you chose a preset.", "Puts back what you had before."},
+    {"Play by the 1997 rules? The screen, sound and keys stay as they are.", "Play by the 1997 rules? Nothing else changes."},
+    {"Talking, fighting, and the screens you open in play.", "Talking, fighting and the game's screens."},
+    {"The game menu, pause, help, saving and loading.", "Game menu, pause, help, save and load."},
+    {"Does what the behaviour does: jump, hit or hide.", "Jumps, hits or hides, by behaviour."},
+};
+
 void Menu_Say(const char *text) {
+    if (sw_short) {
+        for (size_t i = 0; i < sizeof kShortHelp / sizeof kShortHelp[0]; i++)
+            if (!strcmp(text, kShortHelp[i][0]))
+                text = kShortHelp[i][1];
+    }
     bool typed = sw_typing == 0 || (sw_typing == 1 && g_pageEntered);
     if (strcmp(g_voice.text, text) != 0) {
         Voice_Say(g_voice, text, typed);
@@ -1208,6 +1239,8 @@ static void DrawOverlay() {
         "4 scale: largest step the 960x540 fits / 640x480 rule",
         "5 wide: one pane at a time, with a title / two panes",
         "6 band: level 15 / 11, as before",
+        "7 a key clash: the note alone / after the help",
+        "8 help: shorter drafts / as written",
     };
     S32 n = (S32)(sizeof lines / sizeof lines[0]);
     S32 w = 8 * 50 + 16, h = n * 12 + 12;
@@ -1263,6 +1296,7 @@ static const SwitchDef kSwitches[] = {
     {"devices", &sw_devices, 0, 1, 1},     {"padnames", &sw_padnames, 0, 3, 0},   {"heads", &sw_heads, 0, 1, 1},
     {"sheet", &sw_sheet, 0, 1, 1},         {"legend", &sw_legend, 0, 1, 1},       {"bg", &sw_bg, 0, 1, 1},
     {"scale", &sw_scale, 0, 1, 1},         {"bandshade", &sw_bandshade, 0, 15, 15}, {"panes", &sw_panes, 0, 1, 1},
+    {"clash", &sw_clash, 0, 1, 1},       {"short", &sw_short, 0, 1, 1},
 };
 
 bool Menu_SetSwitch(const char *name, int v) {

@@ -26,6 +26,8 @@ void Menu_Draw();
 //            plan's rule. Set at launch (--switch scale=N), since the canvas depends on it.
 //   panes    1 = one pane at a time, the page's name as a title (decided 2026-11-03); 0 = two panes
 //   bandshade the band's darkening level; 15 as decided 2026-11-03; 0 = BAND_SHADE_LVL (11), as before
+//   short    1 = the shorter help, for translation (kShortHelp; decided 2026-11-03); 0 = as first written
+//   clash    (decided 2026-11-03) 1 = a key clash's note replaces the action's help in the voice; 0 = added after it
 bool Menu_SetSwitch(const char *name, int value);
 // Every switch as "name=value", for a relaunch.
 #include <string>

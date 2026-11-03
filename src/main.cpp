@@ -34,6 +34,7 @@
 #include "selftest.h"
 #include "shot.h"
 #include "trace.h"
+#include "ui.h"
 
 #include <SYSTEM/WINDOW.H>
 
@@ -97,6 +98,25 @@ static bool RunCommand(Runner &r, const char *line) {
     } else if (!strcmp(cmd, "measure")) {
         printf("measure ");
         Menu_WriteMeasure(stdout);
+    } else if (!strcmp(cmd, "widths")) {
+        // widths FILE [VOICE_W]: each line "tag<TAB>text" (CP850, as TEXT.HQR holds it);
+        // prints the text's width in the game font and the voice lines it needs.
+        FILE *in = fopen(a, "rb");
+        if (!in) {
+            printf("err cannot open %s\n", a);
+            return false;
+        }
+        S32 voiceW = n >= 3 ? atoi(b) : 620;
+        char buf[2048];
+        while (fgets(buf, sizeof buf, in)) {
+            buf[strcspn(buf, "\r\n")] = 0;
+            char *tab = strchr(buf, '\t');
+            if (!tab)
+                continue;
+            *tab = 0;
+            printf("width %s\t%d\t%d\n", buf, (int)Ui_TextWidth(tab + 1), (int)Voice_Lines(tab + 1, voiceW));
+        }
+        fclose(in);
     } else if (!strcmp(cmd, "state")) {
         printf("state ");
         Menu_WriteState(stdout);
@@ -398,6 +418,10 @@ int main(int argc, char **argv) {
             Menu_SetSwitch("panes", !Menu_GetSwitch("panes"));
         if (Engine_Pressed(KEY_6))
             Menu_SetSwitch("bandshade", Menu_GetSwitch("bandshade") ? 0 : 15);
+        if (Engine_Pressed(KEY_7))
+            Menu_SetSwitch("clash", !Menu_GetSwitch("clash"));
+        if (Engine_Pressed(KEY_8))
+            Menu_SetSwitch("short", !Menu_GetSwitch("short"));
 
         Menu_Update();
         Menu_Draw();

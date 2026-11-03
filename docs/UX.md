@@ -176,7 +176,9 @@ second border, no shadow on a framed label. Joins checked at 3x.
 - At most one current-value plasma in a pane (the category being edited, the
   preset chosen). **[self test: current]**
 - Red is for a key clash only, and a red chip under the cursor is explained in
-  the voice. **[self test: red key, clash one way]**
+  the voice, by the clash alone ("Cross is also Talk and search."), not added
+  after the action's help (decided 2026-11-03). **[self test: red key, clash
+  one way]**
 - `ink-count` marks a changed value, nothing else *(review rule 5)*. The
   prototype draws it at index 158, a brighter step of the same bank than the
   token's 155, which measured 2.66:1 on a row (decided 2026-11-03).
@@ -224,6 +226,19 @@ screen: one question, then play.
 **Selective Attention, Banner Blindness.** The voice says one short thing about
 the row under the cursor. Help that fits one line in English *(review rule 7)*
 is read; help cut off is not. **[self test: help cut off]**
+
+- **One message at a time** (decided 2026-11-03). When there is something to
+  tell about the row (a key clash, a question, the wait for a key, why a row
+  is dimmed), it takes the help's place; nothing is added after the help. A
+  dimmed row says why it is dimmed ("Only with the Auto camera."), not what it
+  does.
+- **Help leaves room for translation** (decided 2026-11-03). An English help
+  text is at most about 750 px in the game font, two thirds of what the
+  voice's two lines hold (about 1,130 px at 620 wide). The 1997 game's own
+  translations of their sentences run 1.1x English typically and up to 1.5x
+  (German) in their longest tenth, so a translation half as long again still
+  fits. Measure with `widths`; once translations exist, the self test should
+  measure each language's real text.
 
 ## Keys
 
