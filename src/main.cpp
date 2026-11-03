@@ -402,6 +402,8 @@ int main(int argc, char **argv) {
             Menu_SetSwitch("exptable", !Menu_GetSwitch("exptable"));
 
         Menu_Update();
+        if (Menu_WantsQuit())
+            break;
         Menu_Draw();
         Engine_Present();
 

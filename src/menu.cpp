@@ -409,6 +409,7 @@ static void Ask(Question q) {
     Trace("ask %s", q == Q_RESET ? "reset" : "classic");
 }
 static bool g_closed;      // left the Options (shown as a note)
+static bool g_quit;        // Esc on that note: the prototype ends (a fullscreen window has no close box)
 // The console (#679), opened from its row: by the device used last, the full console
 // (keyboard, touch) or read-only (pad: the messages, and any button closes it).
 enum { CON_CLOSED, CON_FULL, CON_READONLY };
@@ -953,9 +954,12 @@ void Menu_Update() {
         return;
     }
     if (g_closed) {
-        if (Engine_Pressed(KEY_ENTER) || Engine_Pressed(KEY_ESC)) {
+        if (Engine_Pressed(KEY_ENTER)) {
             g_closed = false;
             Trace("reopen options");
+        } else if (Engine_Pressed(KEY_ESC)) {
+            g_quit = true;
+            Trace("quit");
         }
         return;
     }
@@ -1602,9 +1606,11 @@ void Menu_Draw() {
     Cadre_AnimatePlasma();
 
     if (g_closed) {
-        const char *s = "Options closed. Enter opens them again.";
-        Ui_TextShadow((S32)Engine_LogicalW() / 2 - Ui_TextWidth(s) / 2, (S32)Engine_LogicalH() / 2 - 19, s,
-                      DIALOGUE_HERO * 16 + 12);
+        // Two lines at the voice's pitch: on one, 784 wide, it would not fit 640.
+        const char *lines[2] = {"Options closed.", "Enter opens them again. Esc quits."};
+        for (int i = 0; i < 2; i++)
+            Ui_TextShadow((S32)Engine_LogicalW() / 2 - Ui_TextWidth(lines[i]) / 2,
+                          (S32)Engine_LogicalH() / 2 - 38 + i * 38, lines[i], DIALOGUE_HERO * 16 + 12);
     } else if (Controls_Active()) {
         Controls_Draw();
     } else if (Exp_Active()) {
@@ -1802,6 +1808,8 @@ void Menu_Help(MenuHelp *h) {
     h->width = g_voiceWidth;
     h->text = g_voice.text;
 }
+
+bool Menu_WantsQuit() { return g_quit; }
 
 const char *Menu_Layout() { return g_closed ? "closed" : g_first ? "first-launch" : Wide() ? "wide" : "column"; }
 

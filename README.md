@@ -71,6 +71,9 @@ from the trace afterwards.
 When a change crosses between the one column and the wide layout, the place is
 carried across: the page you were on stays open, on the same row.
 
+To quit, Esc out of the Options, then Esc again on "Options closed" (Enter
+opens them again); in fullscreen there is no close box. Cmd+Q works too.
+
 Keys: arrows, Enter, Esc; a pad's d-pad or left stick, A and B. The prototype's
 own switches are on F1 to F12 and 0 to 9.
 

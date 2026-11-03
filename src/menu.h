@@ -34,6 +34,8 @@ void Menu_Draw();
 bool Menu_SetSwitch(const char *name, int value);
 // A short note at the bottom right for two seconds, as switches show theirs.
 void Menu_Toast(const char *text);
+// Esc on the "Options closed" note: end the prototype.
+bool Menu_WantsQuit();
 // After the screen changed: the note with its size and canvas, and a trace line.
 void Menu_NoteScreen();
 int Menu_GetSwitch(const char *name);
