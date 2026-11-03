@@ -87,6 +87,7 @@ static const Setting kSettings[S_COUNT] = {
 static int g_val[S_COUNT];
 static int g_preset;  // 0 Modern, 1 Classic
 static int g_before[S_COUNT];
+static int g_beforePreset;
 static bool g_haveBefore;
 
 static const char *kPresetNames[2] = {"Modern", "Classic"};
@@ -109,6 +110,7 @@ static bool PresetChanged() {
 static void ApplyPreset(int p) {
     if (!g_haveBefore) {
         memcpy(g_before, g_val, sizeof g_val);
+        g_beforePreset = g_preset;
         g_haveBefore = true;
     }
     g_preset = p;
@@ -485,6 +487,7 @@ static void Activate(const Row &r) {
         break;
     case R_BACK_TO_MINE:
         memcpy(g_val, g_before, sizeof g_val);
+        g_preset = g_beforePreset;
         g_haveBefore = false;
         Trace("back to my settings");
         BuildPages();
@@ -910,7 +913,9 @@ static void DrawWide() {
     }
     y = top;
     for (int i = g_scroll; i < g_scroll + visible; i++) {
-        RowFill fill = (g_focus == F_RIGHT && i == g_cursor) ? FILL_CURSOR : FILL_SHADE;
+        RowFill fill = FILL_SHADE;
+        if (g_focus == F_RIGHT && i == g_cursor)
+            fill = g_confirm ? FILL_CURRENT : FILL_CURSOR;  // the question has the cursor
         DrawWideRow("right", page.rows[RightFirst() + i], rx0, y, rx1, y + ROW_H, fill);
         y += ROW_PITCH;
     }
