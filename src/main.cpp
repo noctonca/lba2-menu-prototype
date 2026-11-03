@@ -22,6 +22,8 @@
 #include "shot.h"
 #include "trace.h"
 
+#include <SYSTEM/WINDOW.H>
+
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -203,6 +205,11 @@ int main(int argc, char **argv) {
     cfg.physH = h;
     if (!Engine_Init(cfg))
         return 1;
+    // lba2cc turns vsync on with the renderer, and on the dummy driver SDL fakes it by
+    // sleeping a refresh per present: 90% of a headless run. The fixed clock keeps runs
+    // repeatable without it (lba2cc does the same for --exit runs, CONTROL.CPP).
+    if (headless)
+        Window_SetVSync(0);
     if (fixedDt)
         Engine_SetFixedDt(fixedDt);
     Menu_Init(first);

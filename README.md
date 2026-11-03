@@ -99,7 +99,8 @@ Commands, one per line: `key <up|down|left|right|enter|esc|tab|del|f1..f11> [cou
 - Every key and every change is a trace line (`trace t=<ms> f=<frame> ...`) on
   stderr and in `--trace FILE`.
 - Headless runs use a fixed clock and a fixed plasma seed, so a script gives
-  the same pictures every time.
+  the same pictures every time. They run with vsync off, as fast as the
+  machine draws.
 
 `tools/sweep.py` visits every row of every page and every chip of the Controls
 page at several screen sizes and switch settings, and lists what does not fit:
