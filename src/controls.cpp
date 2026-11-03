@@ -236,6 +236,17 @@ static bool g_bindingsReady;
 
 static bool Wide() { return Menu_Wide(); }
 
+// The screen can change under the page. Wide keeps the group as g_group alone;
+// the one column's groups page counts its Return row, so put its cursor back on
+// the same group when the layout turns to one column.
+static int g_layoutWide = -1;
+static void SyncLayout() {
+    const int wide = Wide() ? 1 : 0;
+    if (g_layoutWide == 1 && !wide)
+        g_colCursor = g_group + 1;
+    g_layoutWide = wide;
+}
+
 // Wide, with heads=1: the column names sit inside the first row, so the actions start on the
 // top margin level with the groups. The one column keeps its heads above, as 1997's page.
 static bool HeadsInRow() { return sw_heads && Wide(); }
@@ -389,6 +400,7 @@ static void SwitchDevice() {
 }
 
 void Controls_Update() {
+    SyncLayout();
     if (g_waiting) {
         UpdateWaiting();
         Say();
@@ -750,6 +762,7 @@ static void DrawColumnControls() {
 }
 
 void Controls_Draw() {
+    SyncLayout();
     g_chipCount = g_headCount = 0;
     if (Wide())
         DrawWideControls();
@@ -828,6 +841,7 @@ bool Controls_Binding(const char *action, int column, char *out, size_t n) {
 }
 
 void Controls_WriteState(FILE *f) {
+    SyncLayout();
     char buf[32];
     int a = CursorAction(), c = CursorColumn();
     fprintf(f, "{\"device\":\"%s\",\"devices\":%d,\"pad_names\":\"%s\",\"focus\":\"%s\",\"group\":", DeviceName(g_device),

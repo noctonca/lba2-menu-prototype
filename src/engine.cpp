@@ -114,14 +114,32 @@ static void JoinPath(char *out, size_t n, const char *dir, const char *name) {
 // The window opens at the logical size; grow it by a whole step so the
 // picture is the size it would be on the pretend screen, as far as the
 // desktop allows.
-static void SizeWindow() {
+static SDL_Window *TheWindow() {
     int count = 0;
     SDL_Window **windows = SDL_GetWindows(&count);
-    if (!windows || count < 1)
-        return;
-    SDL_Window *win = windows[0];
+    SDL_Window *win = windows && count > 0 ? windows[0] : NULL;
     SDL_free(windows);
+    return win;
+}
 
+static bool s_headless;
+static int s_winPxW, s_winPxH;  // the window's pixels after the prototype last sized it
+
+static void NoteWindowPixels(SDL_Window *win) {
+    SDL_GetWindowSizeInPixels(win, &s_winPxW, &s_winPxH);
+}
+
+static void TitleWindow(SDL_Window *win) {
+    char title[128];
+    snprintf(title, sizeof title, "LBA2 menu prototype - %ux%u (logical %ux%u)",
+             (unsigned)s_physW, (unsigned)s_physH, (unsigned)s_logW, (unsigned)s_logH);
+    SDL_SetWindowTitle(win, title);
+}
+
+static void SizeWindow() {
+    SDL_Window *win = TheWindow();
+    if (!win)
+        return;
     U32 scale = Engine_Scale(s_physW, s_physH);
     SDL_DisplayID display = SDL_GetDisplayForWindow(win);
     SDL_Rect usable;
@@ -131,11 +149,93 @@ static void SizeWindow() {
     }
     SDL_SetWindowSize(win, (int)(s_logW * scale), (int)(s_logH * scale));
     SDL_SetWindowPosition(win, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
-    char title[128];
-    snprintf(title, sizeof title, "LBA2 menu prototype - %ux%u (logical %ux%u)",
-             (unsigned)s_physW, (unsigned)s_physH, (unsigned)s_logW, (unsigned)s_logH);
-    SDL_SetWindowTitle(win, title);
+    // The resize is asynchronous on some desktops; wait for it, so it is not
+    // taken for one made by hand.
+    SDL_SyncWindow(win);
+    NoteWindowPixels(win);
+    TitleWindow(win);
 }
+
+bool Engine_SetScreen(U32 w, U32 h, bool sizeWindow) {
+    w &= ~7u;
+    if (w < 640)
+        w = 640;
+    if (h < 480)
+        h = 480;
+    U32 scale = Engine_Scale(w, h);
+    U32 lw = w / scale, lh = h / scale;
+    if (lw != s_logW || lh != s_logH) {
+        // As RES_SWITCH.CPP: Log, then the texture and Phys, then both clips.
+        EndScreen();
+        if (!CreateScreenMemory(lw, lh) || !ResizeWindowSurface(lw, lh, true) || !ResizeVideoSurface(lw, lh)) {
+            fprintf(stderr, "could not switch to %ux%u (logical %ux%u)\n", (unsigned)w, (unsigned)h,
+                    (unsigned)lw, (unsigned)lh);
+            return false;
+        }
+        SetClipWindow(0, 0, (S32)lw - 1, (S32)lh - 1);
+        SetClip(0, 0, (S32)lw - 1, (S32)lh - 1);
+        BoxChangeClip(0, 0, (S32)lw - 1, (S32)lh - 1, TRUE);
+    }
+    s_physW = w;
+    s_physH = h;
+    s_logW = lw;
+    s_logH = lh;
+    if (s_headless)
+        return true;
+    if (sizeWindow) {
+        SizeWindow();
+    } else if (SDL_Window *win = TheWindow()) {
+        NoteWindowPixels(win);
+        TitleWindow(win);
+    }
+    return true;
+}
+
+static const U32 kSizes[][2] = {
+    {640, 480}, {1280, 720}, {1280, 800}, {1920, 1080}, {2400, 1080}, {2560, 1440}, {3440, 1440}, {3840, 2160},
+};
+
+int Engine_SizeCount() { return (int)(sizeof kSizes / sizeof kSizes[0]); }
+
+void Engine_SizeAt(int i, U32 *w, U32 *h) {
+    *w = kSizes[i][0];
+    *h = kSizes[i][1];
+}
+
+bool Engine_StepScreen(int dir) {
+    const int count = Engine_SizeCount();
+    int below = 0;
+    bool exact = false;
+    for (int i = 0; i < count; i++) {
+        if (kSizes[i][0] * kSizes[i][1] <= s_physW * s_physH)
+            below = i;
+        if (kSizes[i][0] == s_physW && kSizes[i][1] == s_physH) {
+            below = i;
+            exact = true;
+            break;
+        }
+    }
+    // Off the list, the one below counts as the previous.
+    int next = dir > 0 ? below + 1 : (exact ? below - 1 : below);
+    next = (next + count) % count;
+    return Engine_SetScreen(kSizes[next][0], kSizes[next][1], true);
+}
+
+bool Engine_WindowResized(U32 *w, U32 *h) {
+    if (s_headless)
+        return false;
+    SDL_Window *win = TheWindow();
+    int pw = 0, ph = 0;
+    if (!win || !SDL_GetWindowSizeInPixels(win, &pw, &ph) || (pw == s_winPxW && ph == s_winPxH))
+        return false;
+    s_winPxW = pw;
+    s_winPxH = ph;
+    *w = (U32)pw;
+    *h = (U32)ph;
+    return true;
+}
+
+bool Engine_ShiftHeld() { return (SDL_GetModState() & SDL_KMOD_SHIFT) != 0; }
 
 bool Engine_Init(const EngineConfig &cfg) {
     s_physW = cfg.physW;
@@ -404,8 +504,6 @@ bool Engine_BeginFrame() {
 }
 
 bool Engine_Pressed(UiKey k) { return s_pressed[k]; }
-
-static bool s_headless;
 
 void Engine_SetHeadless(bool on) { s_headless = on; }
 

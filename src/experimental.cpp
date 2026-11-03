@@ -223,6 +223,17 @@ static int g_row;         // the list: the row within the open group
 static bool Table() { return sw_exptable != 0; }
 static bool Wide() { return Menu_Wide(); }
 
+// The screen can change under the page. Wide keeps the group as g_group alone;
+// the one column's groups page counts its Return row, so put its cursor back on
+// the same group when the layout turns to one column.
+static int g_layoutWide = -1;
+static void SyncLayout() {
+    const int wide = Wide() ? 1 : 0;
+    if (g_layoutWide == 1 && !wide)
+        g_colCursor = g_group + 1;
+    g_layoutWide = wide;
+}
+
 static int GroupFirst(int g) {
     for (int i = 0; i < TUNING_COUNT; i++)
         if (kTuning[i].group == g)
@@ -374,6 +385,7 @@ static void UpdateList() {
 }
 
 void Exp_Update() {
+    SyncLayout();
     if (Table())
         UpdateTable();
     else
@@ -653,6 +665,7 @@ static void DrawColumnExp() {
 }
 
 void Exp_Draw() {
+    SyncLayout();
     g_lineCount = 0;
     g_tableShown = false;
     g_status[0] = 0;
@@ -703,6 +716,7 @@ int Exp_Where(char *buf, size_t n) {
 }
 
 void Exp_WriteState(FILE *f) {
+    SyncLayout();
     int i = CursorTuning();
     fprintf(f, "{\"form\":\"%s\",\"group\":", Table() ? "table" : "list");
     Menu_JsonString(f, kGroups[i >= 0 ? kTuning[i].group : g_group].name);

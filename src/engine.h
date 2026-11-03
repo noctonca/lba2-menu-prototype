@@ -13,13 +13,29 @@ struct EngineConfig {
 // Rule 0, the menu plan's: scale = max(1, floor(min(W/640, H/480))).
 // Rule 1: a screen 3:2 or wider takes the wide composition (960x540) at the
 // largest whole step it fits; any other takes rule 0's step and the one column.
-void Engine_SetScaleRule(int rule);  // before Engine_Init
+void Engine_SetScaleRule(int rule);  // then Engine_SetScreen, if after Engine_Init
 int Engine_ScaleRule();
 bool Engine_RuleChoseWide();  // rule 1 picked the wide composition for this screen
 U32 Engine_Scale(U32 physW, U32 physH);
 
 bool Engine_Init(const EngineConfig &cfg);
 void Engine_Shutdown();
+
+// Another screen, in place, as lba2cc's Res_Switch does it: the canvas follows and
+// the menu keeps its page, cursor and values. sizeWindow: grow or shrink the window
+// to suit, as at launch; false when the window's own size is the new screen.
+// The width is rounded down to a multiple of 8, and the screen is at least 640x480.
+bool Engine_SetScreen(U32 physW, U32 physH, bool sizeWindow);
+// The window was resized by hand since the last call: its size in pixels, the
+// screen it would be if the game filled it. Never in a headless run.
+bool Engine_WindowResized(U32 *physW, U32 *physH);
+// The screen sizes F2 and the Resolution row step through, smallest first.
+int Engine_SizeCount();
+void Engine_SizeAt(int i, U32 *physW, U32 *physH);
+// The next (dir 1) or previous (-1) size in the list, round at the ends, from the
+// one nearest below the current screen (a dragged window can sit between two).
+bool Engine_StepScreen(int dir);
+bool Engine_ShiftHeld();
 
 U32 Engine_LogicalW();
 U32 Engine_LogicalH();

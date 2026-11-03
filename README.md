@@ -38,13 +38,40 @@ Game data: `LBA2_GAME_DIR`, or `--data DIR`; the default is
 `~/code/lba-hacking/assets/lba2-activision-us-cd` (a disc image is mounted as
 the engine does).
 
+### Screen sizes
+
+The screen size changes in place, as lba2cc's own resolution switch does it:
+the page, the cursor, the settings and every switch stay as they were, and a
+note at the bottom right says the new size and its logical canvas.
+
+- F2 steps to the next size in the list, Shift+F2 back to the previous one
+  (640x480, 1280x720, 1280x800, 1920x1080, 2400x1080, 2560x1440, 3440x1440,
+  3840x2160). The window is sized to suit, as at launch.
+- Dragging the window's edge makes its size in pixels the screen: any size in
+  between, the layout following as you drag. On a Retina display that is twice
+  the window's size in points (a 1100x650 window is a 2200x1236 screen). The
+  width is rounded down to a multiple of 8, as lba2cc requires, and the screen
+  is at least 640x480.
+- The Resolution row on Display and graphics does it as the game would: Left
+  and Right step through the same list, and the row shows the screen in use
+  (a dragged size too, "1512 x 904"). It is the player's screen, not a preset's
+  choice, so it is never drawn as changed, and presets and Reset settings
+  leave it alone.
+- `size WxH` does the same from a script or the control file.
+
+`./play-sizes.sh` walks it in one window, with steps, and prints each change
+from the trace afterwards.
+
+When a change crosses between the one column and the wide layout, the place is
+carried across: the page you were on stays open, on the same row.
+
 Keys: arrows, Enter, Esc; a pad's d-pad or left stick, A and B. The prototype's
 own switches are on F1 to F12 and 0 to 9.
 
 | Key | Switch | What it changes |
 | --- | --- | --- |
 | F1 | `overlay` | this list on screen |
-| F2 | | the next screen size (640x480, 1280x720, 1280x800, 1920x1080, 2400x1080, 2560x1440, 3440x1440, 3840x2160) |
+| F2 | | the next screen size; Shift+F2 the previous (see Screen sizes) |
 | F3 | `band` | one band (help + legend) / a help line and a prompt bar |
 | F4 | `typing` | help typed on every cursor move / on entering a page only / not typed |
 | F5 | `chip` | the 8x8 key font at 2x / 1x |
@@ -58,7 +85,7 @@ own switches are on F1 to F12 and 0 to 9.
 | 1 | `sheet` | wide: one 960x540 composition, centred on any larger screen / stretched to the screen's margins |
 | 2 | `legend` | the band's legend stacked at its right / in a row beside the voice |
 | 3 | `bg` | the background scaled evenly and cropped / stretched, as lba2cc does |
-| 4 | `scale` | screens 3:2 or wider take the 960x540 composition at the largest whole step it fits, others the one column / the plan's rule (relaunches) |
+| 4 | `scale` | screens 3:2 or wider take the 960x540 composition at the largest whole step it fits, others the one column / the plan's rule |
 | 5 | `panes` | wide: one pane at a time, centred, the page's name as a title / two panes side by side |
 | 6 | `bandshade` | the band darkened to level 15 / 11 |
 | 7 | `clash` | a key clash's note alone in the voice / added after the action's help |
@@ -113,7 +140,7 @@ Commands, one per line: `key <up|down|left|right|enter|esc|tab|del|f1..f12> [cou
 `press <key>` (a raw key for rebinding: an SDL name such as `J`, `Left Alt` or
 `Keypad 5`, or `pad:a`, `pad:lb`, `pad:lstick-up` ...),
 `wait <frames>`, `state`, `measure`, `widths <file> [voice width]`, `shot <path.png> [scale]`, `switch <name> <value>`,
-`set <setting> <value>`, `open <page name>`, `quit`.
+`set <setting> <value>`, `open <page name>`, `size <WxH>`, `quit`.
 
 `measure` prints the width in the game font of every setting's label, its
 widest value and its help, and of the hub's rows, for sizing panes.
@@ -290,6 +317,13 @@ takes `--sizes`, `--combo`, `--only`, `--again` and `--layout-only` the same way
 - `--check-again` replays every problem's `again` line and checks that the
   screen it opens has the problem; for a walk's problem, that it ends on the
   page the problem names.
+
+`tools/resize-check.sh` checks that a size changed in place shows what a fresh
+start at that size shows on the same row: seven pages (Controls and
+Experimental among them, and Experimental's list form) from four sizes to
+seven, compared through `state`, and F2 round the list and back (225 runs,
+about 40 seconds). With the layout hand-over turned off it finds 72 of them
+differ.
 
 ## Checked against the game
 

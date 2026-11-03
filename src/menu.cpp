@@ -51,7 +51,12 @@ static const Setting kSettings[S_COUNT] = {
      "The language the characters speak."},
     {"subtitles", "Subtitles", K_TOGGLE, 1, {"Off", "On"}, 1, 1, false,
      "Shows what is said while the voices play."},
-    {"resolution", "Resolution", K_CHOICE, 3, {"640 x 480", "1280 x 720", "1920 x 1080", "2560 x 1440"}, 2, 2, false,
+    // Not a stored value: the row shows the screen in use and steps it through
+    // Engine_SizeAt's list, as F2 does. g_val keeps its fresh value, so presets,
+    // Reset settings and their undo leave the screen alone.
+    {"resolution", "Resolution", K_CHOICE, 7,
+     {"640 x 480", "1280 x 720", "1280 x 800", "1920 x 1080", "2400 x 1080", "2560 x 1440", "3440 x 1440", "3840 x 2160"},
+     3, 3, false,
      "The size of the picture the game draws."},
     {"fullscreen", "Fullscreen", K_TOGGLE, 1, {"Off", "On"}, 1, 1, false,
      "Fills the screen, or plays in a window."},
@@ -203,7 +208,7 @@ static Page g_pages[P_COUNT];
 // Switches.
 static int sw_band = 1, sw_typing = 0, sw_chip = 2, sw_word = 0, sw_island = 0, sw_help640 = 0,
            sw_gameplay = 0, sw_overlay = 0;
-// Composition (2026-11-03 design pass): sheet, legend, bg, scale (scale is set at launch).
+// Composition (2026-11-03 design pass): sheet, legend, bg, scale (scale remakes the canvas).
 static int sw_sheet = 1, sw_legend = 1, sw_bg = 1, sw_scale = 1, sw_bandshade = 15, sw_panes = 1;
 static int sw_clash = 1, sw_short = 1, sw_narrow = 1;
 // Where the Frame rate row sits (no key): 0 Display and graphics, under Vsync (decided 2026-11-03);
@@ -350,7 +355,9 @@ static const char *PresetRowLabel(char *buf, size_t n) {
 
 static const char *ValueText(int s, char *buf, size_t n) {
     const Setting &st = kSettings[s];
-    if (st.kind == K_SLIDER)
+    if (s == S_RESOLUTION)
+        snprintf(buf, n, "%u x %u", (unsigned)Engine_PhysW(), (unsigned)Engine_PhysH());
+    else if (st.kind == K_SLIDER)
         snprintf(buf, n, "%d", g_val[s]);
     else
         snprintf(buf, n, "%s", st.names[g_val[s]]);
@@ -360,6 +367,8 @@ static const char *ValueText(int s, char *buf, size_t n) {
 // "Changed is a colour": differs from a fresh install, or for a setting presets
 // set, from the chosen preset.
 static bool ValueChanged(int s) {
+    if (s == S_RESOLUTION)
+        return false;  // the player's screen, not a choice a preset makes
     return g_val[s] != PresetValue(g_preset, s);
 }
 
@@ -432,6 +441,16 @@ int Menu_Panes() { return sw_panes; }
 static void Toast(const char *fmt, const char *a, int v) {
     snprintf(g_toast, sizeof g_toast, fmt, a, v);
     g_toastUntil = Engine_TimeMs() + 2000;
+}
+
+void Menu_Toast(const char *text) { Toast("%s", text, 0); }
+
+void Menu_NoteScreen() {
+    char note[64];
+    snprintf(note, sizeof note, "%ux%u (logical %ux%u)", (unsigned)Engine_PhysW(), (unsigned)Engine_PhysH(),
+             (unsigned)Engine_LogicalW(), (unsigned)Engine_LogicalH());
+    Toast("%s", note, 0);
+    Trace("screen %s", note);
 }
 
 // The page in the right pane (wide) or on screen (one column).
@@ -648,6 +667,87 @@ static void Push(int page) {
     Trace("open page=%s", g_pages[page].name);
 }
 
+// The layout the navigation state was made in. The screen can change under it (a
+// new size, the scale rule, the sheet switch), and the two layouts keep the place
+// differently: one column stacks hub, category, sub-page, each cursor counting
+// the Return row; wide keeps the category as the left pane's cursor and the right
+// pane's stack under the hub, its cursors past the Return row.
+static int g_layoutWide = -1;
+
+static int HubRowFor(int page) {
+    for (int i = 0; i < LeftCount(); i++)
+        if (g_pages[P_HUB].rows[LeftRowToHub(i)].arg == page)
+            return LeftRowToHub(i);
+    return -1;
+}
+
+static bool PageLeadsTo(int from, int to) {
+    for (int i = 0; i < g_pages[from].count; i++)
+        if (g_pages[from].rows[i].arg == to && g_pages[from].rows[i].type != R_SETTING)
+            return true;
+    return false;
+}
+
+static void SyncLayout() {
+    const int wide = Wide() ? 1 : 0;
+    if (g_layoutWide == wide)
+        return;
+    const int was = g_layoutWide;
+    g_layoutWide = wide;
+    if (was < 0 || g_first)
+        return;
+    g_scroll = 0;
+    if (wide) {
+        int hubRow = g_depth >= 2 ? HubRowFor(g_stack[1]) : -1;
+        if (g_depth == 1) {
+            g_leftCursor = g_cursor > 0 ? g_cursor - 1 : 0;
+            g_focus = F_LEFT;
+            g_cursor = 0;
+        } else if (hubRow >= 0) {
+            // Drop the category from the stack: the left cursor holds it.
+            g_leftCursor = hubRow - 1;
+            for (int i = 1; i + 1 < g_depth; i++) {
+                g_stack[i] = g_stack[i + 1];
+                g_cursorStack[i - 1] = g_cursorStack[i] > 0 ? g_cursorStack[i] - 1 : 0;
+            }
+            g_depth--;
+            g_cursor = g_cursor > 0 ? g_cursor - 1 : 0;
+            g_focus = F_RIGHT;
+        } else {
+            for (int i = 1; i + 1 < g_depth; i++)
+                g_cursorStack[i] = g_cursorStack[i] > 0 ? g_cursorStack[i] - 1 : 0;
+            g_leftCursor = 0;
+            g_cursor = g_cursor > 0 ? g_cursor - 1 : 0;
+            g_focus = F_RIGHT;
+        }
+    } else {
+        const int hubRow = LeftRowToHub(g_leftCursor);
+        const int cat = g_pages[P_HUB].rows[hubRow].arg;
+        g_leftCursor = 0;  // one column has no left pane
+        if (g_focus == F_LEFT) {
+            g_depth = 1;
+            g_cursor = hubRow;
+        } else if (g_depth == 1 || (g_depth < 8 && PageLeadsTo(cat, g_stack[1]))) {
+            // Put the category back between the hub and the right pane's pages.
+            for (int i = g_depth; i >= 2; i--) {
+                g_stack[i] = g_stack[i - 1];
+                g_cursorStack[i - 1] = g_cursorStack[i - 2] + 1;
+            }
+            g_stack[1] = cat;
+            g_cursorStack[0] = hubRow;
+            g_depth++;
+            g_cursor++;
+        } else {
+            for (int i = 1; i + 1 < g_depth; i++)
+                g_cursorStack[i]++;
+            g_cursor++;
+        }
+    }
+    g_pageEntered = true;
+    Trace("layout %s page=%s cursor=%d", wide ? "wide" : "column",
+          g_pages[wide && g_focus == F_RIGHT ? RightPage() : TopPage()].name, g_cursor);
+}
+
 static void Pop() {
     if (g_depth > 1) {
         Trace("close page=%s", g_pages[TopPage()].name);
@@ -677,11 +777,17 @@ void Menu_Init(bool firstLaunch) {
         g_cursor = 0;
     g_pageEntered = true;
     g_voice.text[0] = 0;
+    g_layoutWide = Wide() ? 1 : 0;
     Trace("init layout=%s logical=%ux%u first=%d", Wide() ? "wide" : "column",
           (unsigned)Engine_LogicalW(), (unsigned)Engine_LogicalH(), (int)g_first);
 }
 
 static void ChangeSetting(int s, int dir) {
+    if (s == S_RESOLUTION) {
+        if (Engine_StepScreen(dir))
+            Menu_NoteScreen();
+        return;
+    }
     const Setting &st = kSettings[s];
     int v = g_val[s];
     if (st.kind == K_SLIDER) {
@@ -816,6 +922,7 @@ static void KeepCursorOn(const char *label) {
 }
 
 void Menu_Update() {
+    SyncLayout();
     if (Controls_Active()) {
         Controls_Update();
         return;
@@ -1391,7 +1498,8 @@ void Menu_DrawFoot(const char **keys, const char **words, int nk) {
 static void DrawOverlay() {
     static const char *lines[] = {
         "Prototype keys",
-        "F1 this list      F2 next screen size",
+        "F1 this list   F2 / Shift F2 screen size",
+        "Drag the window's edge: any screen size",
         "F3 band / help line + prompt bar",
         "F4 help typing: every move / page entry / none",
         "F5 key font 1x / 2x    F6 preset word",
@@ -1475,8 +1583,10 @@ static void DrawFps() {
 }
 
 void Menu_Draw() {
+    SyncLayout();
     g_drawnCount = 0;
     g_helpBox.shown = false;
+    g_helpBox.x0 = g_helpBox.y0 = g_helpBox.x1 = g_helpBox.y1 = 0;  // where it was is no help on a new screen
     g_voiceLines = g_voiceNeeded = g_voiceMax = g_voiceWidth = 0;
     g_legend[0] = 0;
 
@@ -1541,8 +1651,13 @@ bool Menu_SetSwitch(const char *name, int v) {
         *s.value = v;
         if (!strcmp(name, "bg"))
             Engine_SetBackgroundFit(v);
-        if (!strcmp(name, "scale"))
-            *s.value = Engine_ScaleRule();  // set at launch (--switch scale=N); the canvas cannot change here
+        if (!strcmp(name, "scale") && v != Engine_ScaleRule()) {
+            Engine_SetScaleRule(v);
+            if (!Engine_SetScreen(Engine_PhysW(), Engine_PhysH(), true)) {
+                Engine_SetScaleRule(!v);
+                *s.value = !v;
+            }
+        }
         if (!strcmp(name, "island")) {
             if (v)
                 Engine_UseIslandPalette(0);
@@ -1559,14 +1674,6 @@ bool Menu_SetSwitch(const char *name, int v) {
     return false;
 }
 
-void Menu_SwitchArgs(std::vector<std::string> &out) {
-    for (size_t i = 0; i < sizeof kSwitches / sizeof kSwitches[0]; i++) {
-        if (!strcmp(kSwitches[i].name, "overlay"))
-            continue;
-        out.push_back(std::string(kSwitches[i].name) + "=" + std::to_string(*kSwitches[i].value));
-    }
-}
-
 int Menu_GetSwitch(const char *name) {
     for (size_t i = 0; i < sizeof kSwitches / sizeof kSwitches[0]; i++)
         if (!strcmp(kSwitches[i].name, name))
@@ -1575,8 +1682,10 @@ int Menu_GetSwitch(const char *name) {
 }
 
 bool Menu_Open(const char *name) {
+    SyncLayout();  // what follows is made in the layout in use
     if (!strcmp(name, "Keys and buttons")) {
         Menu_Open("Controls and camera");
+        KeepCursorOn("Keys and buttons");  // as Enter on it leaves it
         Controls_Open();
         return true;
     }
@@ -1650,7 +1759,7 @@ bool Menu_Set(const char *id, int value) {
 void Menu_Reset() {
     for (size_t i = 0; i < sizeof kSwitches / sizeof kSwitches[0]; i++)
         *kSwitches[i].value = kSwitches[i].start;
-    sw_scale = Engine_ScaleRule();  // the canvas was made with it
+    sw_scale = Engine_ScaleRule();  // the canvas in use was made with it
     Engine_SetBackgroundFit(sw_bg);
     Engine_UseMenuPalette();
     Engine_ResetInput();
@@ -1812,6 +1921,7 @@ void Menu_WriteMeasure(FILE *f) {
 }
 
 void Menu_WriteState(FILE *f) {
+    SyncLayout();
     char buf[160];
     fprintf(f, "{\"t\":%u,\"physical\":[%u,%u],\"logical\":[%u,%u],\"scale\":%u,\"layout\":",
             (unsigned)Engine_TimeMs(), (unsigned)Engine_PhysW(), (unsigned)Engine_PhysH(),

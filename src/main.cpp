@@ -28,6 +28,7 @@
 //   switch <name> <v>    band typing chip word island help640 gameplay overlay devices padnames heads
 //   set <setting> <v>    a fake setting by id (see `state`)
 //   open <page name>     jump to a page ("Display and graphics", "Keys and buttons", "original", ...)
+//   size <WxH>           another screen size, in place: the page, cursor and values stay
 //   quit
 #include "engine.h"
 #include "menu.h"
@@ -50,9 +51,6 @@
 
 static const char *kDefaultData = "~/code/lba-hacking/assets/lba2-activision-us-cd";
 
-static const U32 kSizes[][2] = {
-    {640, 480}, {1280, 720}, {1280, 800}, {1920, 1080}, {2400, 1080}, {2560, 1440}, {3440, 1440}, {3840, 2160},
-};
 
 struct Runner {
     std::vector<std::string> lines;
@@ -60,6 +58,8 @@ struct Runner {
     U32 waitFrames;
     bool quit;
 };
+
+static void SwitchScreen(U32 w, U32 h, bool sizeWindow);
 
 static bool RunCommand(Runner &r, const char *line) {
     char cmd[32] = "", a[512] = "", b[64] = "";
@@ -137,6 +137,13 @@ static bool RunCommand(Runner &r, const char *line) {
             name++;
         if (!Menu_Open(name))
             printf("err unknown page %s\n", name);
+    } else if (!strcmp(cmd, "size")) {
+        unsigned sw, sh;
+        if (sscanf(a, "%ux%u", &sw, &sh) != 2) {
+            printf("err size wants WxH\n");
+            return false;
+        }
+        SwitchScreen(sw, sh, true);
     } else if (!strcmp(cmd, "quit")) {
         r.quit = true;
     } else {
@@ -155,41 +162,10 @@ static std::string ExpandHome(const char *p) {
     return p;
 }
 
-// F2: start again at the next size, keeping the other arguments.
-// Start again at another screen size or scale rule, with the switches as they are now.
-static void Relaunch(int argc, char **argv, U32 w, U32 h, int scaleRule) {
-    std::vector<std::string> args;
-    for (int i = 0; i < argc; i++) {
-        if ((!strcmp(argv[i], "--size") || !strcmp(argv[i], "--switch")) && i + 1 < argc) {
-            i++;
-            continue;
-        }
-        if (!strcmp(argv[i], "--first"))
-            continue;
-        args.push_back(argv[i]);
-    }
-    char size[32];
-    snprintf(size, sizeof size, "%ux%u", (unsigned)w, (unsigned)h);
-    args.push_back("--size");
-    args.push_back(size);
-    std::vector<std::string> sw;
-    Menu_SwitchArgs(sw);
-    for (size_t i = 0; i < sw.size(); i++) {
-        if (!sw[i].compare(0, 6, "scale="))
-            continue;
-        args.push_back("--switch");
-        args.push_back(sw[i]);
-    }
-    args.push_back("--switch");
-    args.push_back("scale=" + std::to_string(scaleRule));
-    std::vector<char *> cargs;
-    for (size_t i = 0; i < args.size(); i++)
-        cargs.push_back((char *)args[i].c_str());
-    cargs.push_back(NULL);
-    Trace("relaunch size=%s", size);
-    Engine_Shutdown();
-    execv(argv[0], cargs.data());
-    perror("execv");
+// A new screen size, in place; the toast says what it is.
+static void SwitchScreen(U32 w, U32 h, bool sizeWindow) {
+    if (Engine_SetScreen(w, h, sizeWindow))
+        Menu_NoteScreen();
 }
 
 int main(int argc, char **argv) {
@@ -397,14 +373,12 @@ int main(int argc, char **argv) {
             Menu_SetSwitch("padnames", Menu_GetSwitch("padnames") + 1);
         if (Engine_Pressed(KEY_F12))
             Menu_SetSwitch("heads", !Menu_GetSwitch("heads"));
-        if (Engine_Pressed(KEY_F2)) {
-            size_t count = sizeof kSizes / sizeof kSizes[0], at = 0;
-            for (size_t i = 0; i < count; i++)
-                if (kSizes[i][0] == w && kSizes[i][1] == h)
-                    at = i;
-            const U32 *nx = kSizes[(at + 1) % count];
-            Relaunch(argc, argv, nx[0], nx[1], Engine_ScaleRule());
-        }
+        if (Engine_Pressed(KEY_F2))
+            if (Engine_StepScreen(Engine_ShiftHeld() ? -1 : 1))
+                Menu_NoteScreen();
+        U32 dragW, dragH;
+        if (Engine_WindowResized(&dragW, &dragH))
+            SwitchScreen(dragW, dragH, false);
         // The composition switches (design pass, 2026-11-03).
         if (Engine_Pressed(KEY_1))
             Menu_SetSwitch("sheet", !Menu_GetSwitch("sheet"));
@@ -413,7 +387,7 @@ int main(int argc, char **argv) {
         if (Engine_Pressed(KEY_3))
             Menu_SetSwitch("bg", !Menu_GetSwitch("bg"));
         if (Engine_Pressed(KEY_4))
-            Relaunch(argc, argv, w, h, !Engine_ScaleRule());
+            Menu_SetSwitch("scale", !Engine_ScaleRule());
         if (Engine_Pressed(KEY_5))
             Menu_SetSwitch("panes", !Menu_GetSwitch("panes"));
         if (Engine_Pressed(KEY_6))
