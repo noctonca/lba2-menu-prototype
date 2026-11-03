@@ -2,23 +2,29 @@
 """Visit every row of every Options page and every chip of the Controls page at
 several screen sizes and switch settings, and list what does not fit: help cut
 off, rows running into the help or off the canvas, labels running into their
-values or out of their row, key names cut in their chips.
+values or out of their row, key names cut in their chips; and what is wrong on
+a screen: not exactly one cursor, a red key the help does not explain, a clash
+only one of the two actions shows. The self test then walks the menu by its
+keys and lists what they do wrong (see README "Testing").
 
     tools/sweep.py [--bin build/lba2menu] [--sizes 640x480,1920x1080] [--jobs N]
                    [--combo band=1,gameplay=0 ...] [--only PAGE] [--again]
-                   [--scripts [--shots DIR]] [--check-again]
+                   [--layout-only] [--scripts [--shots DIR]] [--check-again]
 
 By default each (size, combo) is one `lba2menu --selftest` process, and --jobs
 of them run at once. --again prints, under each problem, the command line that
 opens the screen it was found on (add --headless and `; shot x.png` to the --do
 list for a picture). --only keeps one page ("Keys and buttons", "Sound" ...).
 
---scripts walks the same screens from outside instead: a script per run, read
-back through `state` lines and checked here. Slower; it is the cross-check that
-the self test and the script path agree, and the only way to take --shots.
+--layout-only leaves out the walks by keys. --scripts walks the same screens as
+--layout-only from outside instead: a script per run, read back through `state`
+lines and checked here. Slower; it is the cross-check that the self test and the
+script path agree (the two must list the same problems), and the only way to
+take --shots.
 
 --check-again runs every problem's command line headless and checks that the
-screen it opens has the problem.
+screen it opens has the problem; for a walk's problem, that it ends on the page
+the problem names.
 """
 import argparse, json, os, shlex, subprocess, sys
 from concurrent.futures import ThreadPoolExecutor
@@ -38,11 +44,13 @@ def parse_combo(spec):
 
 # ───────────────────────────── The self test ─────────────────────────────
 
-def run_selftest(binary, size, combo, only):
+def run_selftest(binary, size, combo, only, layout_only):
     """Problems as {line: again-command} from one --selftest process."""
     cmd = [binary, "--selftest", "--size", size, "--combo", combo]
     if only:
         cmd += ["--only", only]
+    if layout_only:
+        cmd += ["--layout-only"]
     p = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
     if p.returncode not in (0, 1):
         raise SystemExit(f"{' '.join(cmd)} failed ({p.returncode}):\n{p.stderr}")
@@ -120,12 +128,32 @@ def check(state):
             problems.append(f"row overlaps the {v['where']} by {y1 - hy0 + 1} px: {r['label']!r}")
         if r["text_right"] > x1:
             problems.append(f"text spills {r['text_right'] - x1} px: {r['label']!r} {r['value']!r}")
-    for k in state.get("controls", {}).get("chips", []):
+    controls = state.get("controls", {})
+    chips = controls.get("chips", [])
+    for k in chips:
         if not k["fits"]:
             problems.append(f"key name cut in its chip: {k['action']!r} {k['column']} {k['name']!r}")
+    # One cursor: exactly one row or chip wears it.
+    if state["rows"] or chips:
+        cursors = sum(r["fill"] == "cursor" for r in state["rows"])
+        cursors += sum(k["fill"] in ("cursor", "waiting") for k in chips)
+        if cursors != 1:
+            problems.append(f"{cursors} cursors on the screen")
+    # A red chip under the cursor says in the help what else has its key.
+    for k in chips:
+        if k["fill"] == "cursor" and k["conflict"] and " is also " not in v["text"]:
+            problems.append(f"red key not explained in the help: {k['action']!r} {k['column']} {k['name']!r}")
+    # A clash goes both ways: the other action shows one too.
+    clashing = {a for a, _, _ in controls.get("conflicts", [])}
+    for a, col, other in controls.get("conflicts", []):
+        if other not in clashing:
+            problems.append(f"clash one way: {a!r} {col} is also {other!r}, which shows no clash")
     return problems
 
 # ───────────────────────────── Checking the command lines ─────────────────────────────
+
+# The walks by keys name themselves at the start of each problem they find.
+WALKS = {"esc", "reach", "setting", "preset", "bind", "walk"}
 
 def check_again(line, again):
     """None when the command line opens a screen with this problem, else what it showed."""
@@ -143,8 +171,8 @@ def check_again(line, again):
     problem = line.split("] ", 1)[1]
     if st["page"] != page:
         return f"on page {st['page']!r}"
-    if problem.startswith("walk did not reach"):
-        return None
+    if problem.startswith("walk did not reach") or problem.split(":")[0] in WALKS:
+        return None  # a walk by keys: what it saw is not in one state, the page is
     if problem not in check(st):
         return "problem not on that screen"
     return None
@@ -156,6 +184,7 @@ def main():
     ap.add_argument("--combo", action="append", help="name=v,name=v (repeat; default: the eight)")
     ap.add_argument("--only", help="one page by name")
     ap.add_argument("--again", action="store_true", help="print the command line that shows each problem")
+    ap.add_argument("--layout-only", action="store_true", help="the layout walk only, no walks by keys")
     ap.add_argument("--scripts", action="store_true", help="walk through scripts instead of --selftest")
     ap.add_argument("--shots", help="with --scripts: a PNG of each page")
     ap.add_argument("--check-again", action="store_true", help="replay every problem's command line")
@@ -165,6 +194,8 @@ def main():
         ap.error("--shots needs --scripts")
     if a.check_again and a.scripts:
         ap.error("--check-again needs the self test (no --scripts)")
+    if a.layout_only and a.scripts:
+        ap.error("--scripts walks the layout only already")
     if a.shots:
         os.makedirs(a.shots, exist_ok=True)
     combos = a.combo or COMBOS
@@ -172,7 +203,7 @@ def main():
     if a.scripts:
         work = lambda j: run_scripts(a.bin, j[0], j[1], a.only, a.shots)
     else:
-        work = lambda j: run_selftest(a.bin, j[0], j[1], a.only)
+        work = lambda j: run_selftest(a.bin, j[0], j[1], a.only, a.layout_only)
     found = {}
     with ThreadPoolExecutor(max_workers=max(1, a.jobs)) as pool:
         for result in pool.map(work, jobs):

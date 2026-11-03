@@ -16,6 +16,7 @@
 #include <string.h>
 
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -135,38 +136,93 @@ static void Check(std::vector<std::string> *found) {
             found->push_back(
                 Fmt("text spills %d px: %s %s", r.textRight - r.x1, Repr(r.label).c_str(), Repr(r.value).c_str()));
     }
-    if (Controls_Active()) {
-        ChipView chips[32];
-        int nc = Controls_Chips(chips, 32);
+    ChipView chips[32];
+    int nc = Controls_Active() ? Controls_Chips(chips, 32) : 0;
+    for (int i = 0; i < nc; i++)
+        if (!chips[i].fits)
+            found->push_back(Fmt("key name cut in its chip: %s %s %s", Repr(chips[i].action).c_str(), chips[i].column,
+                                 Repr(chips[i].name).c_str()));
+
+    // One cursor: exactly one row or chip wears it.
+    if (n || nc) {
+        int cursors = 0;
+        for (int i = 0; i < n; i++)
+            cursors += !strcmp(rows[i].fill, "cursor");
         for (int i = 0; i < nc; i++)
-            if (!chips[i].fits)
-                found->push_back(Fmt("key name cut in its chip: %s %s %s", Repr(chips[i].action).c_str(), chips[i].column,
-                                     Repr(chips[i].name).c_str()));
+            cursors += !strcmp(chips[i].fill, "cursor") || !strcmp(chips[i].fill, "waiting");
+        if (cursors != 1)
+            found->push_back(Fmt("%d cursors on the screen", cursors));
+    }
+    // A red chip under the cursor says in the help what else has its key.
+    for (int i = 0; i < nc; i++)
+        if (!strcmp(chips[i].fill, "cursor") && chips[i].conflict && !strstr(v.text, " is also "))
+            found->push_back(Fmt("red key not explained in the help: %s %s %s", Repr(chips[i].action).c_str(),
+                                 chips[i].column, Repr(chips[i].name).c_str()));
+    // A clash goes both ways: the other action shows one too.
+    if (Controls_Active()) {
+        ConflictView cv[128];
+        int ncf = Controls_Conflicts(cv, 128);
+        for (int i = 0; i < ncf; i++) {
+            bool back = false;
+            for (int j = 0; j < ncf && !back; j++)
+                back = !strcmp(cv[j].action, cv[i].other);
+            if (!back)
+                found->push_back(Fmt("clash one way: %s %s is also %s, which shows no clash", Repr(cv[i].action).c_str(),
+                                     cv[i].column, Repr(cv[i].other).c_str()));
+        }
     }
 }
 
 // ───────────────────────────── The walk ─────────────────────────────
 
 // One step is one frame, as a script line followed by `wait 1` would be.
-static void Frame() {
+// draw: false for frames nothing looks at (a long wait); the next frame draws.
+static void Frame(bool draw = true) {
     Engine_BeginFrame();
     Trace_SetFrame(Engine_Frame());
     Menu_Update();
-    Menu_Draw();
-    Engine_Present();
+    if (draw) {
+        Menu_Draw();
+        Engine_Present();
+    }
+}
+
+
+// The groups' first actions (controls.cpp kActions), where the binding walk tries keys.
+static const char *kGroupFirst[] = {"Forward", "Behaviour action", "Normal", "Weapon 1", "Penguin", "Recentre", "Game menu"};
+
+static bool EndsWith(const std::string &s, const char *tail) {
+    size_t n = strlen(tail);
+    return s.size() >= n && s.compare(s.size() - n, n, tail) == 0;
 }
 
 struct Walker {
     const SelftestOptions *opt;
+    std::vector<Switch> switches;  // this combo's
     std::string size, combo, again;  // again: the command line up to --do
     std::vector<std::string> path;   // commands since the last open
     std::map<std::string, std::string> problems;  // line -> the command line that shows it
     int checks;
 
+    // ── Steps ──
+
+    // A fresh process's state under this combo, as the again line starts it.
+    void Start() {
+        Menu_Reset();
+        for (size_t s = 0; s < switches.size(); s++)
+            Menu_SetSwitch(switches[s].name.c_str(), switches[s].value);
+        // Help shown whole, so a check never depends on how far the typing got.
+        Menu_SetSwitch("typing", 2);
+        Frame();
+    }
     void Open(const char *page) {
         path.assign(1, std::string("open ") + page);
         Menu_Open(page);
         Frame();
+    }
+    void Fresh(const char *page) {
+        Start();
+        Open(page);
     }
     void Key(const char *name, int count = 1) {
         UiKey k;
@@ -176,6 +232,16 @@ struct Walker {
             Engine_Inject(k);
             Frame();
         }
+    }
+    void Press(const char *raw) {
+        path.push_back(std::string("press ") + raw);
+        Engine_InjectRaw(raw);
+        Frame();
+    }
+    void Wait(int frames) {
+        path.push_back(Fmt("wait %d", frames));
+        for (int i = 0; i < frames; i++)
+            Frame(i + 1 == frames);
     }
     // The path as --do commands, runs of one key folded into `key X n`.
     std::string Commands() const {
@@ -194,6 +260,64 @@ struct Walker {
         }
         return out;
     }
+
+    // ── Reading the screen ──
+
+    std::string Where(int *depth = NULL) const {
+        char buf[320];
+        int d = Menu_Where(buf, sizeof buf);
+        if (depth)
+            *depth = d;
+        return buf;
+    }
+    int ControlsDepth() const {
+        char buf[200];
+        return Controls_Active() ? Controls_Where(buf, sizeof buf) : 0;
+    }
+    bool InActions() const { return ControlsDepth() == 2; }
+    bool Waiting() const { return ControlsDepth() == 3; }
+    // The chip under the cursor, from the last frame drawn.
+    bool CursorChip(ChipView *out) const {
+        ChipView c[32];
+        int n = Controls_Active() ? Controls_Chips(c, 32) : 0;
+        for (int i = 0; i < n; i++) {
+            if (!strcmp(c[i].fill, "cursor") || !strcmp(c[i].fill, "waiting")) {
+                *out = c[i];
+                return true;
+            }
+        }
+        return false;
+    }
+    std::string ChipText() const {
+        ChipView c;
+        return CursorChip(&c) ? c.name : "?";
+    }
+    bool ChipRed() const {
+        ChipView c;
+        return CursorChip(&c) && c.conflict;
+    }
+    static bool Clashes(const char *action) {
+        ConflictView cv[128];
+        int n = Controls_Conflicts(cv, 128);
+        for (int i = 0; i < n; i++)
+            if (!strcmp(cv[i].action, action))
+                return true;
+        return false;
+    }
+    static std::string Voice() {
+        MenuHelp v;
+        Menu_Help(&v);
+        return v.text;
+    }
+
+    // ── Problems ──
+
+    void Record(const std::string &what) {
+        std::string line = size + " " + combo + " [" + Menu_PageName() + "] " + what;
+        if (!problems.count(line))
+            problems[line] = again + " --do \"" + Commands() + "\"";
+    }
+    // A screen check: the layout and screen rules on what the last frame drew.
     void Check(const char *expectPage = NULL) {
         checks++;
         std::vector<std::string> found;
@@ -202,13 +326,35 @@ struct Walker {
         if (expectPage && strcmp(expectPage, "Options") != 0 && strcmp(page, expectPage) != 0)
             found.push_back(Fmt("walk did not reach %s (on %s)", Repr(expectPage).c_str(), Repr(page).c_str()));
         ::Check(&found);
-        for (size_t i = 0; i < found.size(); i++) {
-            std::string line = size + " " + combo + " [" + page + "] " + found[i];
-            if (!problems.count(line))
-                problems[line] = again + " --do \"" + Commands() + "\"";
+        for (size_t i = 0; i < found.size(); i++)
+            Record(found[i]);
+    }
+    // A behaviour check that failed. The line starts with the walk's name.
+    void Fail(const std::string &what) {
+        checks++;
+        Record(what);
+    }
+    // A behaviour check that passed, for the count.
+    void Pass() { checks++; }
+    bool Expect(bool ok, const std::string &what) {
+        if (ok)
+            Pass();
+        else
+            Fail(what);
+        return ok;
+    }
+    bool MoveTo(const char *label) {
+        for (int i = 0; i < 24; i++) {
+            if (!strcmp(Menu_CursorLabel(), label))
+                return true;
+            Key("down");
         }
+        Fail(Fmt("walk: no row %s", Repr(label).c_str()));
+        return false;
     }
     bool Wanted(const char *page) const { return !opt->only || strcmp(opt->only, page) == 0; }
+
+    // ───────────────────────────── The layout walk ─────────────────────────────
 
     void Controls(int cols, bool twoDevices) {
         if (!Wanted("Keys and buttons"))
@@ -251,6 +397,311 @@ struct Walker {
             }
         }
     }
+
+    // ───────────────────────────── The walks by keys ─────────────────────────────
+
+    // esc: from every row, Enter; look round what opened; Esc must put the cursor
+    // back where it was. Rows that change a value on Enter get it put back with Left.
+    // Returns false once something went wrong, so one fault is not reported a hundred times.
+    bool TryEnter(int depth, std::set<std::string> *reached) {
+        int d0;
+        std::string here = Where(&d0);
+        if (!strncmp(Menu_CursorLabel(), "Return", 6) || EndsWith(here, "| Return to previous menu"))
+            return true;  // Return rows leave; Esc is no way back from them
+        std::string v0 = Menu_CursorValue();
+        Key("enter");
+        int d1;
+        std::string opened = Where(&d1);
+        if (d1 > d0)
+            reached->insert(Menu_PageName());  // opened, not just shown beside the hub
+        if (d1 < d0) {
+            Fail(Fmt("esc: Enter on %s closed the screen (now %s)", Repr(here.c_str()).c_str(), Repr(opened.c_str()).c_str()));
+            return false;
+        }
+        if (d1 == d0) {
+            bool active;
+            if (Menu_CursorSetting(&active) && Menu_CursorValue() != v0)
+                Key("left");  // a choice moved on; put it back
+            return true;
+        }
+        Check();  // the screen Enter opened
+        bool leaf = EndsWith(opened, "| confirm") || EndsWith(opened, "| waiting");
+        if (!leaf && depth < 6 && !Explore(depth + 1, reached))
+            return false;
+        Key("esc");
+        std::string back = Where();
+        return Expect(back == here, Fmt("esc: Esc from %s went to %s, not back to %s", Repr(opened.c_str()).c_str(),
+                                        Repr(back.c_str()).c_str(), Repr(here.c_str()).c_str()));
+    }
+
+    bool Explore(int depth, std::set<std::string> *reached) {
+        std::string start = Where();
+        for (int step = 0; step < 40; step++) {
+            if (!TryEnter(depth, reached))
+                return false;
+            // Along an action row of the Controls page: each chip, then back.
+            int moved = 0;
+            while (InActions()) {
+                std::string before = Where();
+                Key("right");
+                if (Where() == before)
+                    break;
+                moved++;
+                if (!TryEnter(depth, reached))
+                    return false;
+            }
+            Key("left", moved);
+            Key("down");
+            if (Where() == start)
+                return true;
+        }
+        Fail(Fmt("walk: Down never comes back round to %s", Repr(start.c_str()).c_str()));
+        return false;
+    }
+
+    // reach: every page can be opened with keys from the hub.
+    void Reach(bool gameplay) {
+        if (opt->only)
+            return;
+        Fresh("Options");
+        std::set<std::string> reached;
+        if (!Explore(1, &reached))
+            return;
+        std::vector<const char *> want(kPages + 1, kPages + sizeof kPages / sizeof kPages[0]);
+        want.push_back("Keys and buttons");
+        path.assign(1, "open Options");  // the walk came back round to where it started
+        for (size_t i = 0; i < want.size(); i++) {
+            if (!strcmp(want[i], "Gameplay") && !gameplay)
+                continue;
+            Expect(reached.count(want[i]) != 0, Fmt("reach: no keys lead to %s", Repr(want[i]).c_str()));
+        }
+    }
+
+    // setting: Left and Right change the value drawn, and the other key puts it back;
+    // a dimmed row takes neither, nor Enter.
+    void Settings(const char *page) {
+        if (!Wanted(page))
+            return;
+        Fresh(page);
+        std::string start = Where();
+        for (int step = 0; step < 24; step++) {
+            bool active;
+            if (Menu_CursorSetting(&active)) {
+                std::string label = Menu_CursorLabel(), v0 = Menu_CursorValue();
+                if (!active) {
+                    const char *keys[] = {"right", "left", "enter"};
+                    for (int k = 0; k < 3; k++) {
+                        Key(keys[k]);
+                        if (!Expect(Menu_CursorValue() == v0, Fmt("setting: %s changed dimmed %s from %s to %s", keys[k],
+                                                                  Repr(label.c_str()).c_str(), Repr(v0.c_str()).c_str(),
+                                                                  Repr(Menu_CursorValue()).c_str())))
+                            return;
+                    }
+                } else {
+                    Key("right");
+                    std::string v1 = Menu_CursorValue();
+                    Key("left");
+                    std::string v2 = Menu_CursorValue();
+                    if (v1 != v0) {
+                        if (!Expect(v2 == v0, Fmt("setting: Right then Left leaves %s at %s, not %s", Repr(label.c_str()).c_str(),
+                                                  Repr(v2.c_str()).c_str(), Repr(v0.c_str()).c_str())))
+                            return;
+                    } else {
+                        // At the top already: the Left just pressed must have moved it, Right bring it back.
+                        if (!Expect(v2 != v0, Fmt("setting: neither Left nor Right changes %s", Repr(label.c_str()).c_str())))
+                            return;
+                        Key("right");
+                        if (!Expect(Menu_CursorValue() == v0, Fmt("setting: Left then Right leaves %s at %s, not %s",
+                                                                  Repr(label.c_str()).c_str(), Repr(Menu_CursorValue()).c_str(),
+                                                                  Repr(v0.c_str()).c_str())))
+                            return;
+                    }
+                }
+            }
+            Key("down");
+            if (Where() == start)
+                return;
+        }
+    }
+
+    // setting: invert is dimmed with the Classic camera and wakes with Auto.
+    void Wake() {
+        if (!Wanted("Controls and camera"))
+            return;
+        Fresh("Controls and camera");
+        bool active = false;
+        if (!MoveTo("Invert camera"))
+            return;
+        Menu_CursorSetting(&active);
+        if (!Expect(!active, "setting: Invert camera is live with the Classic camera"))
+            return;
+        if (!MoveTo("Outdoors camera"))
+            return;
+        Key("right");
+        if (!MoveTo("Invert camera"))
+            return;
+        Menu_CursorSetting(&active);
+        Expect(active, "setting: Invert camera stays dimmed with the Auto camera");
+    }
+
+    // preset: Classic asks first and the safe answer is first; Back to my settings
+    // and Reset settings put the preset row back; a changed setting marks it.
+    void Presets() {
+        if (Wanted("Preset")) {
+            Fresh("Preset");
+            std::string p0 = Menu_PresetLabel();
+            if (!MoveTo("Classic"))
+                return;
+            Key("enter");
+            std::string w = Where();
+            if (!Expect(EndsWith(w, "| confirm"), "preset: Classic does not ask first"))
+                return;
+            Expect(EndsWith(w, "| No | confirm"), "preset: the question does not start on No");
+            Key("esc");
+            if (!Expect(!EndsWith(Where(), "| confirm") && Menu_PresetLabel() == p0,
+                        Fmt("preset: Esc on the question does not answer No (preset row %s)", Repr(Menu_PresetLabel()).c_str())))
+                return;
+            Key("enter");
+            Key("enter");
+            if (!Expect(Menu_PresetLabel() == p0, Fmt("preset: No changes the preset row to %s", Repr(Menu_PresetLabel()).c_str())))
+                return;
+            Key("enter");
+            Key("down");
+            Key("enter");
+            std::string p1 = Menu_PresetLabel();
+            if (!Expect(p1.find("Classic") != std::string::npos,
+                        Fmt("preset: Yes leaves the preset row at %s", Repr(p1.c_str()).c_str())))
+                return;
+            if (!MoveTo("Back to my settings"))
+                return;
+            Key("enter");
+            Expect(Menu_PresetLabel() == p0, Fmt("preset: Back to my settings leaves the preset row at %s, not %s",
+                                                 Repr(Menu_PresetLabel()).c_str(), Repr(p0.c_str()).c_str()));
+        }
+        if (Wanted("Advanced and reset")) {
+            Fresh("Advanced and reset");
+            std::string p0 = Menu_PresetLabel();
+            if (!MoveTo("Fix retail bugs"))
+                return;
+            std::string v0 = Menu_CursorValue();
+            Key("right");
+            if (!Expect(std::string(Menu_PresetLabel()).find(", changed") != std::string::npos,
+                        Fmt("preset: changing Fix retail bugs leaves the preset row at %s", Repr(Menu_PresetLabel()).c_str())))
+                return;
+            Key("left");
+            if (!Expect(Menu_PresetLabel() == p0, Fmt("preset: putting Fix retail bugs back leaves the preset row at %s",
+                                                      Repr(Menu_PresetLabel()).c_str())))
+                return;
+            Key("right");
+            if (!MoveTo("Reset settings"))
+                return;
+            Key("enter");
+            if (!Expect(Menu_PresetLabel() == p0, Fmt("preset: Reset settings leaves the preset row at %s, not %s",
+                                                      Repr(Menu_PresetLabel()).c_str(), Repr(p0.c_str()).c_str())))
+                return;
+            if (!MoveTo("Fix retail bugs"))
+                return;
+            Expect(Menu_CursorValue() == v0, Fmt("preset: Reset settings leaves Fix retail bugs at %s, not %s",
+                                                 Repr(Menu_CursorValue()).c_str(), Repr(v0.c_str()).c_str()));
+        }
+    }
+
+    // bind: on the first action of each group, in each column.
+    void ToChip(int device, int group, int column) {
+        Fresh("Keys and buttons");
+        if (device)
+            Key("tab");
+        Key("down", group);
+        Key("enter");
+        Key("right", column);
+    }
+
+    void BindOne(int device, int group, int column, bool pad) {
+        ToChip(device, group, column);
+        std::string before = ChipText();
+        Key("enter");
+        if (!Expect(Waiting(), "bind: Enter does not wait for a key"))
+            return;
+        Expect(Voice().compare(0, 8, "Press a ") == 0, Fmt("bind: the voice does not ask for the key: %s", Repr(Voice().c_str()).c_str()));
+        Check();
+        Key("esc");
+        if (!Expect(!Waiting(), "bind: Esc leaves the wait for a key going"))
+            return;
+        if (!Expect(ChipText() == before,
+                    Fmt("bind: Esc changed the chip to %s (was %s)", Repr(ChipText().c_str()).c_str(), Repr(before.c_str()).c_str())))
+            return;
+
+        // The other device's input does not bind.
+        Key("enter");
+        Press(pad ? "J" : "pad:a");
+        if (!Expect(Waiting(), Fmt("bind: a %s ended the wait for a %s (chip %s)", pad ? "key" : "pad button",
+                                   pad ? "button" : "key", Repr(ChipText().c_str()).c_str())))
+            return;
+        Key("esc");
+
+        // A key another action has: the chip takes it, both go red, the help says so.
+        const char *partner = pad ? "Talk and search" : "Jetpack";
+        char want[32];
+        Controls_Binding(partner, pad ? 2 : 0, want, sizeof want);
+        Key("enter");
+        Press(pad ? "pad:a" : "J");
+        if (!Expect(!Waiting() && ChipText() == want,
+                    Fmt("bind: the chip shows %s, not %s", Repr(ChipText().c_str()).c_str(), Repr(want).c_str())))
+            return;
+        Check();
+        Expect(ChipRed() && Clashes(partner),
+               Fmt("bind: %s is also %s's, and the two chips are not both red", Repr(want).c_str(), partner));
+        Expect(Voice().find(std::string("is also ") + partner) != std::string::npos,
+               Fmt("bind: the help does not name %s: %s", partner, Repr(Voice().c_str()).c_str()));
+
+        Key("del");
+        if (!Expect(ChipText().empty(), Fmt("bind: Del leaves %s", Repr(ChipText().c_str()).c_str())))
+            return;
+        Expect(!ChipRed() && !Clashes(partner), Fmt("bind: %s stays red after Del", partner));
+    }
+
+    void Binding(bool twoDevices) {
+        if (!Wanted("Keys and buttons"))
+            return;
+        const int groups = (int)(sizeof kGroupFirst / sizeof kGroupFirst[0]);
+        for (int d = 0; d < (twoDevices ? 2 : 1); d++) {
+            int cols = !twoDevices ? 3 : d ? 1 : 2;
+            for (int g = 0; g < groups; g++)
+                for (int c = 0; c < cols; c++)
+                    BindOne(d, g, c, d == 1 || c == 2);
+        }
+
+        // Forward's Key 2 put in Key 1 leaves Key 2 empty, and no clash with itself.
+        ToChip(0, 0, 0);
+        char key2[32];
+        Controls_Binding("Forward", 1, key2, sizeof key2);
+        std::string k2 = key2;
+        Key("enter");
+        Press("Keypad 8");
+        Controls_Binding("Forward", 1, key2, sizeof key2);
+        if (Expect(k2 == "Num 8" && ChipText() == "Num 8" && !key2[0],
+                   Fmt("bind: Num 8 moved to Forward's Key 1 leaves Key 1 %s, Key 2 %s", Repr(ChipText().c_str()).c_str(),
+                       Repr(key2).c_str())))
+            Expect(!ChipRed(), "bind: a key moved from Key 2 to Key 1 shows a clash");
+
+        // The wait gives up after 5 s and changes nothing.
+        ToChip(0, 0, 0);
+        std::string before = ChipText();
+        Key("enter");
+        Wait(5000 / 16 + 5);
+        Expect(!Waiting() && ChipText() == before,
+               Fmt("bind: 5 s on, the wait %s (chip %s)", Waiting() ? "goes on" : "ended", Repr(ChipText().c_str()).c_str()));
+    }
+
+    void Behaviour(bool gameplay, bool twoDevices) {
+        Reach(gameplay);
+        for (size_t p = 0; p < sizeof kPages / sizeof kPages[0]; p++)
+            if (strcmp(kPages[p], "Gameplay") || gameplay)
+                Settings(kPages[p]);
+        Wake();
+        Presets();
+        Binding(twoDevices);
+    }
 };
 
 int Selftest_Run(const SelftestOptions &opt, const char *self) {
@@ -258,6 +709,7 @@ int Selftest_Run(const SelftestOptions &opt, const char *self) {
     if (specs.empty())
         specs.assign(kCombos, kCombos + sizeof kCombos / sizeof kCombos[0]);
 
+    Engine_SetPixels(false);
     Walker w;
     w.opt = &opt;
     w.size = Fmt("%ux%u", (unsigned)Engine_PhysW(), (unsigned)Engine_PhysH());
@@ -268,22 +720,22 @@ int Selftest_Run(const SelftestOptions &opt, const char *self) {
             fprintf(stderr, "bad --combo %s (name=value,name=value with the switch names of `state`)\n", specs[i]);
             return 2;
         }
-        Menu_Reset();
+        w.switches = combo;
         w.again = Fmt("%s --size %s", self, w.size.c_str());
-        for (size_t s = 0; s < combo.size(); s++) {
-            Menu_SetSwitch(combo[s].name.c_str(), combo[s].value);
+        for (size_t s = 0; s < combo.size(); s++)
             w.again += Fmt(" --switch %s=%d", combo[s].name.c_str(), combo[s].value);
-        }
-        // Help shown whole, so a check never depends on how far the typing got.
-        Menu_SetSwitch("typing", 2);
         w.again += " --switch typing=2";
         w.combo = ComboLabel(combo);
-        Frame();
-        if (ComboValue(combo, "devices", 1))
+        w.Start();
+        bool twoDevices = ComboValue(combo, "devices", 1) != 0;
+        bool gameplay = ComboValue(combo, "gameplay", 0) != 0;
+        if (twoDevices)
             w.Controls(2, true);
         else
             w.Controls(3, false);
-        w.Pages(ComboValue(combo, "gameplay", 0) != 0);
+        w.Pages(gameplay);
+        if (!opt.layoutOnly)
+            w.Behaviour(gameplay, twoDevices);
     }
     for (std::map<std::string, std::string>::const_iterator it = w.problems.begin(); it != w.problems.end(); ++it) {
         printf("%s\n", it->first.c_str());

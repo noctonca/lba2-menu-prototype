@@ -377,6 +377,10 @@ static bool s_headless;
 
 void Engine_SetHeadless(bool on) { s_headless = on; }
 
+static bool s_pixels = true;
+void Engine_SetPixels(bool on) { s_pixels = on; }
+bool Engine_Pixels() { return s_pixels; }
+
 void Engine_Present() {
     if (!s_headless)
         BoxStaticFullflip();
@@ -392,6 +396,8 @@ void Engine_ResetInput() {
 }
 
 void Engine_DrawBackground() {
+    if (!s_pixels)
+        return;
     // Nearest-neighbour stretch of the 640x480 image, as Image_LoadStretched does.
     U8 *dst = (U8 *)Log;
     for (U32 y = 0; y < s_logH; y++) {

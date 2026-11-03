@@ -3,15 +3,17 @@
 //   lba2menu [--data DIR] [--size WxH] [--first] [--headless] [--fixed-dt MS]
 //            [--script FILE] [--do "cmd; cmd"] [--stdin] [--control FILE] [--trace FILE]
 //            [--switch name=v ...]
-//   lba2menu --selftest [--size WxH] [--combo name=v,name=v ...] [--only PAGE] [--no-again]
+//   lba2menu --selftest [--size WxH] [--combo name=v,name=v ...] [--only PAGE] [--no-again] [--layout-only]
 //
 // --do: commands as a script would hold them, separated by ';', run after --script.
 // Without --headless the window stays up afterwards, on the screen they lead to.
 //
 // --selftest: walk every chip of the Controls page and every row of every page at
 // this size, for each switch combination (tools/sweep.py's eight, or the --combo
-// ones), check that everything fits, print each problem with the command line
-// that shows it, and exit 1 if there were any. --only keeps one page.
+// ones), check that everything fits, then walk the menu by its keys and check
+// what they do (Esc goes back, values come back, presets, binding a key). Print
+// each problem with the command line that shows it, and exit 1 if there were any.
+// --only keeps one page; --layout-only skips the walks by keys.
 //
 // --control FILE: lines appended to FILE run as commands while the window is up,
 // so a driver can steer a session someone is watching. Replies go to stdout.
@@ -223,6 +225,8 @@ int main(int argc, char **argv) {
             i++;
         } else if (!strcmp(a, "--no-again")) {
             test.again = false;
+        } else if (!strcmp(a, "--layout-only")) {
+            test.layoutOnly = true;
         } else {
             fprintf(stderr, "unknown argument %s\n", a);
             return 2;

@@ -26,6 +26,10 @@ bool Engine_BeginFrame();
 void Engine_Present();
 // Headless: no window to show, so a present only costs time. Shots read Log, not the screen.
 void Engine_SetHeadless(bool on);
+// The self test reads what was drawn where, never the pixels: with this off the
+// background and the row shading (most of a frame's time) are skipped.
+void Engine_SetPixels(bool on);
+bool Engine_Pixels();
 // Forget held keys and what was touched last, as a fresh start has it.
 void Engine_ResetInput();
 U32 Engine_TimeMs();

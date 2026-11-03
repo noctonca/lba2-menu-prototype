@@ -601,7 +601,8 @@ void Menu_Update() {
     } else if (g_cursor >= n) {
         g_cursor = n - 1;
     }
-    UpdateVoice();
+    if (!Controls_Active())  // Keys and buttons just opened: its help, not this row's
+        UpdateVoice();
 }
 
 // ───────────────────────────── Drawing ─────────────────────────────
@@ -1148,6 +1149,59 @@ void Menu_Help(MenuHelp *h) {
 
 const char *Menu_PageName() {
     return Controls_Active() ? "Keys and buttons" : g_first ? "First launch" : g_pages[Wide() ? RightPage() : TopPage()].name;
+}
+
+// One for the hub; each page pushed, the wide right pane and the Classic question add one.
+static int Depth() {
+    if (g_first)
+        return 1;
+    return g_depth + (Wide() && g_focus == F_RIGHT ? 1 : 0) + (g_confirm ? 1 : 0);
+}
+
+const char *Menu_CursorLabel() {
+    static char buf[160];
+    const Row *r = Controls_Active() || g_closed ? NULL : CursorRow();
+    if (!r)
+        return "";
+    return r->type == R_PRESET_ROW ? PresetRowLabel(buf, sizeof buf) : r->label;
+}
+
+int Menu_Where(char *buf, size_t n) {
+    if (g_closed) {
+        snprintf(buf, n, "closed");
+        return 0;
+    }
+    if (Controls_Active()) {
+        char inner[200];
+        int d = Controls_Where(inner, sizeof inner);
+        snprintf(buf, n, "%s | %s", Menu_PageName(), inner);
+        return Depth() + d;
+    }
+    if (g_confirm)
+        snprintf(buf, n, "%s | %s | confirm", Menu_PageName(), g_confirmCursor ? "Yes" : "No");
+    else
+        snprintf(buf, n, "%s | %s", Menu_PageName(), Menu_CursorLabel());
+    return Depth();
+}
+
+bool Menu_CursorSetting(bool *active) {
+    const Row *r = Controls_Active() || g_closed ? NULL : CursorRow();
+    if (!r || r->type != R_SETTING)
+        return false;
+    *active = RowActive(*r);
+    return true;
+}
+
+const char *Menu_CursorValue() {
+    for (int i = 0; i < g_drawnCount; i++)
+        if (!strcmp(g_drawn[i].fill, "cursor"))
+            return g_drawn[i].value;
+    return "";
+}
+
+const char *Menu_PresetLabel() {
+    static char buf[160];
+    return PresetRowLabel(buf, sizeof buf);
 }
 
 void Menu_JsonString(FILE *f, const char *s) {

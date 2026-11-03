@@ -280,6 +280,8 @@ static int CursorColumn() {
 
 static const char *DeviceName(int d) { return d ? "Gamepad" : "Keyboard"; }
 
+static void Say();
+
 void Controls_Open() {
     g_active = true;
     g_device = Engine_LastInputWasPad() ? 1 : 0;
@@ -296,6 +298,7 @@ void Controls_Open() {
         g_bindingsReady = true;
     }
     Menu_PageEntered();
+    Say();  // the group's help from the first frame, not the row's that opened the page
     Trace("controls open device=%s", DeviceName(g_device));
 }
 
@@ -377,8 +380,6 @@ static void SwitchDevice() {
     Menu_PageEntered();
     Trace("controls device=%s", DeviceName(g_device));
 }
-
-static void Say();
 
 void Controls_Update() {
     if (g_waiting) {
@@ -689,9 +690,56 @@ int Controls_Chips(ChipView *out, int max) {
         out[i].action = kActions[g_chips[i].action].name;
         out[i].column = ColumnHead(g_chips[i].column);
         out[i].name = g_chips[i].name;
+        out[i].fill = g_chips[i].fill;
         out[i].fits = g_chips[i].fits;
+        out[i].conflict = g_chips[i].conflict;
     }
     return n;
+}
+
+int Controls_Conflicts(ConflictView *out, int max) {
+    int n = 0;
+    for (int a = 0; a < ACTION_COUNT; a++) {
+        for (int c = 0; c < 3; c++) {
+            int other = ConflictOf(a, c);
+            if (other < 0 || n >= max)
+                continue;
+            out[n].action = kActions[a].name;
+            out[n].column = ColumnHead(c);
+            out[n].other = kActions[other].name;
+            n++;
+        }
+    }
+    return n;
+}
+
+int Controls_Where(char *buf, size_t n) {
+    if (!g_focusRight) {
+        const char *row = !Wide() && g_colCursor == 0 ? "Return to previous menu" : kGroups[g_group].name;
+        snprintf(buf, n, "%s | %s", DeviceName(g_device), row);
+        return 1;
+    }
+    char chip[32];
+    int a = CursorAction(), c = CursorColumn();
+    ChipText(a, c, chip, sizeof chip);
+    snprintf(buf, n, "%s | %s | %s | %s | %s%s", DeviceName(g_device), kGroups[g_group].name, kActions[a].name,
+             ColumnHead(c), chip, g_waiting ? " | waiting" : "");
+    return g_waiting ? 3 : 2;
+}
+
+bool Controls_Binding(const char *action, int column, char *out, size_t n) {
+    for (int a = 0; a < ACTION_COUNT; a++) {
+        if (!strcmp(kActions[a].name, action)) {
+            if (!g_bindingsReady) {
+                ResetBindings();
+                g_bindingsReady = true;
+            }
+            ChipText(a, column, out, n);
+            return true;
+        }
+    }
+    out[0] = 0;
+    return false;
 }
 
 void Controls_WriteState(FILE *f) {

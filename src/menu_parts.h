@@ -45,3 +45,10 @@ struct MenuHelp {
 };
 void Menu_Help(MenuHelp *out);
 const char *Menu_PageName();  // as `state` names it
+// Where the player is, as one string ("page | cursor row | confirm"), and how deep:
+// each screen or pane Enter opens adds one, so Esc should take it back by one.
+int Menu_Where(char *buf, size_t n);
+const char *Menu_CursorLabel();  // the cursor row of an Options page; "" elsewhere
+bool Menu_CursorSetting(bool *active);  // the cursor row is a setting; active: not dimmed
+const char *Menu_CursorValue();  // the value drawn on the cursor row last frame
+const char *Menu_PresetLabel();  // the preset row as it reads ("Settings: Modern, changed")

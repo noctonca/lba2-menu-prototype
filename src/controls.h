@@ -23,6 +23,17 @@ struct ChipView {
     const char *action;
     const char *column;
     const char *name;
-    bool fits;
+    const char *fill;  // shade, cursor or waiting
+    bool fits, conflict;
 };
 int Controls_Chips(ChipView *out, int max);
+// Every clash in the bindings: action's key in column is also other's.
+struct ConflictView {
+    const char *action, *column, *other;
+};
+int Controls_Conflicts(ConflictView *out, int max);
+// Where the cursor is ("Keyboard | Movement | Forward | Key 1 | Up | waiting"),
+// and how deep within the page: 1 the groups, 2 the actions, 3 waiting for a key.
+int Controls_Where(char *buf, size_t n);
+// What an action's chip in a column says (0 Key 1, 1 Key 2, 2 the pad).
+bool Controls_Binding(const char *action, int column, char *out, size_t n);

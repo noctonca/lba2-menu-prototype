@@ -1,5 +1,7 @@
 #include "cadre.h"
 
+#include "engine.h"
+
 #include <POLYGON/POLY.H>
 #include <SVGA/CLIP.H>
 #include <SVGA/GRAPH.H>
@@ -218,6 +220,8 @@ void Cadre_BackupCorners(S32 x0, S32 y0, S32 x1, S32 y1) {
 
 // FLOW_A.CPP ShadeBoxBlk.
 void Cadre_Shade(S32 x0, S32 y0, S32 x1, S32 y1, S32 deccoul) {
+    if (!Engine_Pixels())
+        return;
     if (x0 > ClipXMax || x1 < ClipXMin || y0 > ClipYMax || y1 < ClipYMin)
         return;
     if (x0 < ClipXMin)

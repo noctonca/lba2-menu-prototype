@@ -109,9 +109,33 @@ Commands, one per line: `key <up|down|left|right|enter|esc|tab|del|f1..f11> [cou
 Controls page at one screen size, for each of eight switch combinations, and
 lists what does not fit: help cut off, rows running into the help or off the
 screen, labels running into their values or their key chips, key names cut in
-their chips. It runs in one process without drawing to a window, and exits 1
-when it finds a problem. Under each problem it prints a command line that
-opens the screen it was found on:
+their chips. On every screen it also checks that exactly one row or chip has
+the cursor, that a red key chip under the cursor is explained in the help, and
+that a clash shows on both actions.
+
+Then it walks the menu by its keys and checks what they do. Each problem a
+walk finds starts with the walk's name:
+
+- `esc:` from every row of every page, opened from the hub with Enter, Esc
+  puts the cursor back where it was (the Controls page, its groups, and the
+  wait for a key too).
+- `reach:` Enter opens every page from the hub.
+- `setting:` Left or Right changes the value shown and the other key puts it
+  back; a dimmed row ignores Left, Right and Enter; Invert camera is dimmed
+  with the Classic camera and wakes with Auto.
+- `preset:` Classic asks first, starting on No, and Esc answers No; Back to my
+  settings and Reset settings put the preset row back; changing Fix retail
+  bugs marks the preset changed.
+- `bind:` on the first action of each group, in each column: Enter waits and
+  the voice asks for the key; Esc cancels; the other device's input is ignored;
+  a key another action has goes in, both chips go red and the help names the
+  other action; Del clears it. Also: Forward's Key 2 put in Key 1 leaves Key 2
+  empty, and the wait gives up after 5 s.
+
+It runs in one process without drawing to a window (nor drawing the
+background and row shading, which the checks never read), and exits 1 when it
+finds a problem. Under each problem it prints a command line that opens the
+screen it was found on:
 
     $ build/lba2menu --selftest --size 1920x1080 --combo band=1,gameplay=0 --only Sound
     1920x1080 {"band": 1, "gameplay": 0} [Sound] text spills 15 px: 'Master volume' '100'
@@ -120,17 +144,22 @@ opens the screen it was found on:
 - `--combo name=v,name=v` (repeatable) tests those switch settings instead of
   the eight; any switch of `state` can go in.
 - `--only PAGE` keeps one page (`"Keys and buttons"` for the Controls page).
+  The `esc:` and `reach:` walk needs every page, so it runs only without it.
+- `--layout-only` leaves out the walks by keys.
 - Add `--headless` and `; shot x.png` to an `again` line for a picture.
 
 `tools/sweep.py` runs the self test for five screen sizes and the eight
 combinations, one process each, in parallel (about 3 seconds on the Mac), and
-takes `--sizes`, `--combo`, `--only` and `--again` the same way.
+takes `--sizes`, `--combo`, `--only`, `--again` and `--layout-only` the same way.
 
-- `--scripts` walks the same screens from outside: a script per run, read back
-  through `state`. It is slower (about 10 seconds) and must list the same
-  problems; it is the only way to take `--shots`.
+- `--scripts` walks the same screens as `--layout-only` from outside: a script
+  per run, read back through `state`, checked by the same rules written in
+  Python. It is slower (about 10 seconds) and must list the same problems as
+  `sweep.py --layout-only`; it is the only way to take `--shots`. A rule
+  change goes in both `check()` in sweep.py and `Check()` in selftest.cpp.
 - `--check-again` replays every problem's `again` line and checks that the
-  screen it opens has the problem.
+  screen it opens has the problem; for a walk's problem, that it ends on the
+  page the problem names.
 
 ## Checked against the game
 
