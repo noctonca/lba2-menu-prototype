@@ -7,13 +7,15 @@
 // so a driver can steer a session someone is watching. Replies go to stdout.
 //
 // Commands (from --script, and from stdin with --stdin), one per line:
-//   key <name> [count]   press a key: up down left right enter esc tab f1..f9
+//   key <name> [count]   press a key: up down left right enter esc tab del f1..f11
+//   press <name>         a raw key for rebinding: an SDL key name ("J", "Left Alt",
+//                        "Keypad 5") or pad:<a|b|x|y|lb|rb|lt|rt|start|back|ls|rs|dpad-up|lstick-left...>
 //   wait <frames>        let frames pass
 //   state                print the state as one JSON line: "state {...}"
 //   shot <path> [scale]  write the screen as a PNG (logical size x scale)
-//   switch <name> <v>    band typing chip word island help640 gameplay overlay
+//   switch <name> <v>    band typing chip word island help640 gameplay overlay devices padnames
 //   set <setting> <v>    a fake setting by id (see `state`)
-//   open <page name>     jump to a page ("Display and graphics", "original", ...)
+//   open <page name>     jump to a page ("Display and graphics", "Keys and buttons", "original", ...)
 //   quit
 #include "engine.h"
 #include "menu.h"
@@ -64,6 +66,15 @@ static bool RunCommand(Runner &r, const char *line) {
             r.lines.insert(r.lines.begin() + (long)r.next, std::string("wait 1"));
             r.lines.insert(r.lines.begin() + (long)r.next + 1, std::string(again));
             r.next += 0;
+        }
+        r.waitFrames = 1;
+    } else if (!strcmp(cmd, "press")) {
+        const char *name = line + 5;
+        while (*name == ' ')
+            name++;
+        if (!Engine_InjectRaw(name)) {
+            printf("err unknown raw key %s\n", name);
+            return false;
         }
         r.waitFrames = 1;
     } else if (!strcmp(cmd, "wait")) {
@@ -282,6 +293,10 @@ int main(int argc, char **argv) {
             Menu_SetSwitch("help640", !Menu_GetSwitch("help640"));
         if (Engine_Pressed(KEY_F9))
             Menu_SetSwitch("gameplay", !Menu_GetSwitch("gameplay"));
+        if (Engine_Pressed(KEY_F10))
+            Menu_SetSwitch("devices", !Menu_GetSwitch("devices"));
+        if (Engine_Pressed(KEY_F11))
+            Menu_SetSwitch("padnames", Menu_GetSwitch("padnames") + 1);
         if (Engine_Pressed(KEY_F2)) {
             size_t count = sizeof kSizes / sizeof kSizes[0], at = 0;
             for (size_t i = 0; i < count; i++)

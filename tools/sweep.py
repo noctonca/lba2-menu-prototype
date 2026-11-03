@@ -10,9 +10,37 @@ import argparse, json, os, subprocess, sys
 PAGES = ["Options", "Preset", "Language and interface", "Display and graphics", "Sound",
          "Controls and camera", "Advanced and reset", "Gameplay"]
 
+# Actions per group on the Controls page (controls.cpp kGroups).
+CONTROL_GROUPS = [5, 6, 4, 7, 4, 4, 6]
+
+def controls_lines(columns_kb, columns_pad):
+    """Every chip of every group, on each device the view shows."""
+    lines = ["open Keys and buttons", "wait 1", "state"]
+    devices = [columns_kb] if columns_pad is None else [columns_kb, columns_pad]
+    for d, cols in enumerate(devices):
+        if d:
+            lines += ["key tab", "wait 1"]
+        for g, count in enumerate(CONTROL_GROUPS):
+            lines += ["wait 1", "state", "key enter", "wait 1"]
+            for r in range(count):
+                for c in range(cols):
+                    lines += ["wait 1", "state"]
+                    if c + 1 < cols:
+                        lines += ["key right"]
+                lines += ["key left"] * (cols - 1) + ["key down"]
+            lines += ["key esc", "wait 1", "key down"]
+    return lines
+
 def run(binary, size, switches, shots):
     lines = [f"switch {k} {v}" for k, v in switches.items()] + ["switch typing 2", "wait 1"]
     plan = []
+    if switches.get("devices", 1):
+        lines += controls_lines(2, 1)
+    else:
+        lines += controls_lines(3, None)
+    if shots:
+        tag = f"{size}-{'-'.join(f'{k}{v}' for k, v in switches.items())}-Keys_and_buttons"
+        lines += [f"shot {shots}/{tag}.png"]
     for page in PAGES:
         if page == "Gameplay" and not switches.get("gameplay"):
             continue
@@ -46,6 +74,9 @@ def check(state, where):
             problems.append(f"row overlaps the {v['where']} by {y1 - hy0 + 1} px: {r['label']!r}")
         if r["text_right"] > x1:
             problems.append(f"text spills {r['text_right'] - x1} px: {r['label']!r} {r['value']!r}")
+    for k in state.get("controls", {}).get("chips", []):
+        if not k["fits"]:
+            problems.append(f"key name cut in its chip: {k['action']!r} {k['column']} {k['name']!r}")
     return problems
 
 def main():
@@ -57,7 +88,8 @@ def main():
     if a.shots:
         os.makedirs(a.shots, exist_ok=True)
     combos = [{"band": 1, "gameplay": 0}, {"band": 1, "gameplay": 1}, {"band": 0, "gameplay": 1},
-              {"help640": 1, "gameplay": 1}]
+              {"help640": 1, "gameplay": 1}, {"devices": 0}, {"padnames": 2}, {"padnames": 3},
+              {"chip": 1}]
     found = {}
     for size in a.sizes.split(","):
         for sw in combos:

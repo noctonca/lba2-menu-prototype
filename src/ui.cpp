@@ -150,6 +150,38 @@ S32 Ui_Chip(S32 x, S32 y, const char *key, S32 scale, bool lit) {
     return w;
 }
 
+S32 Ui_KeyChipHeight(S32 scale) {
+    return 8 * scale + 4 * scale;
+}
+
+bool Ui_KeyChip(S32 x, S32 y, S32 w, const char *name, S32 scale, ChipFill fill, bool red) {
+    S32 h = Ui_KeyChipHeight(scale);
+    S32 x1 = x + w - 1, y1 = y + h - 1;
+    if (fill == CHIP_CURSOR)
+        Cadre_FireBar(x + 1, y + 1, x1 - 1, y1 - 1, PLASMA_CURSOR);
+    else if (fill == CHIP_WAITING)
+        Cadre_FireBar(x + 1, y + 1, x1 - 1, y1 - 1, PLASMA_CURRENT);
+    else
+        Cadre_Shade(x + 1, y + 1, x1 - 1, y1 - 1, MENU_SHADE_LVL);
+    U8 up = red ? COUL_UP_RED : COUL_UP_BLUE, down = red ? COUL_DOWN_RED : COUL_DOWN_BLUE;
+    Line(x, y, x1, y, up);
+    Line(x, y, x, y1, up);
+    Line(x1, y + 1, x1, y1, down);
+    Line(x + 1, y1, x1, y1, down);
+
+    bool empty = !name || !name[0];
+    const char *text = empty ? "......" : name;
+    S32 inner = w - 8 * scale;
+    S32 tw = Ui_SmallWidth(text, scale);
+    S32 tx = tw <= inner ? x + w / 2 - tw / 2 : x + 4 * scale;
+    U8 ink = fill != CHIP_SHADE ? INK_WHITE : empty ? INK_DISABLED : INK_CONFIG_MENU;
+    MemoClip();
+    SetClip(x + 2, y + 1, x1 - 2, y1 - 1);
+    Ui_Small(tx, y + 2 * scale, text, ink, scale);
+    RestoreClip();
+    return tw <= inner;
+}
+
 void Voice_Say(Voice &v, const char *text, bool typed) {
     if (strcmp(v.text, text) == 0 && v.typed == typed)
         return;

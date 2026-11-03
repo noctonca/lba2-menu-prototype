@@ -43,6 +43,14 @@ void Ui_Small(S32 x, S32 y, const char *s, U8 colour, S32 scale);
 S32 Ui_ChipWidth(const char *key, S32 scale);
 S32 Ui_Chip(S32 x, S32 y, const char *key, S32 scale, bool lit = false);
 
+// A binding chip of a fixed width, the name centred: shade, the cursor plasma,
+// the current-value plasma while it waits for a key, or empty (a row of dots).
+// red: the alert pair, for a key on two actions. Returns false when the name
+// does not fit inside (it is clipped).
+enum ChipFill { CHIP_SHADE, CHIP_CURSOR, CHIP_WAITING };
+bool Ui_KeyChip(S32 x, S32 y, S32 w, const char *name, S32 scale, ChipFill fill, bool red);
+S32 Ui_KeyChipHeight(S32 scale);
+
 // The game's voice: help typed letter by letter with the 13-step colour ramp
 // (MESSAGE.CPP AffAllCar). Wraps into at most maxLines of the game font.
 struct Voice {

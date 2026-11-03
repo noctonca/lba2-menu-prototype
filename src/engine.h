@@ -28,8 +28,8 @@ U32 Engine_TimeMs();
 
 // Keys pressed this frame (edge, with key repeat for held arrows).
 enum UiKey {
-    KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_ENTER, KEY_ESC, KEY_TAB,
-    KEY_F1, KEY_F2, KEY_F3, KEY_F4, KEY_F5, KEY_F6, KEY_F7, KEY_F8, KEY_F9,
+    KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_ENTER, KEY_ESC, KEY_TAB, KEY_DEL,
+    KEY_F1, KEY_F2, KEY_F3, KEY_F4, KEY_F5, KEY_F6, KEY_F7, KEY_F8, KEY_F9, KEY_F10, KEY_F11,
     KEY_COUNT
 };
 bool Engine_Pressed(UiKey k);
@@ -37,6 +37,21 @@ bool Engine_Pressed(UiKey k);
 void Engine_Inject(UiKey k);
 bool Engine_KeyByName(const char *name, UiKey *out);
 const char *Engine_KeyName(UiKey k);
+
+// Raw keys, for rebinding. A code is an SDL scancode (1..255) or
+// PAD_CODE_BASE + n, n in lba2cc's K_GAMEPAD_* order (KEYBOARD_KEYS.H).
+enum { PAD_CODE_BASE = 1024, PAD_CODE_COUNT = 25 };
+// The first key or pad input that went down this frame, or 0.
+S32 Engine_RawPressed();
+// The control channel: "J", "Left Alt", "Keypad 5" (SDL names) or "pad:<n|name>"
+// (pad:a, pad:lb, pad:lstick-up ...). Counts on the next frame.
+bool Engine_InjectRaw(const char *name);
+// What the player touched last: true when it was the pad.
+bool Engine_LastInputWasPad();
+// The connected pad's family: 0 none, 1 Xbox-like, 2 PlayStation, 3 Nintendo.
+S32 Engine_PadFamily();
+// The SDL name of a keyboard scancode.
+const char *Engine_ScancodeName(S32 code);
 
 // Fixed clock: every frame advances the clock by dtMs, so runs repeat exactly.
 void Engine_SetFixedDt(U32 dtMs);

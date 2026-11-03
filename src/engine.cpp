@@ -57,8 +57,8 @@ static bool s_pressed[KEY_COUNT];
 static U32 s_repeatAt[KEY_COUNT];
 
 static const U32 kScancode[KEY_COUNT] = {
-    K_UP, K_DOWN, K_LEFT, K_RIGHT, K_ENTER, K_ESC, K_TAB,
-    K_F1, K_F2, K_F3, K_F4, K_F5, K_F6, K_F7, K_F8, K_F9,
+    K_UP, K_DOWN, K_LEFT, K_RIGHT, K_ENTER, K_ESC, K_TAB, K_SUPPR,
+    K_F1, K_F2, K_F3, K_F4, K_F5, K_F6, K_F7, K_F8, K_F9, K_F10, K_F11,
 };
 
 U32 Engine_Scale(U32 w, U32 h) {
@@ -196,8 +196,8 @@ static U32 s_fixedDt;
 static U32 s_frame;
 
 static const char *kKeyNames[KEY_COUNT] = {
-    "up", "down", "left", "right", "enter", "esc", "tab",
-    "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9",
+    "up", "down", "left", "right", "enter", "esc", "tab", "del",
+    "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11",
 };
 
 void Engine_Inject(UiKey k) { s_injected[k] = true; }
@@ -248,19 +248,115 @@ static bool PadDown(int k) {
     case KEY_ENTER: return SDL_GetGamepadButton(s_pad, SDL_GAMEPAD_BUTTON_SOUTH);
     case KEY_ESC: return SDL_GetGamepadButton(s_pad, SDL_GAMEPAD_BUTTON_EAST);
     case KEY_TAB: return SDL_GetGamepadButton(s_pad, SDL_GAMEPAD_BUTTON_BACK);
+    case KEY_DEL: return SDL_GetGamepadButton(s_pad, SDL_GAMEPAD_BUTTON_WEST);
     default: return false;
+    }
+}
+
+// Raw state: every scancode and every pad input, for rebinding.
+static bool s_rawDown[256 + PAD_CODE_COUNT];
+static S32 s_rawPressed, s_rawInjected;
+static bool s_lastPad;
+
+static bool PadRawDown(int n) {
+    if (!s_pad)
+        return false;
+    const int dead = 16000;
+    if (n <= 14)  // SDL's button order is lba2cc's K_GAMEPAD order up to the d-pad
+        return SDL_GetGamepadButton(s_pad, (SDL_GamepadButton)n);
+    switch (n) {
+    case 15: return SDL_GetGamepadAxis(s_pad, SDL_GAMEPAD_AXIS_LEFTY) < -dead;
+    case 16: return SDL_GetGamepadAxis(s_pad, SDL_GAMEPAD_AXIS_LEFTY) > dead;
+    case 17: return SDL_GetGamepadAxis(s_pad, SDL_GAMEPAD_AXIS_LEFTX) < -dead;
+    case 18: return SDL_GetGamepadAxis(s_pad, SDL_GAMEPAD_AXIS_LEFTX) > dead;
+    case 19: return SDL_GetGamepadAxis(s_pad, SDL_GAMEPAD_AXIS_RIGHTY) < -dead;
+    case 20: return SDL_GetGamepadAxis(s_pad, SDL_GAMEPAD_AXIS_RIGHTY) > dead;
+    case 21: return SDL_GetGamepadAxis(s_pad, SDL_GAMEPAD_AXIS_RIGHTX) < -dead;
+    case 22: return SDL_GetGamepadAxis(s_pad, SDL_GAMEPAD_AXIS_RIGHTX) > dead;
+    case 23: return SDL_GetGamepadAxis(s_pad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > dead;
+    case 24: return SDL_GetGamepadAxis(s_pad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > dead;
+    }
+    return false;
+}
+
+static void ScanRaw() {
+    s_rawPressed = s_rawInjected;
+    s_rawInjected = 0;
+    if (s_rawPressed)
+        s_lastPad = s_rawPressed >= PAD_CODE_BASE;
+    for (int i = 0; i < 256 + PAD_CODE_COUNT; i++) {
+        bool down = i < 256 ? (i > 0 && CheckKey((U32)i) != 0) : PadRawDown(i - 256);
+        if (down && !s_rawDown[i]) {
+            S32 code = i < 256 ? i : PAD_CODE_BASE + (i - 256);
+            if (!s_rawPressed)
+                s_rawPressed = code;
+            s_lastPad = i >= 256;
+        }
+        s_rawDown[i] = down;
+    }
+}
+
+S32 Engine_RawPressed() { return s_rawPressed; }
+bool Engine_LastInputWasPad() { return s_lastPad; }
+
+static const char *kPadCodeNames[PAD_CODE_COUNT] = {
+    "a", "b", "x", "y", "back", "guide", "start", "ls", "rs", "lb", "rb",
+    "dpad-up", "dpad-down", "dpad-left", "dpad-right",
+    "lstick-up", "lstick-down", "lstick-left", "lstick-right",
+    "rstick-up", "rstick-down", "rstick-left", "rstick-right", "lt", "rt",
+};
+
+bool Engine_InjectRaw(const char *name) {
+    if (!strncmp(name, "pad:", 4)) {
+        for (int n = 0; n < PAD_CODE_COUNT; n++) {
+            if (!strcmp(name + 4, kPadCodeNames[n])) {
+                s_rawInjected = PAD_CODE_BASE + n;
+                return true;
+            }
+        }
+        return false;
+    }
+    SDL_Scancode sc = SDL_GetScancodeFromName(name);
+    if (sc == SDL_SCANCODE_UNKNOWN || sc >= 256)
+        return false;
+    s_rawInjected = (S32)sc;
+    return true;
+}
+
+const char *Engine_ScancodeName(S32 code) {
+    return SDL_GetScancodeName((SDL_Scancode)code);
+}
+
+S32 Engine_PadFamily() {
+    if (!s_pad)
+        return 0;
+    switch (SDL_GetGamepadType(s_pad)) {
+    case SDL_GAMEPAD_TYPE_PS3:
+    case SDL_GAMEPAD_TYPE_PS4:
+    case SDL_GAMEPAD_TYPE_PS5:
+        return 2;
+    case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_PRO:
+    case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_LEFT:
+    case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_RIGHT:
+    case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_PAIR:
+        return 3;
+    default:
+        return 1;
     }
 }
 
 bool Engine_BeginFrame() {
     ManageEvents();
     ManageKeyboard();
+    ScanRaw();
     if (s_fixedDt)
         Timer_FixedDtAdvance();
     s_frame++;
     U32 now = Engine_TimeMs();
     for (int k = 0; k < KEY_COUNT; k++) {
         bool down = CheckKey(kScancode[k]) != 0 || PadDown(k);
+        if (k == KEY_DEL)  // a Mac keyboard's delete key is Backspace
+            down = down || CheckKey(K_BACKSPACE) != 0;
         s_pressed[k] = s_injected[k];
         s_injected[k] = false;
         if (down && !s_down[k]) {

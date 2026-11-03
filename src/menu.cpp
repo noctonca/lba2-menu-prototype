@@ -1,8 +1,10 @@
 #include "menu.h"
 
 #include "cadre.h"
+#include "controls.h"
 #include "engine.h"
 #include "trace.h"
+#include "menu_parts.h"
 #include "ui.h"
 
 #include <SVGA/BOX.H>
@@ -215,7 +217,7 @@ static void BuildPages() {
     Page &ctl = g_pages[P_CONTROLS];
     ctl.name = "Controls and camera";
     AddRow(ctl, R_RETURN, "Return to previous menu", 0, "");
-    AddRow(ctl, R_ACTION, "Keys and buttons", 0, "Change which key or button does what. Not built in the prototype yet.");
+    AddRow(ctl, R_ACTION, "Keys and buttons", 0, "Change which key or button does what.");
     AddSetting(ctl, S_CAM_OUT);
     AddSetting(ctl, S_CAM_IN);
     AddSetting(ctl, S_INVERT);
@@ -357,15 +359,21 @@ static const char *HelpFor(const Row *r) {
     return r->help ? r->help : "";
 }
 
-static void UpdateVoice() {
-    const Row *r = CursorRow();
-    const char *text = g_confirm ? "Play by the 1997 rules? The screen, sound and keys stay as they are."
-                                 : HelpFor(r);
+void Menu_Say(const char *text) {
     bool typed = sw_typing == 0 || (sw_typing == 1 && g_pageEntered);
     if (strcmp(g_voice.text, text) != 0) {
         Voice_Say(g_voice, text, typed);
         g_pageEntered = false;
     }
+}
+
+void Menu_PageEntered() { g_pageEntered = true; }
+
+static void UpdateVoice() {
+    const Row *r = CursorRow();
+    const char *text = g_confirm ? "Play by the 1997 rules? The screen, sound and keys stay as they are."
+                                 : HelpFor(r);
+    Menu_Say(text);
 }
 
 static void Push(int page) {
@@ -492,7 +500,7 @@ static void Activate(const Row &r) {
             BuildPages();
             Trace("reset settings");
         } else {
-            Trace("action %s (not built)", r.label);
+            Controls_Open();
         }
         break;
     }
@@ -523,6 +531,10 @@ static void Move(int dir) {
 }
 
 void Menu_Update() {
+    if (Controls_Active()) {
+        Controls_Update();
+        return;
+    }
     if (g_closed) {
         if (Engine_Pressed(KEY_ENTER) || Engine_Pressed(KEY_ESC)) {
             g_closed = false;
@@ -595,15 +607,6 @@ void Menu_Update() {
 // ───────────────────────────── Drawing ─────────────────────────────
 
 // What was drawn this frame, for `state`.
-struct DrawnRow {
-    char label[96];
-    char value[48];
-    const char *pane;
-    const char *fill;
-    int x0, y0, x1, y1;
-    bool dim, changed, marks;
-    int textRight;  // where the label (or value) ends; > x1 means it spills
-};
 static DrawnRow g_drawn[40];
 static int g_drawnCount;
 static struct {
@@ -614,7 +617,7 @@ static struct {
 static char g_legend[128];
 static int g_voiceLines, g_voiceNeeded, g_voiceMax, g_voiceWidth;
 
-static DrawnRow &Record(const char *pane, const char *label, const char *value, RowFill fill, int x0, int y0, int x1,
+DrawnRow &Menu_Record(const char *pane, const char *label, const char *value, RowFill fill, int x0, int y0, int x1,
                         int y1) {
     DrawnRow &d = g_drawn[g_drawnCount < 39 ? g_drawnCount++ : 39];
     snprintf(d.label, sizeof d.label, "%s", label);
@@ -631,7 +634,7 @@ static DrawnRow &Record(const char *pane, const char *label, const char *value, 
 }
 
 // Centred text clipped to the row, the original's way (DrawOneChoice).
-static void RowLabelCentred(S32 x0, S32 x1, S32 yc, const char *s, U8 colour) {
+void Menu_RowLabelCentred(S32 x0, S32 x1, S32 yc, const char *s, U8 colour) {
     MemoClip();
     SetClip(x0 + 1, yc - 25, x1 - 1, yc + 25);
     Ui_Text((x0 + x1) / 2 - Ui_TextWidth(s) / 2, yc - 18, s, colour);
@@ -668,9 +671,9 @@ static void DrawColumnRow(const Row &r, S32 x0, S32 y0, S32 x1, S32 y1, bool cur
         snprintf(text, sizeof text, "%s: %s", r.label, ValueText(r.arg, val, sizeof val));
     else
         snprintf(text, sizeof text, "%s", r.label);
-    RowLabelCentred(x0, x1, yc, text, active ? INK_WHITE : INK_DISABLED);
+    Menu_RowLabelCentred(x0, x1, yc, text, active ? INK_WHITE : INK_DISABLED);
 
-    DrawnRow &d = Record("column", text, r.type == R_SETTING ? ValueText(r.arg, val, sizeof val) : "", fill, x0, y0,
+    DrawnRow &d = Menu_Record("column", text, r.type == R_SETTING ? ValueText(r.arg, val, sizeof val) : "", fill, x0, y0,
                          x1, y1);
     d.dim = !active;
     d.textRight = (x0 + x1) / 2 + Ui_TextWidth(text) / 2 + 8;  // 8: the original's side padding
@@ -693,7 +696,7 @@ static void DrawWideRow(const char *pane, const Row &r, S32 x0, S32 y0, S32 x1, 
     Ui_Text(x0 + 16, yc - 18, label, active ? INK_WHITE : INK_DISABLED);
     RestoreClip();
 
-    DrawnRow &d = Record(pane, label, "", fill, x0, y0, x1, y1);
+    DrawnRow &d = Menu_Record(pane, label, "", fill, x0, y0, x1, y1);
     d.dim = !active;
     d.textRight = x0 + 16 + Ui_TextWidth(label);
 
@@ -730,7 +733,7 @@ static void DrawWideRow(const char *pane, const Row &r, S32 x0, S32 y0, S32 x1, 
     }
 }
 
-static void DrawScrollBar(S32 x0, S32 y0, S32 y1, int first, int visible, int total) {
+void Menu_DrawScrollBar(S32 x0, S32 y0, S32 y1, int first, int visible, int total) {
     // ScrollBarReview: 12 wide, thumb inset 2, in the margin.
     S32 x1 = x0 + 11;
     Cadre_Shade(x0 + 1, y0 + 1, x1 - 1, y1 - 1, MENU_SHADE_LVL);
@@ -799,12 +802,14 @@ static void DrawConfirm() {
         S32 ry0 = y0 + i * ROW_PITCH;
         RowFill fill = i == g_confirmCursor ? FILL_CURSOR : FILL_SHADE;
         Ui_RowBackground(x0, ry0, x1, ry0 + ROW_H, fill);
-        RowLabelCentred(x0, x1, ry0 + ROW_H / 2, answers[i], INK_WHITE);
-        Record("confirm", answers[i], "", fill, x0, ry0, x1, ry0 + ROW_H);
+        Menu_RowLabelCentred(x0, x1, ry0 + ROW_H / 2, answers[i], INK_WHITE);
+        Menu_Record("confirm", answers[i], "", fill, x0, ry0, x1, ry0 + ROW_H);
     }
 }
 
-static void DrawDialogueVoice() {
+S32 Menu_DialogueTop() { return (S32)Engine_LogicalH() - 1 - 137; }
+
+void Menu_DrawDialogue() {
     // MESSAGE.CPP NormalWinDial: 8 in from the sides, 137 tall, 8 off the bottom.
     S32 W = (S32)Engine_LogicalW(), H = (S32)Engine_LogicalH();
     S32 x0 = 8, y0 = H - 1 - 137, x1 = W - 1 - 8, y1 = H - 1 - 8;
@@ -828,7 +833,7 @@ static void DrawColumn() {
         ColorFont(INK_BLACK);
         Font(tx + 4, 64 + 4, title);  // the title shadow, +4,+4
         Ui_Text(tx, 64, title, INK_WHITE);
-        Record("title", title, "", FILL_SHADE, tx, 64, tx + Ui_TextWidth(title), 64 + 38);
+        Menu_Record("title", title, "", FILL_SHADE, tx, 64, tx + Ui_TextWidth(title), 64 + 38);
     }
 
     if (g_confirm) {
@@ -860,11 +865,11 @@ static void DrawColumn() {
             y += ROW_PITCH;
         }
         if (visible < p.count)
-            DrawScrollBar(x1 + 9, y - visible * ROW_PITCH, y - visible * ROW_PITCH + stackH - 1, g_scroll, visible,
+            Menu_DrawScrollBar(x1 + 9, y - visible * ROW_PITCH, y - visible * ROW_PITCH + stackH - 1, g_scroll, visible,
                           p.count);
     }
     if (help)
-        DrawDialogueVoice();
+        Menu_DrawDialogue();
 }
 
 static void DrawWide() {
@@ -874,11 +879,6 @@ static void DrawWide() {
     S32 leftW = inner * 464 / 880;
     S32 lx0 = side, lx1 = side + leftW - 1;
     S32 rx0 = lx1 + 1 + gap, rx1 = W - side - 1;
-    S32 chip = sw_chip;
-
-    // Where the help goes decides how far the rows may run.
-    S32 bandY0 = H - 24 - 86, bandY1 = H - 25;
-    S32 helpLineY = H - 168, promptY = H - 68;
 
     // Left pane: the hub's categories.
     const Page &hub = g_pages[P_HUB];
@@ -895,7 +895,7 @@ static void DrawWide() {
     int rp = RightPage();
     const Page &page = g_pages[rp];
     int n = page.count - RightFirst();
-    S32 limit = sw_band ? bandY0 - 16 : helpLineY - 8;
+    S32 limit = Menu_WideRowsLimit();
     int visible = (limit - top + ROW_GAP) / ROW_PITCH;
     if (visible > n)
         visible = n;
@@ -914,7 +914,7 @@ static void DrawWide() {
         y += ROW_PITCH;
     }
     if (visible < n)
-        DrawScrollBar(rx1 + 9, top, top + visible * ROW_PITCH - ROW_GAP - 1, g_scroll, visible, n);
+        Menu_DrawScrollBar(rx1 + 9, top, top + visible * ROW_PITCH - ROW_GAP - 1, g_scroll, visible, n);
 
     if (g_confirm)
         DrawConfirm();
@@ -923,6 +923,20 @@ static void DrawWide() {
     const char *keys[4], *words[4];
     int nk;
     LegendFor(CursorRow(), keys, words, &nk);
+    Menu_DrawFoot(keys, words, nk);
+}
+
+S32 Menu_WideRowsLimit() {
+    S32 H = (S32)Engine_LogicalH();
+    return sw_band ? H - 24 - 86 - 16 : H - 168 - 8;
+}
+
+void Menu_DrawFoot(const char **keys, const char **words, int nk) {
+    S32 W = (S32)Engine_LogicalW(), H = (S32)Engine_LogicalH();
+    const S32 side = 32;
+    S32 chip = sw_chip;
+    S32 bandY0 = H - 24 - 86, bandY1 = H - 25;
+    S32 helpLineY = H - 168, promptY = H - 68;
     S32 legendW = LegendWidth(keys, words, nk, chip);
     if (sw_band) {
         Ui_Panel(side, bandY0, W - side - 1, bandY1);
@@ -957,6 +971,8 @@ static void DrawOverlay() {
         "F5 key font 1x / 2x    F6 preset word",
         "F7 island palette      F8 help on 640 pages",
         "F9 Gameplay category",
+        "F10 Controls: one device per view / all columns",
+        "F11 pad names: connected / Xbox / PlayStation / Nintendo",
     };
     S32 n = (S32)(sizeof lines / sizeof lines[0]);
     S32 w = 8 * 50 + 16, h = n * 12 + 12;
@@ -979,6 +995,8 @@ void Menu_Draw() {
         const char *s = "Options closed. Enter opens them again.";
         Ui_TextShadow((S32)Engine_LogicalW() / 2 - Ui_TextWidth(s) / 2, (S32)Engine_LogicalH() / 2 - 19, s,
                       DIALOGUE_HERO * 16 + 12);
+    } else if (Controls_Active()) {
+        Controls_Draw();
     } else if (Wide() && !g_first) {
         DrawWide();
     } else {
@@ -1006,6 +1024,7 @@ static const SwitchDef kSwitches[] = {
     {"band", &sw_band, 0, 1},       {"typing", &sw_typing, 0, 2}, {"chip", &sw_chip, 1, 2},
     {"word", &sw_word, 0, 2},       {"island", &sw_island, 0, 1}, {"help640", &sw_help640, 0, 1},
     {"gameplay", &sw_gameplay, 0, 1}, {"overlay", &sw_overlay, 0, 1},
+    {"devices", &sw_devices, 0, 1},   {"padnames", &sw_padnames, 0, 3},
 };
 
 bool Menu_SetSwitch(const char *name, int v) {
@@ -1040,6 +1059,12 @@ int Menu_GetSwitch(const char *name) {
 }
 
 bool Menu_Open(const char *name) {
+    if (!strcmp(name, "Keys and buttons")) {
+        Menu_Open("Controls and camera");
+        Controls_Open();
+        return true;
+    }
+    Controls_Close();
     for (int p = 0; p < P_COUNT; p++) {
         if (g_pages[p].name && !strcmp(g_pages[p].name, name)) {
             g_first = false;
@@ -1085,7 +1110,7 @@ bool Menu_Set(const char *id, int value) {
     return false;
 }
 
-static void JsonString(FILE *f, const char *s) {
+void Menu_JsonString(FILE *f, const char *s) {
     fputc('"', f);
     for (; *s; s++) {
         unsigned char c = (unsigned char)*s;
@@ -1105,26 +1130,28 @@ void Menu_WriteState(FILE *f) {
             (unsigned)Engine_TimeMs(), (unsigned)Engine_PhysW(), (unsigned)Engine_PhysH(),
             (unsigned)Engine_LogicalW(), (unsigned)Engine_LogicalH(),
             (unsigned)Engine_Scale(Engine_PhysW(), Engine_PhysH()));
-    JsonString(f, g_closed ? "closed" : g_first ? "first-launch" : Wide() ? "wide" : "column");
+    Menu_JsonString(f, g_closed ? "closed" : g_first ? "first-launch" : Wide() ? "wide" : "column");
     fprintf(f, ",\"page\":");
-    JsonString(f, g_first ? "First launch" : g_pages[Wide() ? RightPage() : TopPage()].name);
+    Menu_JsonString(f, Controls_Active() ? "Keys and buttons"
+                       : g_first          ? "First launch"
+                                          : g_pages[Wide() ? RightPage() : TopPage()].name);
     fprintf(f, ",\"focus\":\"%s\",\"cursor\":%d,\"left_cursor\":%d,\"scroll\":%d,\"confirm\":%s",
             Wide() ? (g_focus == F_LEFT ? "left" : "right") : "column", g_cursor, g_leftCursor, g_scroll,
             g_confirm ? "true" : "false");
-    const Row *r = CursorRow();
+    const Row *r = Controls_Active() ? NULL : CursorRow();
     fprintf(f, ",\"cursor_row\":");
-    JsonString(f, r ? (r->type == R_PRESET_ROW ? PresetRowLabel(buf, sizeof buf) : r->label) : "");
+    Menu_JsonString(f, r ? (r->type == R_PRESET_ROW ? PresetRowLabel(buf, sizeof buf) : r->label) : "");
     fprintf(f, ",\"preset\":\"%s\",\"preset_changed\":%s,\"preset_row\":", kPresetNames[g_preset],
             PresetChanged() ? "true" : "false");
-    JsonString(f, PresetRowLabel(buf, sizeof buf));
+    Menu_JsonString(f, PresetRowLabel(buf, sizeof buf));
 
     fprintf(f, ",\"rows\":[");
     for (int i = 0; i < g_drawnCount; i++) {
         const DrawnRow &d = g_drawn[i];
         fprintf(f, "%s{\"pane\":\"%s\",\"label\":", i ? "," : "", d.pane);
-        JsonString(f, d.label);
+        Menu_JsonString(f, d.label);
         fprintf(f, ",\"value\":");
-        JsonString(f, d.value);
+        Menu_JsonString(f, d.value);
         fprintf(f, ",\"fill\":\"%s\",\"rect\":[%d,%d,%d,%d],\"dim\":%s,\"changed\":%s,\"marks\":%s,\"text_right\":%d}", d.fill, d.x0,
                 d.y0, d.x1, d.y1, d.dim ? "true" : "false", d.changed ? "true" : "false", d.marks ? "true" : "false",
                 d.textRight);
@@ -1136,16 +1163,20 @@ void Menu_WriteState(FILE *f) {
     if (shown > total)
         shown = total;
     fprintf(f, ",\"voice\":{\"text\":");
-    JsonString(f, g_voice.text);
+    Menu_JsonString(f, g_voice.text);
     fprintf(f, ",\"typed\":%s,\"letters_shown\":%d,\"letters\":%d,\"where\":", g_voice.typed ? "true" : "false",
             shown, total);
-    JsonString(f, g_helpBox.shown ? g_helpBox.kind : "none");
+    Menu_JsonString(f, g_helpBox.shown ? g_helpBox.kind : "none");
     fprintf(f, ",\"lines\":%d,\"lines_needed\":%d,\"max_lines\":%d,\"width\":%d,\"cut_off\":%s", g_voiceLines,
             g_voiceNeeded, g_voiceMax, g_voiceWidth, g_voiceNeeded > g_voiceMax && g_voiceMax ? "true" : "false");
     fprintf(f, ",\"rect\":[%d,%d,%d,%d]}", g_helpBox.x0, g_helpBox.y0, g_helpBox.x1, g_helpBox.y1);
     fprintf(f, ",\"legend\":");
-    JsonString(f, g_legend);
+    Menu_JsonString(f, g_legend);
 
+    if (Controls_Active()) {
+        fprintf(f, ",\"controls\":");
+        Controls_WriteState(f);
+    }
     fprintf(f, ",\"switches\":{");
     for (size_t i = 0; i < sizeof kSwitches / sizeof kSwitches[0]; i++)
         fprintf(f, "%s\"%s\":%d", i ? "," : "", kSwitches[i].name, *kSwitches[i].value);
