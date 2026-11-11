@@ -34,7 +34,7 @@ Steps (the window opens on Options at 1920x1080 with Modern: Twinsun, Zilla Slab
   6. Close the window. (--first starts on the first-launch choice.)
 STEPS
 read -r -p "Press Enter to open it. " _
-"$run/lba2menu" --size "$size" "${first[@]}" --trace "$run/trace.log" >"$run/out.log" 2>&1 || true
+"$run/lba2menu" --size "$size" ${first[@]+"${first[@]}"} --trace "$run/trace.log" >"$run/out.log" 2>&1 || true
 echo
 echo "Trace: $run/trace.log"
 grep -E " (switch|set|screen|apply|reset|back to) " "$run/trace.log" || true
