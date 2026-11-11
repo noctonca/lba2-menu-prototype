@@ -1588,9 +1588,12 @@ static void DrawWide() {
         y = rtop;
         for (int i = g_scroll; i < g_scroll + visible; i++) {
             RowFill fill = FILL_SHADE;
+            const Row &row = page.rows[RightFirst() + i];
             if (g_focus == F_RIGHT && i == g_cursor)
                 fill = FILL_CURSOR;
-            DrawWideRow("right", page.rows[RightFirst() + i], rx0, y, rx1, y + ROW_H, fill);
+            else if (row.type == R_PRESET_CHOICE && !g_first && row.arg == g_preset)
+                fill = FILL_CURRENT;  // the chosen preset wears the current-value plasma, as in the column
+            DrawWideRow("right", row, rx0, y, rx1, y + ROW_H, fill);
             y += ROW_PITCH;
         }
         if (visible < n)
