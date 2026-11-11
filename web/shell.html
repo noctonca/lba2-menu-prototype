@@ -153,12 +153,14 @@
     <div class="legend system">
       <span><i class="chip">Up</i><i class="chip">Down</i></span><span>Move</span>
       <span><i class="chip">Enter</i></span><span>Choose</span>
-      <span><i class="chip">Esc</i></span><span>Back</span>
+      <span><i class="chip">Esc</i><i class="chip">Q</i></span><span>Back</span>
       <span><i class="chip">F2</i></span><span>Screen size</span>
       <span><i class="chip">F1</i><i class="chip">F3</i><i class="chip">F4</i><i class="chip">F8</i></span><span>Switches being tried</span>
       <span><i class="chip">1</i>&ndash;<i class="chip">0</i></span><span>More switches</span>
     </div>
     <p class="voice">A gamepad works too. Some browsers keep F5, F11 and F12 for themselves.</p>
+    <p class="voice">In fullscreen, Firefox and Safari keep Esc for leaving it: use Q to go back. In Chrome and
+      Edge, Esc goes back and holding Esc leaves fullscreen.</p>
     <div class="rows">
       <button class="row" id="aboutClose">Back to the menu</button>
       <button class="row" id="forget" hidden>Forget the saved game files</button>
@@ -192,6 +194,18 @@
     if (document.fullscreenElement) document.exitFullscreen();
     else document.getElementById('stage').requestFullscreen().catch(function () {});
   });
+  // Browsers keep Esc for leaving fullscreen. Chrome and Edge let the page take
+  // it (holding Esc still leaves); in every browser Q is the menu's Esc too.
+  document.addEventListener('fullscreenchange', function () {
+    var kb = navigator.keyboard;
+    if (!kb || !kb.lock) return;
+    if (document.fullscreenElement) kb.lock(['Escape']).catch(function () {});
+    else kb.unlock();
+  });
+  window.addEventListener('keydown', function (e) {
+    if (!started || !about.hidden || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    if ((e.key === 'q' || e.key === 'Q') && Module._WebBack) Module._WebBack();
+  }, true);
 
   function say(text, isError) { statusEl.textContent = text; statusEl.className = isError ? 'alert frame frame--alert' : 'voice'; }
   onClick('pickFolder', function () { document.getElementById('folder').click(); });

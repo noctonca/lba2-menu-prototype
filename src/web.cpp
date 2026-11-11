@@ -11,3 +11,10 @@ extern "C" void SDL_ShowOpenFolderDialog(SDL_DialogFileCallback callback, void *
     if (callback)
         callback(userdata, NULL, -1);
 }
+
+// Browsers keep Esc for leaving fullscreen (Firefox and Safari always; Chrome
+// and Edge unless the page locks it), so the page sends Q as the menu's Esc.
+#include <emscripten.h>
+#include "engine.h"
+
+extern "C" EMSCRIPTEN_KEEPALIVE void WebBack() { Engine_Inject(KEY_ESC); }

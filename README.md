@@ -68,6 +68,10 @@ desktop window does; F2 still picks a size from the list, shown with black
 bars. The Fullscreen row and the bar's button put the page's stage in the
 browser's fullscreen; the row's request waits for the release of Enter, as a
 browser allows fullscreen only inside a key or click handler.
+Browsers keep Esc for leaving fullscreen, so on the web Q is the menu's Esc
+too (by the key's name, so it follows the keyboard layout). In fullscreen,
+Chrome and Edge also lock Esc for the page (Keyboard Lock): a press goes back,
+holding it leaves fullscreen. Firefox and Safari have no such lock.
 `tools/publish-web.sh` builds and puts `out/web` on the `gh-pages` branch.
 
 The page around the menu (the bar, the file picker, About) follows the LBA
