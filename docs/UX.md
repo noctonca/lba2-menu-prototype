@@ -242,7 +242,7 @@ the engine's.
 itself in the voice as the cursor lands on it; there is no help page.
 
 **Goal-Gradient, Zeigarnik.** The preset row says when the player's settings
-are no longer the preset ("Modern settings, changed"), and the changed values
+are no longer the preset ("Preset: Modern, changed"), and the changed values
 are in `ink-count`.
 
 **Peak-End Rule.** First launch ends with the game, not with a settings
@@ -259,6 +259,23 @@ is read; help cut off is not. **[self test: help cut off]**
   again from the start. So help is never cut off; a window's worth is still
   the aim for the Options pages, and the console help on More options
   is said whole.
+- **A window with more to come shows the dialogue's arrow** (2026-11-11, after
+  playing on the Xbox): sprites.hqr 6 in the window's bottom-right corner, as
+  MESSAGE.CPP marks a full page; in the wide band at the end of the voice,
+  short of the legend. It goes on the last window. **[self test: device]**
+
+**Jakob's Law (the player's own device).** The legend names what the player
+holds (2026-11-11): after a pad press the pad's buttons (A Open, B Back), after
+a key the keyboard's; the wait for a key keeps its own names. A keyboard is
+offered only where there is one: on a console the Keyboard view and Tab come
+once a key has been typed, and until then the legend names the pad.
+**[self test: device]**
+
+**The 1997 slider** (2026-11-11, after playing on the Xbox). In both layouts
+the row under the cursor is the slider, the 1997 red plasma up to the value with
+the label on it, and the other rows show only their label, as GAMEMENU.CPP
+DrawOneChoice draws a volume. The wide layout first squeezed the plasma into a
+strip at the value edge, which read badly on a TV (switch `slider=0`).
 
 - **One message at a time** (decided 2026-11-03). When there is something to
   tell about the row (a key clash, a question, the wait for a key, why a row

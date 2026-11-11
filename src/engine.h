@@ -86,6 +86,14 @@ bool Engine_InjectRaw(const char *name);
 bool Engine_InjectPad(const char *name);
 // What the player touched last: true when it was the pad.
 bool Engine_LastInputWasPad();
+// A keyboard is offered (the Keyboard view, Tab) only where there is one: always on a
+// desktop; on a console once a key has been typed on one.
+bool Engine_KeyboardSeen();
+void Engine_SetKeyboardSeen(bool seen);  // the "keyboard" switch: try a console's view on a desktop
+// The dialogue's "more to read" arrow (sprites.hqr 6, MESSAGE.CPP AffFleche), its
+// 25x25 drawn with its bottom-right corner 2 inside (x1, y1). False when the
+// game data has no sprites.hqr.
+bool Engine_DrawMoreArrow(S32 x1, S32 y1);
 // The connected pad's family: 0 none, 1 Xbox-like, 2 PlayStation, 3 Nintendo.
 S32 Engine_PadFamily();
 // The SDL name of a keyboard scancode.

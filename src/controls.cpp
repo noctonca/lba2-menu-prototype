@@ -344,7 +344,7 @@ static void Say();
 
 void Controls_Open() {
     g_active = true;
-    g_device = Engine_LastInputWasPad() ? 1 : 0;
+    g_device = Engine_LastInputWasPad() || !Engine_KeyboardSeen() ? 1 : 0;
     g_focusRight = false;
     g_group = 0;
     g_colCursor = 1;
@@ -497,7 +497,7 @@ static void UpdateWaiting() {
 }
 
 static void SwitchDevice() {
-    if (!sw_devices)
+    if (!sw_devices || !Engine_KeyboardSeen())  // no keyboard, no Keyboard view
         return;
     g_device ^= 1;
     g_column = 0;
@@ -799,7 +799,7 @@ static void Legend(const char **keys, const char **words, int *n) {
     } else if (!g_focusRight) {
         keys[*n] = "Enter", words[(*n)++] = "Open";
     }
-    if (sw_devices) {
+    if (sw_devices && Engine_KeyboardSeen()) {
         snprintf(other, sizeof other, "%s", DeviceName(!g_device));
         keys[*n] = "Tab", words[(*n)++] = other;
     }
@@ -1088,4 +1088,25 @@ void Controls_WriteState(FILE *f) {
         }
     }
     fprintf(f, "]}");
+}
+
+// A legend's key as the player's device names it: after a pad press, the pad's
+// button for the menu's fixed keys (engine.cpp kPadMenuKeys: A Enter, B Esc,
+// X Del, View Tab). The wait for a key keeps its own names: there B is not Esc.
+const char *Controls_LegendKey(const char *key) {
+    static char names[4][16];
+    static const struct {
+        const char *key;
+        int pad;
+    } kFixed[] = {{"Enter", 0}, {"Esc", 1}, {"Del", 2}, {"Tab", 4}};
+    // With no keyboard (a console before any key is typed) the pad's names from the start.
+    if ((!Engine_LastInputWasPad() && Engine_KeyboardSeen()) || g_waiting)
+        return key;
+    for (int i = 0; i < 4; i++) {
+        if (!strcmp(key, kFixed[i].key)) {
+            PadName(PAD_CODE_BASE + kFixed[i].pad, names[i], sizeof names[i]);
+            return names[i];
+        }
+    }
+    return key;
 }

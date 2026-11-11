@@ -208,11 +208,16 @@ struct Page {
 static Page g_pages[P_COUNT];
 
 // Switches.
-static int sw_band = 1, sw_typing = 0, sw_chip = 2, sw_tablefont = 1, sw_keyrule = 0, sw_word = 0, sw_island = 0, sw_help640 = 1,
+static int sw_band = 1, sw_typing = 0, sw_chip = 2, sw_tablefont = 1, sw_keyrule = 0, sw_word = 2, sw_island = 0, sw_help640 = 1,
            sw_gameplay = 0, sw_overlay = 0;
 // Composition (2026-11-03 design pass): sheet, legend, bg, scale (scale remakes the canvas).
 static int sw_sheet = 1, sw_legend = 1, sw_bg = 1, sw_scale = 1, sw_bandshade = 15, sw_panes = 1;
 static int sw_clash = 1, sw_short = 1, sw_narrow = 1;
+// Wide sliders: 1 the 1997 way, the row under the cursor is the slider (red plasma up to the
+// value, label on it) and the others show only the label (2026-11-11, after playing on the
+// Xbox: the plasma squeezed into a strip read badly); 0 a small slider at the value edge on
+// every row (2026-11-03).
+static int sw_slider = 1;
 // How long a window of help is held before the next is typed, in tenths of a second per word
 // (no key): 3 reads at about 200 words a minute. The demo reel holds a second a line.
 static int sw_pace = 3;
@@ -226,8 +231,9 @@ static const char *kVersion = "0.13.3-dev 011394f";
 static const char *kVersionString = "0.13.3-dev";  // LBA2_VERSION_STRING alone, as the log's first line has it
 static const char *kCommit = "011394fbc247";
 
-// The preset row: 0 names the preset ("Modern settings", decided 2026-11-03); 1-3 the earlier
-// word-and-colon forms to compare ("Settings: Modern", "Preset: Modern", "Rules: Modern").
+// The preset row: 2 "Preset: Modern", the page's own name (2026-11-11, after playing on the
+// Xbox: "Modern settings" read as a page of settings, not the preset); 0 "Modern settings"
+// (decided 2026-11-03), 1 and 3 the other word-and-colon forms ("Settings: Modern", "Rules: Modern").
 static const char *kWords[3] = {"Settings", "Preset", "Rules"};
 
 static const char *FormatPresetRow(char *buf, size_t n, const char *name, bool changed) {
@@ -323,7 +329,7 @@ static void BuildPages() {
     AddRow(adv, R_ACTION, "Console", A_CONSOLE, "Messages, and commands from a keyboard.");
     AddRow(adv, R_ACTION, "Reset settings", A_RESET, "Puts every setting back as a fresh install has it.");
     if (ResetBackDiffers())
-        AddRow(adv, R_BACK_TO_MINE, "Back to my settings", BACK_RESET, "Puts back what you had before the reset.");
+        AddRow(adv, R_BACK_TO_MINE, "Undo reset", BACK_RESET, "Puts back what you had before the reset.");
 
     Page &gp = g_pages[P_GAMEPLAY];
     gp.name = "Gameplay";
@@ -1101,12 +1107,34 @@ static void DrawWideRow(const char *pane, const Row &r, S32 x0, S32 y0, S32 x1, 
     S32 yc = (y0 + y1) / 2;
     char label[160], val[48];
     bool active = RowActive(r);
-    Ui_RowBackground(x0, y0, x1, y1, fill);
+    // The 1997 slider (GAMEMENU.CPP DrawOneChoice): under the cursor the whole row is the
+    // slider plasma up to the value, fill-selected after it, the label on it.
+    const bool barRow = sw_slider && r.type == R_SETTING && kSettings[r.arg].kind == K_SLIDER;
+    if (barRow && fill == FILL_CURSOR && active) {
+        S32 x2 = x0 + (x1 - x0) * g_val[r.arg] / kSettings[r.arg].max;
+        Cadre_BackupCorners(x0, y0, x1, y1);
+        Cadre_FireBar(x0, y0, x1, y1, PLASMA_SLIDER);
+        if (x2 < x1)
+            Box(x2, y0, x1, y1, FILL_SELECTED);
+        Cadre_Frame(x0, y0, x1, y1);
+    } else {
+        Ui_RowBackground(x0, y0, x1, y1, fill);
+    }
 
-    if (r.type == R_PRESET_ROW)
-        PresetRowLabel(label, sizeof label);
-    else
+    // The preset row: "Preset" at the label's edge, the preset where a value goes.
+    const char *presetValue = NULL;
+    char presetText[160];
+    if (r.type == R_PRESET_ROW) {
+        PresetRowLabel(presetText, sizeof presetText);
+        char *colon = strstr(presetText, ": ");
+        if (colon) {
+            *colon = 0;
+            presetValue = colon + 2;
+        }
+        snprintf(label, sizeof label, "%s", presetText);
+    } else {
         snprintf(label, sizeof label, "%s", r.label);
+    }
 
     MemoClip();
     SetClip(x0 + 1, y0, x1 - 1, y1);
@@ -1127,6 +1155,8 @@ static void DrawWideRow(const char *pane, const Row &r, S32 x0, S32 y0, S32 x1, 
         if (st.kind == K_STEPS) {
             Ui_Steps(valueRight, yc, st.max, g_val[r.arg], &left);
             snprintf(d.value, sizeof d.value, "%d/%d", g_val[r.arg], st.max);
+        } else if (st.kind == K_SLIDER && sw_slider) {
+            snprintf(d.value, sizeof d.value, "%d", g_val[r.arg]);  // the bar is the value
         } else if (st.kind == K_SLIDER) {
             left = valueRight - 128;
             if (d.textRight + 8 > left - 17)
@@ -1143,7 +1173,7 @@ static void DrawWideRow(const char *pane, const Row &r, S32 x0, S32 y0, S32 x1, 
         }
         d.changed = changed;
         d.valueRight = valueRight;
-        if (fill == FILL_CURSOR && active) {
+        if (fill == FILL_CURSOR && active && !(st.kind == K_SLIDER && sw_slider)) {
             Ui_ChangeMarks(left - 17, valueRight + 17, yc);  // in the padding: the value never moves
             d.marks = true;
         }
@@ -1154,6 +1184,13 @@ static void DrawWideRow(const char *pane, const Row &r, S32 x0, S32 y0, S32 x1, 
             d.textRight = x1 + (d.textRight + 8 - (left - 17));
         Ui_Text(left, yc - 18, kVersion, INK_DISABLED);
         snprintf(d.value, sizeof d.value, "%s", kVersion);
+        d.valueRight = valueRight;
+    } else if (presetValue) {
+        S32 left = valueRight + 1 - Ui_TextInkWidth(presetValue);
+        if (d.textRight + 8 > left - 17)
+            d.textRight = x1 + (d.textRight + 8 - (left - 17));
+        Ui_Text(left, yc - 18, presetValue, PresetChanged() ? INK_COUNT : INK_WHITE);
+        snprintf(d.value, sizeof d.value, "%s", presetValue);
         d.valueRight = valueRight;
     } else if (r.type == R_PRESET_CHOICE && r.arg == g_preset && PresetChanged()) {
         Ui_Text(valueRight + 1 - Ui_TextInkWidth("Changed"), yc - 18, "Changed", INK_COUNT);
@@ -1287,6 +1324,17 @@ static void DrawConfirm(const char *pane, S32 x0, S32 x1, S32 y0) {
     }
 }
 
+// Paged help shows the dialogue's arrow while a later window is still to come (MESSAGE.CPP:
+// AffFleche at a full page), as a dialogue does (2026-11-11, after playing on the Xbox).
+static bool g_moreArrow;
+static void DrawMoreArrow(S32 x1, S32 y1) {
+    S32 page = 0, pages = 1;
+    Voice_LastPage(&page, &pages);
+    g_moreArrow = page + 1 < pages && Engine_DrawMoreArrow(x1, y1);
+}
+bool Menu_MoreArrow() { return g_moreArrow; }
+const char *Menu_Legend() { return g_legend; }
+
 S32 Menu_DialogueTop() { return (S32)Engine_LogicalH() - 1 - 137; }
 
 void Menu_DrawDialogue() {
@@ -1299,6 +1347,7 @@ void Menu_DrawDialogueIn(S32 x0, S32 y0, S32 x1, S32 y1) {
     Ui_Panel(x0, y0, x1, y1, PANEL_SHADE_LVL);
     g_voiceLines = Voice_Draw(g_voice, x0 + 16, y0 + 12, x1 - x0 - 32, 3, &g_voiceNeeded);
     g_voiceMax = 3;
+    DrawMoreArrow(x1, y1);  // MESSAGE.CPP AffFleche: the window's own corner
     g_helpBox.shown = true;
     g_helpBox.kind = "dialogue";
     g_helpBox.x0 = x0; g_helpBox.y0 = y0; g_helpBox.x1 = x1; g_helpBox.y1 = y1;
@@ -1454,7 +1503,11 @@ static S32 BandVoiceWidth(const char **keys, const char **words, int nk) {
     return voiceW > 620 ? 620 : voiceW;
 }
 
-void Menu_DrawFoot(const char **keys, const char **words, int nk) {
+void Menu_DrawFoot(const char **keysIn, const char **words, int nk) {
+    // After a pad press the legend names the pad's buttons, not the keyboard's.
+    const char *keys[8];
+    for (int i = 0; i < nk && i < 8; i++)
+        keys[i] = Controls_LegendKey(keysIn[i]);
     WideFrame f = Menu_WideFrame();
     S32 W = f.w, H = f.h;
     const S32 side = 32;
@@ -1469,6 +1522,11 @@ void Menu_DrawFoot(const char **keys, const char **words, int nk) {
         g_voiceLines = Voice_Draw(g_voice, bx0 + 16, bandY0 + 5, voiceW, 2, &g_voiceNeeded);
         g_voiceMax = 2;
         g_voiceWidth = voiceW;
+        // More to read: the dialogue's arrow at the voice's bottom-right corner, short of the legend.
+        S32 arrowX1 = bx0 + 16 + voiceW + 29, legendX = bx1 - 24 - legendW + 1;
+        if (arrowX1 > legendX - 8)
+            arrowX1 = legendX - 8;
+        DrawMoreArrow(arrowX1, bandY1);
         if (sw_legend)
             DrawLegendStacked(bx1 - 24 - legendW + 1, bandY0 + 7, keys, words, nk, chip);
         else
@@ -1627,17 +1685,21 @@ struct SwitchDef {
 };
 static const SwitchDef kSwitches[] = {
     {"band", &sw_band, 0, 1, 1},           {"typing", &sw_typing, 0, 2, 0},   {"chip", &sw_chip, 1, 2, 2},   {"tablefont", &sw_tablefont, 1, 2, 1}, {"keyrule", &sw_keyrule, 0, 1, 0},
-    {"word", &sw_word, 0, 3, 0},           {"island", &sw_island, 0, 1, 0},   {"help640", &sw_help640, 0, 1, 1},
+    {"word", &sw_word, 0, 3, 2},           {"island", &sw_island, 0, 1, 0},   {"help640", &sw_help640, 0, 1, 1},
     {"gameplay", &sw_gameplay, 0, 1, 0},   {"overlay", &sw_overlay, 0, 1, 0},
     {"devices", &sw_devices, 0, 1, 1},     {"padnames", &sw_padnames, 0, 3, 0},   {"heads", &sw_heads, 0, 1, 1},
     {"sheet", &sw_sheet, 0, 1, 1},         {"legend", &sw_legend, 0, 1, 1},       {"bg", &sw_bg, 0, 1, 1},
     {"scale", &sw_scale, 0, 1, 1},         {"bandshade", &sw_bandshade, 0, 15, 15}, {"panes", &sw_panes, 0, 1, 1},
     {"clash", &sw_clash, 0, 1, 1},       {"short", &sw_short, 0, 1, 1},
     {"narrow", &sw_narrow, 0, 1, 1},     {"exptable", &sw_exptable, 0, 1, 1},
-    {"fpsrow", &sw_fpsrow, 0, 1, 0},     {"pace", &sw_pace, 1, 9, 3},
+    {"fpsrow", &sw_fpsrow, 0, 1, 0},     {"slider", &sw_slider, 0, 1, 1},     {"pace", &sw_pace, 1, 9, 3},
 };
 
 bool Menu_SetSwitch(const char *name, int v) {
+    if (!strcmp(name, "keyboard")) {  // 0: as a console with no keyboard yet
+        Engine_SetKeyboardSeen(v != 0);
+        return true;
+    }
     for (size_t i = 0; i < sizeof kSwitches / sizeof kSwitches[0]; i++) {
         const SwitchDef &s = kSwitches[i];
         if (strcmp(s.name, name) != 0)
@@ -1968,6 +2030,7 @@ void Menu_WriteState(FILE *f) {
     fprintf(f, ",\"lines\":%d,\"lines_needed\":%d,\"max_lines\":%d,\"width\":%d,\"page\":%d,\"pages\":%d,\"cut_off\":%s",
             g_voiceLines, g_voiceNeeded, g_voiceMax, g_voiceWidth, (int)page, (int)pages,
             g_voiceNeeded >= VOICE_MAX_LINES ? "true" : "false");
+    fprintf(f, ",\"more_arrow\":%s", g_moreArrow ? "true" : "false");
     fprintf(f, ",\"rect\":[%d,%d,%d,%d]}", g_helpBox.x0, g_helpBox.y0, g_helpBox.x1, g_helpBox.y1);
     fprintf(f, ",\"legend\":");
     Menu_JsonString(f, g_legend);

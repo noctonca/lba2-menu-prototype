@@ -74,4 +74,6 @@ const char *Menu_CursorLabel();  // the cursor row of an Options page; "" elsewh
 bool Menu_CursorSetting(bool *active);  // the cursor row is a setting; active: not dimmed
 const char *Menu_CursorValue();  // the value drawn on the cursor row last frame
 const char *Menu_PresetLabel();
+const char *Menu_Legend();  // the footer's legend as the last draw had it: "[A] Open  [B] Back"
+bool Menu_MoreArrow();      // the last draw showed the dialogue's arrow: more help to come
 const char *Menu_ConsoleMode();  // closed, full or read-only  // the preset row as it reads ("Modern settings, changed")

@@ -48,3 +48,5 @@ int Controls_Where(char *buf, size_t n);
 bool Controls_Binding(const char *action, int column, char *out, size_t n);
 // The pad's Start as the voice says it (Menu, Options, Plus).
 void Controls_StartSaid(char *out, size_t n);
+// A legend key ("Enter", "Esc", "Del", "Tab") as the pad names it after a pad press.
+const char *Controls_LegendKey(const char *key);

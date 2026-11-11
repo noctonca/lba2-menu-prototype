@@ -103,7 +103,7 @@ own switches are on F1 to F12 and 0 to 9.
 | F4 | `typing` | help typed on every cursor move (decided) / on entering a page only / not typed |
 | F5 | `chip` | the 8x8 key font at 2x (decided) / 1x |
 | Shift+F5 | `tablefont` | the Experimental table's 8x8 font at 1x (decided) / 2x |
-| F6 | `word` | the preset row: Modern settings (decided) / Settings: Modern / Preset: Modern / Rules: Modern |
+| F6 | `word` | the preset row: Preset: Modern, wide "Preset" with Modern where a value goes (2026-11-11) / Modern settings (decided 2026-11-03) / Settings: Modern / Rules: Modern |
 | F7 | `island` | Citadel's palette, as Options opened in play would have |
 | F8 | `help640` | help in the dialogue window on every one-column page (decided) / only where it must show |
 | F9 | `gameplay` | the Gameplay category |
@@ -122,6 +122,8 @@ own switches are on F1 to F12 and 0 to 9.
 | 9 | `narrow` | 640 wide: key chips 116 wide, so "Behaviour action" clears them / 120 |
 | 0 | `exptable` | More options: one dense table in the 8x8 font (decided) / the game-font list, a page per group |
 | | `fpsrow` | the Frame rate row on Display and graphics, under Vsync (decided) / on Advanced and reset (no key: `--switch fpsrow=1`) |
+| | `slider` | wide sliders: the 1997 way, the cursor row is the red plasma up to the value (2026-11-11) / a small slider at the value edge on every row |
+| | `keyboard` | 1 a keyboard is there (a desktop) / 0 as a console before a key is typed: no Keyboard view or Tab, the legend names the pad |
 | | `pace` | how long a window of long help is held before the next, in tenths of a second a word: 3 (decided) / 1 to 9 (no key: `--switch pace=5`) |
 
 Keys 1 to 6 are the composition review of 2026-11-03 (wide and large screens).
@@ -229,7 +231,7 @@ said more than its rows are. "More options" says what it is, the settings of
 the other pages in more depth, and leaves the warning to the rows it is
 about. It says options, not settings, by the rule in lba2cc's glossary: options
 is the place (the menu, Advanced options, a page), settings are the values
-chosen there (Reset settings, Modern settings).
+chosen there (Reset settings).
 
 The settings tables have no field saying which rows are experimental yet; the plan's ring field would give it, and the hand list in
 `experimental.cpp` stands in for it.
@@ -255,8 +257,8 @@ instead.
   back, Page Up and Page Down (the pad's LB and RB) move a window at a time.
   A changed value takes the count colour.
 - A changed value marks the preset changed. Choosing a preset, and Reset
-  settings, put every value back to its default; Back to my settings puts them
-  back and names them.
+  settings, put every value back to its default; Back to my settings (after a
+  preset) and Undo reset (after a reset) put them back and name them.
 - The help is the console help, said in the voice. The game font has no `=`,
   `~` or `+`, so the voice says them as `:`, "about" and "and". Eleven console
   helps need three or four lines of the voice; they page on a window at a time
@@ -339,7 +341,7 @@ walk finds starts with the walk's name:
   the change marks the preset row, and Del puts the default back; Page Down and
   Page Up stop at the last and first rows; Modern puts a changed value back to
   its default, Back to my settings names it and puts it back; Reset settings
-  does the same, and the cursor stays on Reset settings.
+  and Undo reset do the same, and the cursor stays on Reset settings.
 - `console:` the Console row shows the version; Enter after a key opens the
   full console, which Down and Enter leave open and Esc closes; Enter after a
   pad button opens it read-only, and a pad button, the d-pad or a key closes

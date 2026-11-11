@@ -10,6 +10,7 @@
 #include "menu.h"
 #include "menu_parts.h"
 #include "trace.h"
+#include "ui.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -929,8 +930,8 @@ struct Walker {
                                                     Repr(Menu_PresetLabel()).c_str(), Repr(fresh.c_str()).c_str())))
             return;
         Key("down");
-        if (!Expect(!strcmp(Menu_CursorLabel(), "Back to my settings"),
-                    Fmt("preset: after a reset, the row after Reset settings is %s, not Back to my settings",
+        if (!Expect(!strcmp(Menu_CursorLabel(), "Undo reset"),
+                    Fmt("preset: after a reset, the row after Reset settings is %s, not Undo reset",
                         Repr(Menu_CursorLabel()).c_str())))
             return;
         OpenToo(page);
@@ -940,16 +941,16 @@ struct Walker {
                                                   Repr(Menu_CursorValue()).c_str(), Repr(v0.c_str()).c_str())))
             return;
         OpenToo("Advanced and reset");
-        if (!MoveTo("Back to my settings"))
+        if (!MoveTo("Undo reset"))
             return;
         Key("enter");
-        Expect(Menu_PresetLabel() == pMine, Fmt("preset: Back to my settings after a reset leaves the preset row at %s, not %s",
+        Expect(Menu_PresetLabel() == pMine, Fmt("preset: Undo reset after a reset leaves the preset row at %s, not %s",
                                                 Repr(Menu_PresetLabel()).c_str(), Repr(pMine.c_str()).c_str()));
-        Expect(!RowDrawn("Back to my settings"), "preset: Back to my settings stays after it put the settings back");
+        Expect(!RowDrawn("Undo reset"), "preset: Undo reset stays after it put the settings back");
         OpenToo(page);
         if (!MoveTo(setting))
             return;
-        Expect(Menu_CursorValue() == mine, Fmt("preset: Back to my settings after a reset leaves %s at %s, not %s", setting,
+        Expect(Menu_CursorValue() == mine, Fmt("preset: Undo reset after a reset leaves %s at %s, not %s", setting,
                                                Repr(Menu_CursorValue()).c_str(), Repr(mine.c_str()).c_str()));
     }
 
@@ -1097,17 +1098,17 @@ struct Walker {
         Expect(std::string(Menu_PresetLabel()).find(", changed") == std::string::npos,
                Fmt("experimental: Reset settings leaves the preset row at %s", Repr(Menu_PresetLabel()).c_str()));
         Key("down");
-        if (!Expect(!strcmp(Menu_CursorLabel(), "Back to my settings"),
+        if (!Expect(!strcmp(Menu_CursorLabel(), "Undo reset"),
                     Fmt("experimental: after a reset the row after Reset settings is %s", Repr(Menu_CursorLabel()).c_str())))
             return;
         Expect(Voice().find(name) != std::string::npos || Voice().find(" more.") != std::string::npos,
-               Fmt("experimental: Back to my settings after a reset does not name %s: %s", name.c_str(),
+               Fmt("experimental: Undo reset after a reset does not name %s: %s", name.c_str(),
                    Repr(Voice().c_str()).c_str()));
         Key("enter");
         if (!OpenAgain(kExpPage))
             return;
         ToRows();
-        Expect(Exp_CursorValue() == v1, Fmt("experimental: Back to my settings after a reset leaves %s at %s, not %s",
+        Expect(Exp_CursorValue() == v1, Fmt("experimental: Undo reset after a reset leaves %s at %s, not %s",
                                              name.c_str(), Repr(Exp_CursorValue()).c_str(), Repr(v1.c_str()).c_str()));
     }
 
@@ -1414,6 +1415,58 @@ struct Walker {
         Console();
         Binding(twoDevices);
         PadOnly(twoDevices);
+        Devices();
+    }
+
+    // The player's device (2026-11-11, after playing on the Xbox): after a pad press the
+    // legend names the pad's buttons, after a key the keyboard's; with no keyboard the
+    // Keys and buttons page shows the pad and Tab offers no Keyboard view; help that
+    // pages shows the dialogue's arrow until its last window.
+    void Devices() {
+        if (Wanted("Advanced and reset")) {
+            Fresh("Advanced and reset");
+            Pad("dpad-down");
+            Pad("dpad-up");
+            std::string l = Menu_Legend();
+            Expect(l.empty() || (l.find("[Enter]") == std::string::npos && l.find("[Esc]") == std::string::npos),
+                   Fmt("device: after a pad press the legend reads %s", Repr(l.c_str()).c_str()));
+            Press("Down");
+            l = Menu_Legend();
+            Expect(l.empty() || (l.find("[Esc]") != std::string::npos && l.find("[B]") == std::string::npos),
+                   Fmt("device: after a key the legend reads %s", Repr(l.c_str()).c_str()));
+
+            Fresh("Advanced and reset");
+            if (MoveTo("More options")) {
+                S32 page = 0, pages = 1;
+                Voice_LastPage(&page, &pages);
+                Expect(pages < 2 || Menu_MoreArrow(), Fmt("device: help in %d windows shows no arrow on the first", (int)pages));
+                Wait(1500);
+                Voice_LastPage(&page, &pages);
+                Expect(page + 1 == pages && !Menu_MoreArrow(),
+                       Fmt("device: help on window %d of %d %s the arrow", (int)page + 1, (int)pages,
+                           Menu_MoreArrow() ? "shows" : "has no"));
+            }
+        }
+        if (Wanted("Keys and buttons")) {
+            Menu_SetSwitch("keyboard", 0);
+            Fresh("Keys and buttons");
+            std::string where = ControlsWhere(), l = Menu_Legend();
+            Expect(where.find("Gamepad") == 0, Fmt("device: with no keyboard Keys and buttons opens on %s", Repr(where.c_str()).c_str()));
+            Expect(l.find("Tab") == std::string::npos && l.find("Keyboard") == std::string::npos,
+                   Fmt("device: with no keyboard the legend reads %s", Repr(l.c_str()).c_str()));
+            Key("tab");
+            where = ControlsWhere();
+            Expect(where.find("Gamepad") == 0, Fmt("device: with no keyboard Tab switched to %s", Repr(where.c_str()).c_str()));
+            Menu_SetSwitch("keyboard", 1);
+        }
+        if (Wanted("Advanced and reset")) {  // no keyboard, no press yet: the pad's names already
+            Menu_SetSwitch("keyboard", 0);
+            Fresh("Advanced and reset");
+            std::string l = Menu_Legend();
+            Expect(l.empty() || (l.find("[Enter]") == std::string::npos && l.find("[Esc]") == std::string::npos),
+                   Fmt("device: with no keyboard and no press the legend reads %s", Repr(l.c_str()).c_str()));
+            Menu_SetSwitch("keyboard", 1);
+        }
     }
 };
 

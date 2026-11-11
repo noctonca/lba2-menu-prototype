@@ -4,6 +4,7 @@
 #include <SVGA/CLIP.H>
 #include <SVGA/DIRTYBOX.H>
 #include <SVGA/FONT.H>
+#include <SVGA/GRAPH.H>
 #include <SVGA/INITMODE.H>
 #include <SVGA/SCREEN.H>
 #include <SVGA/VIDEO.H>
@@ -51,6 +52,7 @@ static U8 *s_palMenu;
 static U8 *s_xplBoot;        // the XPL the boot menu shades through (citabau)
 static U8 *s_xplIsland;      // Citadel's, for Options opened in play
 static U8 *s_menuImage;      // 640x480, as authored
+static U8 *s_arrow;          // sprites.hqr 6: the dialogue's bottom-right arrow
 static bool s_islandPal;
 static const U8 *s_palCurrent;
 static bool s_quit;
@@ -347,6 +349,11 @@ bool Engine_Init(const EngineConfig &cfg) {
     DiscImage_Mount(dir, "lba2.hqr");
     JoinPath(s_ress, sizeof s_ress, dir, "ress.hqr");
     JoinPath(s_screen, sizeof s_screen, dir, "screen.hqr");
+    char sprites[1024];
+    JoinPath(sprites, sizeof sprites, dir, "sprites.hqr");
+    s_arrow = (U8 *)LoadMalloc_HQR(sprites, 6);  // as PERSO.CPP's HQRPtrSprite, entry 6
+    if (!s_arrow)
+        fprintf(stderr, "no sprites.hqr in %s: paged help has no arrow\n", dir);
 
     s_palMenu = (U8 *)LoadMalloc_HQR(s_ress, RESS_PAL);
     U8 *font = (U8 *)LoadMalloc_HQR(s_ress, RESS_FONT_GPM);
@@ -487,6 +494,11 @@ static bool PadDown(int k) {
 static bool s_rawDown[256 + PAD_CODE_COUNT];
 static S32 s_rawPressed, s_rawInjected;
 static bool s_lastPad;
+#ifdef LBA2_PROTO_SDL
+static bool s_keyboardSeen = true;
+#else
+static bool s_keyboardSeen;
+#endif
 
 static int Axis(PlatformGamepadAxis a) { return g_platform.input.gamepad_axis(s_pad, a); }
 
@@ -516,6 +528,8 @@ static void ScanRaw() {
     s_rawInjected = 0;
     if (s_rawPressed)
         s_lastPad = s_rawPressed >= PAD_CODE_BASE;
+    if (s_rawPressed && s_rawPressed < PAD_CODE_BASE)
+        s_keyboardSeen = true;
     for (int i = 0; i < 256 + PAD_CODE_COUNT; i++) {
         bool down = i < 256 ? (i > 0 && CheckKey((U32)i) != 0) : PadRawDown(i - 256);
         if (down && !s_rawDown[i]) {
@@ -523,12 +537,24 @@ static void ScanRaw() {
             if (!s_rawPressed)
                 s_rawPressed = code;
             s_lastPad = i >= 256;
+            if (i < 256)
+                s_keyboardSeen = true;
         }
         s_rawDown[i] = down;
     }
 }
 
 S32 Engine_RawPressed() { return s_rawPressed; }
+
+bool Engine_KeyboardSeen() { return s_keyboardSeen; }
+void Engine_SetKeyboardSeen(bool seen) { s_keyboardSeen = seen; }
+
+bool Engine_DrawMoreArrow(S32 x1, S32 y1) {
+    if (!s_arrow)
+        return false;
+    AffGraph(0, x1 - 27, y1 - 27, s_arrow);  // INVENT.CPP DrawAngles, ARROW_ID
+    return true;
+}
 bool Engine_LastInputWasPad() { return s_lastPad; }
 
 static const char *kPadCodeNames[PAD_CODE_COUNT] = {
