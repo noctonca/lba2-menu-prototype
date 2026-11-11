@@ -429,6 +429,9 @@ struct Walker {
     // A fresh process's state under this combo, as the again line starts it.
     void Start() {
         Menu_Reset();
+        // Presets set the rules only, as the plan has it: the checks below were made for
+        // that, and the game font is the one they can read (a combo may turn it on).
+        Menu_SetSwitch("presetlook", 0);
         for (size_t s = 0; s < switches.size(); s++)
             Menu_SetSwitch(switches[s].name.c_str(), switches[s].value);
         // Help shown whole, so a check never depends on how far the typing got.
@@ -1493,7 +1496,7 @@ int Selftest_Run(const SelftestOptions &opt, const char *self) {
             return 2;
         }
         w.switches = combo;
-        w.again = Fmt("%s --size %s", self, w.size.c_str());
+        w.again = Fmt("%s --size %s --switch presetlook=0", self, w.size.c_str());
         for (size_t s = 0; s < combo.size(); s++)
             w.again += Fmt(" --switch %s=%d", combo[s].name.c_str(), combo[s].value);
         w.again += " --switch typing=2";

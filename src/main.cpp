@@ -425,8 +425,12 @@ int Lba2Main(int argc, char *argv[]) {
         if (Engine_WindowResized(&dragW, &dragH))
             SwitchScreen(dragW, dragH, false);
         // The composition switches (design pass, 2026-11-03).
-        if (Engine_Pressed(KEY_1))
-            Menu_SetSwitch("sheet", !Menu_GetSwitch("sheet"));
+        if (Engine_Pressed(KEY_1)) {
+            if (Engine_ShiftHeld())  // presets set the look too, or the rules only
+                Menu_SetSwitch("presetlook", !Menu_GetSwitch("presetlook"));
+            else
+                Menu_SetSwitch("sheet", !Menu_GetSwitch("sheet"));
+        }
         if (Engine_Pressed(KEY_2))
             Menu_SetSwitch("legend", !Menu_GetSwitch("legend"));
         if (Engine_Pressed(KEY_3)) {

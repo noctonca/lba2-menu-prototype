@@ -121,18 +121,77 @@ static bool g_haveBeforeReset;
 
 static const char *kPresetNames[2] = {"Modern", "Classic"};
 
+// Switch presetlook (asked for 2026-11-12, prototype only): a preset also sets the look, so
+// choosing one shows the difference. Classic: the 1997 picture, the game font, Classic
+// cameras, 640 x 480. Modern: Twinsun, Zilla Slab, Auto and Follow cameras, the screen the
+// prototype started at (the display's own size on a console). Off: presets set the rules
+// only, as the plan has it; the self test runs with it off. A real port may leave the
+// screen alone.
+static int sw_presetlook = 1;
+
+struct LookDef {
+    int s;
+    int modern, classic;
+};
+static const LookDef kLook[] = {
+    {S_BACKGROUND, 2, 0},  // Twinsun / Picture
+    {S_FONT, 1, 0},        // Zilla Slab / Game
+    {S_CAM_OUT, 1, 0},     // Auto / Classic
+    {S_CAM_IN, 1, 0},      // Follow / Classic
+};
+static const int kLookCount = (int)(sizeof kLook / sizeof kLook[0]);
+
+static const LookDef *Look(int s) {
+    if (!sw_presetlook)
+        return NULL;
+    for (int i = 0; i < kLookCount; i++)
+        if (kLook[i].s == s)
+            return &kLook[i];
+    return NULL;
+}
+
+static bool PresetSets(int s) { return kSettings[s].presetSets || Look(s); }
+
+// What a fresh install has (= Modern).
+static int FreshValue(int s) {
+    const LookDef *l = Look(s);
+    return l ? l->modern : kSettings[s].fresh;
+}
+
 static int PresetValue(int preset, int s) {
-    const Setting &st = kSettings[s];
-    if (!st.presetSets)
-        return st.fresh;
-    return preset == 1 ? st.classic : st.fresh;
+    if (!PresetSets(s))
+        return FreshValue(s);
+    if (preset != 1)
+        return FreshValue(s);
+    const LookDef *l = Look(s);
+    return l ? l->classic : kSettings[s].classic;
+}
+
+// The screen, with presetlook on: Classic's is 640 x 480, Modern's the one the prototype
+// started at.
+struct ScreenSize {
+    U32 w, h;
+};
+static ScreenSize g_modernScreen = {1920, 1080};
+static ScreenSize g_beforeScreen, g_beforeResetScreen;
+
+static ScreenSize ScreenNow() { return ScreenSize{Engine_PhysW(), Engine_PhysH()}; }
+static bool SameScreen(ScreenSize a, ScreenSize b) { return a.w == b.w && a.h == b.h; }
+static ScreenSize PresetScreen(int preset) { return preset == 1 ? ScreenSize{640, 480} : g_modernScreen; }
+
+static void SetScreenTo(ScreenSize to) {
+    if (SameScreen(to, ScreenNow()))
+        return;
+    if (Engine_SetScreen(to.w, to.h, true))
+        Menu_NoteScreen();
 }
 
 // "Changed": the player's values differ from the chosen preset in a setting presets set,
-// or a tuning value differs from its default (a preset puts every one back).
+// or a tuning value differs from its default (a preset puts every one back). The screen
+// is the player's: choosing another one does not mark the preset changed.
 static bool PresetChanged() {
     for (int s = 0; s < S_COUNT; s++)
-        if (kSettings[s].presetSets && g_val[s] != PresetValue(g_preset, s))
+        if (PresetSets(s) && g_val[s] != PresetValue(g_preset, s))
             return true;
     return Exp_AnyChanged();
 }
@@ -149,13 +208,16 @@ static void ApplyPreset(int p) {
         memcpy(g_before, g_val, sizeof g_val);
         Exp_Get(g_beforeExp);
         g_beforePreset = g_preset;
+        g_beforeScreen = ScreenNow();
         g_haveBefore = true;
     }
     g_preset = p;
     for (int s = 0; s < S_COUNT; s++)
-        if (kSettings[s].presetSets)
+        if (PresetSets(s))
             g_val[s] = PresetValue(p, s);
     Exp_Defaults();
+    if (sw_presetlook)
+        SetScreenTo(PresetScreen(p));
     Trace("apply preset=%s", kPresetNames[p]);
 }
 
@@ -163,8 +225,10 @@ static bool BackDiffers() {
     if (!g_haveBefore)
         return false;
     for (int s = 0; s < S_COUNT; s++)
-        if (kSettings[s].presetSets && g_before[s] != g_val[s])
+        if (PresetSets(s) && g_before[s] != g_val[s])
             return true;
+    if (sw_presetlook && !SameScreen(g_beforeScreen, ScreenNow()))
+        return true;
     return ExpDiffers(g_beforeExp);
 }
 
@@ -174,25 +238,39 @@ static bool ResetBackDiffers() {
         return false;
     if (g_beforeResetPreset != g_preset)
         return true;
+    if (sw_presetlook && !SameScreen(g_beforeResetScreen, ScreenNow()))
+        return true;
     return memcmp(g_beforeReset, g_val, sizeof g_val) != 0 || ExpDiffers(g_beforeResetExp);
 }
 
 static void ResetSettings() {
     bool fresh = g_preset == 0 && !Exp_AnyChanged();
     for (int s = 0; s < S_COUNT; s++)
-        fresh = fresh && g_val[s] == kSettings[s].fresh;
+        fresh = fresh && g_val[s] == FreshValue(s);
+    if (sw_presetlook)
+        fresh = fresh && SameScreen(ScreenNow(), g_modernScreen);
     if (!fresh) {  // a second reset with nothing changed keeps the first one's undo
         memcpy(g_beforeReset, g_val, sizeof g_val);
         Exp_Get(g_beforeResetExp);
         g_beforeResetPreset = g_preset;
+        g_beforeResetScreen = ScreenNow();
         g_haveBeforeReset = true;
     }
     for (int s = 0; s < S_COUNT; s++)
-        g_val[s] = kSettings[s].fresh;
+        g_val[s] = FreshValue(s);
     Exp_Defaults();
     g_preset = 0;
     g_haveBefore = false;
+    if (sw_presetlook)
+        SetScreenTo(g_modernScreen);
     Trace("reset settings");
+}
+
+// presetlook turned: the look settings take the chosen preset's values under the new rule;
+// the screen stays as it is.
+static void PresetLookChanged() {
+    for (int i = 0; i < kLookCount; i++)
+        g_val[kLook[i].s] = PresetValue(g_preset, kLook[i].s);
 }
 
 // ───────────────────────────── Pages as data ─────────────────────────────
@@ -279,7 +357,9 @@ static void BuildPages() {
     Page &hub = g_pages[P_HUB];
     hub.name = "Options";
     AddRow(hub, R_RETURN, "Return to the game", 0, "Back to where you were.");
-    AddRow(hub, R_PRESET_ROW, "", P_PRESET, "Choose how to play: the 1997 rules, or with the known bugs fixed.");
+    AddRow(hub, R_PRESET_ROW, "", P_PRESET,
+           sw_presetlook ? "Choose how to play: as in 1997, or today's look with the known bugs fixed."
+                         : "Choose how to play: the 1997 rules, or with the known bugs fixed.");
     AddRow(hub, R_CATEGORY, "Language and interface", P_LANG, "Text, voices, subtitles, the font and the background.");
     AddRow(hub, R_CATEGORY, "Display and graphics", P_DISPLAY, "Resolution, window and detail.");
     AddRow(hub, R_CATEGORY, "Sound", P_SOUND, "Volumes.");
@@ -291,8 +371,13 @@ static void BuildPages() {
     Page &pr = g_pages[P_PRESET];
     pr.name = "Preset";
     AddRow(pr, R_RETURN, "Return to previous menu", 0, "");
-    AddRow(pr, R_PRESET_CHOICE, "Modern", 0, "The original, with its known bugs fixed. What a fresh install plays.");
-    AddRow(pr, R_PRESET_CHOICE, "Classic", 1, "The rules of the 1997 CD release, bugs and all. Nothing else changes.");
+    if (sw_presetlook) {
+        AddRow(pr, R_PRESET_CHOICE, "Modern", 0, "Twinsun, sharp letters, cameras that follow you, bugs fixed.");
+        AddRow(pr, R_PRESET_CHOICE, "Classic", 1, "The 1997 picture, letters, cameras and screen, bugs and all.");
+    } else {
+        AddRow(pr, R_PRESET_CHOICE, "Modern", 0, "The original, with its known bugs fixed. What a fresh install plays.");
+        AddRow(pr, R_PRESET_CHOICE, "Classic", 1, "The rules of the 1997 CD release, bugs and all. Nothing else changes.");
+    }
     if (BackDiffers())
         AddRow(pr, R_BACK_TO_MINE, "Undo preset", BACK_PRESET, "Puts back the settings you had before you chose a preset.");
 
@@ -369,8 +454,13 @@ static void BuildPages() {
 
     Page &fl = g_pages[P_FIRST];
     fl.name = "First launch";
-    AddRow(fl, R_PRESET_CHOICE, "Modern", 0, "The original, with its known bugs fixed. You can change this later in the Options Menu.");
-    AddRow(fl, R_PRESET_CHOICE, "Classic", 1, "The rules of the 1997 CD release, bugs and all. You can change this later in the Options Menu.");
+    if (sw_presetlook) {
+        AddRow(fl, R_PRESET_CHOICE, "Modern", 0, "Today's look, bugs fixed. You can change this later in the Options Menu.");
+        AddRow(fl, R_PRESET_CHOICE, "Classic", 1, "As in 1997, bugs and all. You can change this later in the Options Menu.");
+    } else {
+        AddRow(fl, R_PRESET_CHOICE, "Modern", 0, "The original, with its known bugs fixed. You can change this later in the Options Menu.");
+        AddRow(fl, R_PRESET_CHOICE, "Classic", 1, "The rules of the 1997 CD release, bugs and all. You can change this later in the Options Menu.");
+    }
 }
 
 // Invert and speed only mean something with the Auto camera: dimmed, not hidden.
@@ -548,7 +638,8 @@ static const char *HelpFor(const Row *r) {
     if (r->type == R_BACK_TO_MINE && r->arg == BACK_PRESET && BackDiffers()) {
         char list[160] = "";
         for (int s = 0; s < S_COUNT; s++) {
-            if (kSettings[s].presetSets && g_before[s] != g_val[s]) {
+            if ((PresetSets(s) && g_before[s] != g_val[s]) ||
+                (s == S_RESOLUTION && sw_presetlook && !SameScreen(g_beforeScreen, ScreenNow()))) {
                 if (list[0])
                     strncat(list, ", ", sizeof list - strlen(list) - 1);
                 strncat(list, kSettings[s].label, sizeof list - strlen(list) - 1);
@@ -578,7 +669,8 @@ static const char *HelpFor(const Row *r) {
             names[n++] = preset;
         }
         for (int s = 0; s < S_COUNT; s++)
-            if (g_beforeReset[s] != g_val[s])
+            if (g_beforeReset[s] != g_val[s] ||
+                (s == S_RESOLUTION && sw_presetlook && !SameScreen(g_beforeResetScreen, ScreenNow())))
                 names[n++] = kSettings[s].label;
         int now[EXP_MAX];
         Exp_Get(now);
@@ -773,8 +865,9 @@ static void Pop() {
 
 void Menu_Init(bool firstLaunch) {
     sw_scale = Engine_ScaleRule();
+    g_modernScreen = ScreenNow();  // Modern's screen, with presetlook on
     for (int s = 0; s < S_COUNT; s++)
-        g_val[s] = kSettings[s].fresh;
+        g_val[s] = FreshValue(s);
     g_preset = 0;
     BuildPages();
     g_depth = 1;
@@ -872,11 +965,15 @@ static void Activate(const Row &r) {
             Exp_Put(g_beforeResetExp);
             g_preset = g_beforeResetPreset;
             g_haveBeforeReset = false;
+            if (sw_presetlook)
+                SetScreenTo(g_beforeResetScreen);
         } else {
             memcpy(g_val, g_before, sizeof g_val);
             Exp_Put(g_beforeExp);
             g_preset = g_beforePreset;
             g_haveBefore = false;
+            if (sw_presetlook)
+                SetScreenTo(g_beforeScreen);
         }
         Trace("back to my settings");
         BuildPages();
@@ -1724,6 +1821,7 @@ static const SwitchDef kSwitches[] = {
     {"narrow", &sw_narrow, 0, 1, 1},     {"exptable", &sw_exptable, 0, 1, 1},
     {"fpsrow", &sw_fpsrow, 0, 1, 0},     {"slider", &sw_slider, 0, 1, 1},     {"pace", &sw_pace, 1, 9, 3},
     {"tstilt", &sw_tstilt, 0, 4095, 3328}, {"tssize", &sw_tssize, 50, 200, 140},
+    {"presetlook", &sw_presetlook, 0, 1, 1},
 };
 
 bool Menu_SetSwitch(const char *name, int v) {
@@ -1746,6 +1844,8 @@ bool Menu_SetSwitch(const char *name, int v) {
             Twinsun_SetTilt(v);
         if (!strcmp(name, "tssize"))
             Twinsun_SetSizePercent(v);
+        if (!strcmp(name, "presetlook"))
+            PresetLookChanged();
         if (!strcmp(name, "scale") && v != Engine_ScaleRule()) {
             Engine_SetScaleRule(v);
             if (!Engine_SetScreen(Engine_PhysW(), Engine_PhysH(), true)) {

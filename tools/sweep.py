@@ -106,7 +106,8 @@ def experimental_lines(table):
 def run_scripts(binary, size, combo, only, shots):
     switches = parse_combo(combo)
     tag = f"{size}-{'-'.join(f'{k}{v}' for k, v in switches.items())}"
-    lines = [f"switch {k} {v}" for k, v in switches.items()] + ["switch typing 2", "wait 1"]
+    # Presets set the rules only, as the self test runs (a combo may turn presetlook on).
+    lines = ["switch presetlook 0"] + [f"switch {k} {v}" for k, v in switches.items()] + ["switch typing 2", "wait 1"]
     if not only or only == "Keys and buttons":
         lines += controls_lines(2, 1) if switches.get("devices", 1) else controls_lines(3, None)
         if shots:

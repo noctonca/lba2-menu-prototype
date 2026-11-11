@@ -115,6 +115,7 @@ own switches are on F1 to F12 and 0 to 9.
 | F11 | `padnames` | the pad's names: the connected pad's / Xbox / PlayStation / Nintendo |
 | F12 | `heads` | Controls, wide: the column names inside the first row, above its chips / a line of heads above the rows |
 | 1 | `sheet` | wide: one 960x540 composition, centred on any larger screen / stretched to the screen's margins |
+| Shift+1 | `presetlook` | presets set the rules only, as the plan has it / presets set the look too (the start; prototype only): Classic the 1997 picture, the game font, Classic cameras and 640 x 480; Modern Twinsun, Zilla Slab, Auto and Follow cameras and the screen the prototype started at. Undo preset and Undo reset put the screen back too. Turning it puts the look rows at the chosen preset's values; the self test and `tools/sweep.py` run with it off |
 | 2 | `legend` | the band's legend stacked at its right / in a row beside the voice |
 | 3 | `bg` | the background scaled evenly and cropped / stretched, as lba2cc does |
 | Shift+3 | `bgres` | the menu picture at the screen's own resolution: off, part of the canvas (as before) / whole step: the smallest whole factor that covers the screen, cropped / smooth: the exact cover factor, Catmull-Rom / as the Image row says (the start): Classic whole step, Smooth smooth. The menu stays on the canvas at its whole step; darkened rows and the band darken the screen-size picture through the same fog rows (src/screenbg.cpp) |
