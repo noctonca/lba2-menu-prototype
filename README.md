@@ -49,6 +49,18 @@ same) in its `LocalState\Game`. The screen is the TV's (1920x1080, the wide
 layout); what it says goes to `LocalState\lba2menu.log`. `--stdin` is not
 available there; a `LocalState\args.txt` gives it other arguments, one a line.
 
+### Web browser
+
+    bash tools/build-web.sh
+
+builds with Emscripten (Homebrew `emscripten`; its SDL3 port, through
+`cmake/emscripten-sdl3/`) into `out/web/`: `index.html`, `lba2menu.js` and
+`lba2menu.wasm`, a static site for any web server. The page (`web/shell.html`)
+asks for the player's game folder and keeps `RESS.HQR`, `SCREEN.HQR`,
+`SPRITES.HQR` and `HOLOMAP.HQR` in the browser (IndexedDB); no game data is
+served. Any copy works, the 1997 demo included. The menu loop runs as it does
+on a desktop and hands each frame back to the browser (ASYNCIFY).
+
 ## Play
 
     ./play.sh                      # 640x480, one column

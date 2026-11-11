@@ -50,7 +50,15 @@
 #include <string>
 #include <vector>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+// The web page puts the player's game files here before it starts us (web/shell.html).
+static const char *kDefaultData = "/game";
+// The loop stays as it is; each frame hands control back to the browser until it draws again.
+EM_ASYNC_JS(void, WaitForBrowserFrame, (), { await new Promise(function (r) { requestAnimationFrame(function () { r(); }); }); });
+#else
 static const char *kDefaultData = "~/code/lba-hacking/assets/lba2-activision-us-cd";
+#endif
 
 
 struct Runner {
@@ -482,6 +490,10 @@ int Lba2Main(int argc, char *argv[]) {
             break;
         Menu_Draw();
         Engine_Present();
+#ifdef __EMSCRIPTEN__
+        if (!headless)
+            WaitForBrowserFrame();
+#endif
 
         // A script with no stdin ends a headless run when it runs out.
         if (headless && !live && run.next >= run.lines.size() && run.waitFrames == 0)

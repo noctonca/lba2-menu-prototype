@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LBA2 menu prototype</title>
+<style>
+  :root { --bg: #10161c; --fg: #e8e4da; --dim: #9aa3ab; --accent: #f0c060; --panel: #1b242d; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 1.4rem; margin: 0.4em 0; }
+  p { margin: 0.5em 0; }
+  .dim { color: var(--dim); }
+  #pick { background: var(--panel); padding: 16px; border-radius: 8px; }
+  button, label.button { display: inline-block; background: var(--accent); color: #1a1408; border: 0; border-radius: 6px;
+    padding: 8px 14px; font: inherit; font-weight: 600; cursor: pointer; margin: 6px 6px 0 0; }
+  button.quiet { background: transparent; color: var(--dim); border: 1px solid #3a4652; font-weight: 400; }
+  input[type=file], [hidden] { display: none !important; }
+  #stage { display: none; }
+  canvas { display: block; width: 100%; max-width: 960px; aspect-ratio: 4 / 3; margin: 0 auto; background: #000;
+    image-rendering: pixelated; outline: none; }
+  #status { min-height: 1.5em; }
+  .error { color: #ff8a7a; }
+  details { margin-top: 12px; }
+  kbd { background: #2a3540; border-radius: 4px; padding: 0 5px; font-size: 0.9em; }
+  ul { padding-left: 1.2em; margin: 0.3em 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>LBA2 Options menu prototype</h1>
+  <p class="dim">A fan-made prototype of a new Options menu for LBA2 Classic Community. It is not the game, and not
+    affiliated with the game's owners.</p>
+
+  <section id="pick">
+    <p>The menu draws with the game's own font, picture and palette, so it needs files from your copy of
+      Little Big Adventure 2: <b>RESS.HQR</b>, <b>SCREEN.HQR</b> and <b>SPRITES.HQR</b> (<b>HOLOMAP.HQR</b> too for
+      the Twinsun background). Any copy works, the free 1997 demo included.</p>
+    <p>Choose the game's folder. The files stay in this browser (kept for your next visit); nothing is uploaded.</p>
+    <label class="button" for="folder">Choose game folder</label>
+    <label class="button" for="files">Or choose the files</label>
+    <input id="folder" type="file" webkitdirectory multiple>
+    <input id="files" type="file" multiple accept=".hqr,.HQR">
+    <p id="status"></p>
+  </section>
+
+  <section id="stage">
+    <canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
+    <p class="dim">Click the picture first so it takes the keys. <kbd>Esc</kbd> goes back, arrows move,
+      <kbd>Enter</kbd> picks. A gamepad works too.</p>
+    <button id="forget" class="quiet" hidden>Forget saved game files</button>
+  </section>
+
+  <details>
+    <summary>The prototype's own keys</summary>
+    <ul>
+      <li><kbd>F2</kbd> / <kbd>Shift+F2</kbd>: the next or previous pretend screen size</li>
+      <li><kbd>F1</kbd> overlay, <kbd>F3</kbd> band, <kbd>F4</kbd> typing, <kbd>F8</kbd> help at 640x480 &mdash; switches being tried</li>
+      <li><kbd>1</kbd>&ndash;<kbd>0</kbd> and <kbd>Shift</kbd>+them: more switches being tried (see the README)</li>
+    </ul>
+    <p class="dim">Some browsers keep keys such as F5 (reload), F11 and F12 for themselves.</p>
+  </details>
+</main>
+
+<script>
+(function () {
+  var NEEDED = ['ress.hqr', 'screen.hqr', 'sprites.hqr'];
+  var OPTIONAL = ['holomap.hqr'];
+  var DB = 'lba2menu', STORE = 'files';
+  var statusEl = document.getElementById('status');
+  var forgetBtn = document.getElementById('forget');
+
+  function say(text, isError) { statusEl.textContent = text; statusEl.className = isError ? 'error' : ''; }
+
+  function openDb() {
+    return new Promise(function (resolve, reject) {
+      if (!window.indexedDB) { reject(new Error('no IndexedDB')); return; }
+      var req = indexedDB.open(DB, 1);
+      req.onupgradeneeded = function () { req.result.createObjectStore(STORE); };
+      req.onsuccess = function () { resolve(req.result); };
+      req.onerror = function () { reject(req.error); };
+    });
+  }
+  function dbAll() {
+    return openDb().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var out = {}, tx = db.transaction(STORE, 'readonly'), st = tx.objectStore(STORE);
+        var cur = st.openCursor();
+        cur.onsuccess = function () {
+          var c = cur.result;
+          if (c) { out[c.key] = c.value; c.continue(); } else resolve(out);
+        };
+        cur.onerror = function () { reject(cur.error); };
+      });
+    });
+  }
+  function dbPut(files) {
+    return openDb().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(STORE, 'readwrite'), st = tx.objectStore(STORE);
+        st.clear();
+        Object.keys(files).forEach(function (k) { st.put(files[k], k); });
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror = function () { reject(tx.error); };
+      });
+    });
+  }
+  function dbClear() {
+    return openDb().then(function (db) {
+      return new Promise(function (resolve) {
+        var tx = db.transaction(STORE, 'readwrite');
+        tx.objectStore(STORE).clear();
+        tx.oncomplete = function () { resolve(); };
+      });
+    });
+  }
+
+  function missing(files) { return NEEDED.filter(function (n) { return !files[n]; }); }
+
+  // Take the wanted files from a chosen folder or list, whatever their case or subfolder.
+  function readChosen(list) {
+    var wanted = NEEDED.concat(OPTIONAL), found = {}, jobs = [];
+    Array.prototype.forEach.call(list, function (f) {
+      var name = f.name.toLowerCase();
+      if (wanted.indexOf(name) < 0 || found[name]) return;
+      found[name] = true;
+      jobs.push(f.arrayBuffer().then(function (buf) { return [name, new Uint8Array(buf)]; }));
+    });
+    return Promise.all(jobs).then(function (pairs) {
+      var files = {};
+      pairs.forEach(function (p) { files[p[0]] = p[1]; });
+      return files;
+    });
+  }
+
+  var started = false;
+  function start(files) {
+    if (started) return;
+    started = true;
+    document.getElementById('pick').style.display = 'none';
+    document.getElementById('stage').style.display = 'block';
+    var canvas = document.getElementById('canvas');
+    canvas.addEventListener('click', function () { canvas.focus(); });
+    var go = function () {
+      Module.FS.mkdir('/game');
+      Object.keys(files).forEach(function (k) { Module.FS.writeFile('/game/' + k, files[k]); });
+      canvas.focus();
+      Module.callMain([]);
+    };
+    if (Module.calledRun || Module.ready) go(); else Module.onRuntimeInitialized = go;
+  }
+
+  function chosen(ev) {
+    say('Reading the files...');
+    readChosen(ev.target.files).then(function (files) {
+      var lack = missing(files);
+      if (lack.length) {
+        say('Not found in what you chose: ' + lack.map(function (n) { return n.toUpperCase(); }).join(', ') +
+            '. Choose the folder that holds the .HQR files.', true);
+        return;
+      }
+      dbPut(files).then(function () { forgetBtn.hidden = false; }, function () {}).then(function () { start(files); });
+    }).catch(function (e) { say('Could not read the files: ' + e, true); });
+  }
+  document.getElementById('folder').addEventListener('change', chosen);
+  document.getElementById('files').addEventListener('change', chosen);
+  forgetBtn.addEventListener('click', function () {
+    dbClear().then(function () { forgetBtn.textContent = 'Forgotten: this browser asks for the files next time'; forgetBtn.disabled = true; });
+  });
+
+  window.lba2menuStart = start;  // for a test page that hands over the files itself
+  dbAll().then(function (files) {
+    if (!missing(files).length) {
+      forgetBtn.hidden = false;
+      start(files);
+    }
+  }).catch(function () {});
+
+  window.Module = {
+    canvas: document.getElementById('canvas'),
+    print: function (t) { console.log(t); },
+    printErr: function (t) { console.warn(t); },
+    onRuntimeInitialized: function () { Module.ready = true; },
+    onExit: function () {
+      var p = document.createElement('p');
+      p.textContent = 'The menu was closed. Reload the page to open it again.';
+      document.getElementById('stage').appendChild(p);
+    }
+  };
+})();
+</script>
+{{{ SCRIPT }}}
+</body>
+</html>

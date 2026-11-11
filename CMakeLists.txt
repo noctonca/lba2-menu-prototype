@@ -6,6 +6,12 @@ project(LBA2MenuProto C CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 98)
+if(EMSCRIPTEN)
+    # em++ defaults to C++17, so CMake would leave out -std=gnu++98 and build the
+    # 1997 code as C++17; as the desktop compilers, say the standard every time.
+    # Targets set to C++17 add their own -std after this one, which wins.
+    string(APPEND CMAKE_CXX_FLAGS " -std=gnu++98")
+endif()
 
 # lba2cc's LIB386 is built from the submodule, with its own CMake files.
 # Its options are set here the way lba2cc's root CMakeLists sets them.
@@ -95,3 +101,15 @@ else()
     target_link_options(lba2menu PRIVATE -static -municode -mwindows -Wl,--wrap=exit)
 endif()
 set_target_properties(lba2menu PROPERTIES CXX_STANDARD 17)
+if(EMSCRIPTEN)
+    target_sources(lba2menu PRIVATE src/web.cpp)
+    # The web build: the page in web/ asks for the game files and starts the menu (tools/build-web.sh).
+    target_link_options(lba2menu PRIVATE
+        -sASYNCIFY -sASYNCIFY_STACK_SIZE=65536 -sSTACK_SIZE=1048576
+        -sALLOW_MEMORY_GROWTH -sINITIAL_MEMORY=67108864
+        -sFORCE_FILESYSTEM -sINVOKE_RUN=0 -sEXIT_RUNTIME
+        -sEXPORTED_RUNTIME_METHODS=FS,ENV,callMain
+        --shell-file ${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html)
+    set_target_properties(lba2menu PROPERTIES SUFFIX ".html"
+        LINK_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html)
+endif()
