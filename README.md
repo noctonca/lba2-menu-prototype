@@ -136,10 +136,16 @@ memory like the other settings.
   the one touched last.
 - Enter waits for a key: the chip takes the current-value plasma and the voice
   asks for it and says the way out: "Press a key, or Esc to keep it." on the
-  keyboard view, "Press a button, or wait to keep it." on the pad view, since a
-  pad has no button that cannot be bound (decided 2026-11-03). Esc cancels, and
-  so does waiting 5 seconds. A pad view only takes pad input, a keyboard view
-  only keys.
+  keyboard view, "Press a button, or Menu to keep it." on the pad view (Start,
+  by the pad's own name; decided 2026-11-11, replacing "or wait to keep it").
+  Esc or Start cancels, and so does waiting 5 seconds. A pad view only takes
+  pad input, a keyboard view only keys.
+- Start always opens the game menu, as Esc does on the keyboard: Game menu's
+  pad chip is fixed (Enter and Del leave it, and the voice says why), and Start
+  is never bound to another action. The menu's own pad buttons are fixed too
+  (A Enter, B Esc, X Del, View Tab, d-pad and left stick the arrows). So a
+  player with only a pad (Xbox, Switch, Vita, Android TV) cannot rebind their
+  way out of reaching these options (decided 2026-11-11).
 - Del (Backspace on a Mac keyboard, X on a pad) clears a chip.
 - A key on two actions frames both chips red, and the voice names the other
   action.
@@ -328,8 +334,12 @@ walk finds starts with the walk's name:
   Jetpack, ...", the answers take the actions' place), and Esc keeps both as
   they were; with
   `keyrule=1` it goes in, both chips go red and the help names the other
-  action; Del clears it. Also: Forward's Key 2 put in Key 1 leaves Key 2
-  empty, and the wait gives up after 5 s.
+  action; Del clears it. On the pad, Start leaves the wait as Esc does, and
+  Game menu's chip neither waits nor clears. Also: Forward's Key 2 put in
+  Key 1 leaves Key 2 empty, and the wait gives up after 5 s.
+- `padonly:` with pad buttons only, every pad binding is offered Start (which
+  keeps it, never asks) and then cleared; Game menu still has Start, and B
+  leaves Keys and buttons and A opens it again.
 - `swap:` No changes nothing; Yes gives Forward J and Jetpack Forward's old
   key, with no key on two actions; swapping back puts both back; onto an empty
   chip the Yes answer says what Jetpack is left with.

@@ -105,6 +105,13 @@ static void ResetBindings() {
     }
 }
 
+// Start always opens the game menu, as Esc does on the keyboard: a pad-only player
+// (Xbox, Switch, Vita, Android TV) has no other way back to these options. Its chip
+// on the pad view is fixed, and Start is never bound to anything else.
+static bool FixedChip(int action, int column) {
+    return column >= 2 && !strcmp(kActions[action].name, "Game menu");
+}
+
 // ───────────────────────────── Names ─────────────────────────────
 
 // Short keyboard names for the chips; SDL's names otherwise. The 1997 binding
@@ -176,6 +183,13 @@ static void PadName(int code, char *out, size_t n) {
         snprintf(out, n, "R stick %c", kArrows[i - 19]);
     else
         snprintf(out, n, "%s", kTriggers[f][i - 23]);
+}
+
+// Start as the voice says it: the game font has no +, so Nintendo's is said Plus.
+void Controls_StartSaid(char *out, size_t n) {
+    PadName(PAD_START, out, n);
+    if (!strcmp(out, "+"))
+        snprintf(out, n, "Plus");
 }
 
 // What one chip says. The pad's column shows both of its bindings when it has two.
@@ -379,6 +393,8 @@ static void CodeName(int column, int code, char *out, size_t n) {
 
 static void Bind(int action, int column, int code) {
     char name[32], was[32];
+    if (FixedChip(action, column) || (column >= 2 && code == PAD_START))
+        return;  // the wait never hands these over; this keeps it so
     // Nothing changes without the player's say (decided 2026-11-11, replacing the refusal
     // of 2026-11-03): a key another action has is offered as a swap, and the voice says
     // what the other action is left with.
@@ -462,7 +478,8 @@ static void UpdateWaiting() {
     S32 raw = Engine_RawPressed();
     if (Engine_Frame() == g_waitFrame)
         return;  // the press that started the wait
-    bool cancel = raw == K_ESC || (raw == 0 && Engine_Pressed(KEY_ESC));
+    // Esc on the keyboard view, Start on the pad view: the button no binding can take.
+    bool cancel = raw == K_ESC || (raw == 0 && Engine_Pressed(KEY_ESC)) || (column >= 2 && raw == PAD_START);
     if (cancel) {
         g_waiting = false;
         Trace("controls wait cancelled");
@@ -563,7 +580,10 @@ void Controls_Update() {
             else if (!column)
                 g_focusRight = false, Menu_PageEntered();
         }
-        if (g_focusRight && Engine_Pressed(KEY_ENTER)) {
+        bool fixed = FixedChip(CursorAction(), CursorColumn());
+        if (g_focusRight && fixed && (Engine_Pressed(KEY_ENTER) || Engine_Pressed(KEY_DEL))) {
+            Trace("fixed action=\"%s\"", kActions[CursorAction()].name);
+        } else if (g_focusRight && Engine_Pressed(KEY_ENTER)) {
             StartWaiting();
         } else if (g_focusRight && Engine_Pressed(KEY_DEL)) {
             int a = CursorAction(), c = CursorColumn();
@@ -585,10 +605,17 @@ static void Say() {
     static char buf[256];
     const char *text = "";
     if (g_waiting) {
-        // The way out, said (decided 2026-11-03): a pad has no button that cannot
-        // be bound, so the Gamepad view says to wait; the keyboard has Esc. The
-        // action is the row under the cursor, so the prompt fits one line.
-        text = CursorColumn() < 2 ? "Press a key, or Esc to keep it." : "Press a button, or wait to keep it.";
+        // The way out, said: Esc on the keyboard, Start on the pad, the two inputs no
+        // binding can take (decided 2026-11-11, replacing "or wait to keep it" of
+        // 2026-11-03). The action is the row under the cursor, so the prompt fits one line.
+        if (CursorColumn() < 2) {
+            text = "Press a key, or Esc to keep it.";
+        } else {
+            char start[16];
+            Controls_StartSaid(start, sizeof start);
+            snprintf(buf, sizeof buf, "Press a button, or %s to keep it.", start);
+            text = buf;
+        }
     } else if (!g_focusRight) {
         if (Wide() || g_colCursor > 0)
             text = kGroups[g_group].help;
@@ -597,7 +624,12 @@ static void Say() {
         int other = ConflictOf(a, c);
         if (g_swap.action >= 0 && (g_swap.action != a || g_swap.column != c))
             g_swap.action = -1;  // the cursor moved on
-        if (g_swap.action >= 0) {
+        if (g_swap.action < 0 && FixedChip(a, c)) {
+            char start[16];
+            Controls_StartSaid(start, sizeof start);
+            snprintf(buf, sizeof buf, "%s always opens the game menu, so it can't be changed.", start);
+            text = buf;
+        } else if (g_swap.action >= 0) {
             const Action &h = kActions[g_swap.holder];
             char key[32], where[64] = "";
             CodeName(c, g_swap.code, key, sizeof key);
@@ -748,7 +780,12 @@ static void Legend(const char **keys, const char **words, int *n) {
     static char other[16];
     *n = 0;
     if (g_waiting) {
-        keys[*n] = "Esc", words[(*n)++] = "Cancel";
+        static char start[16];
+        if (CursorColumn() < 2)
+            snprintf(start, sizeof start, "Esc");
+        else
+            PadName(PAD_START, start, sizeof start);
+        keys[*n] = start, words[(*n)++] = "Cancel";
         return;
     }
     if (g_swap.action >= 0) {  // as Options' questions
@@ -756,10 +793,10 @@ static void Legend(const char **keys, const char **words, int *n) {
         keys[*n] = "Enter", words[(*n)++] = "Answer";
         return;
     }
-    if (g_focusRight) {
+    if (g_focusRight && !FixedChip(CursorAction(), CursorColumn())) {
         keys[*n] = "Enter", words[(*n)++] = "Change";
         keys[*n] = "Del", words[(*n)++] = "Clear";
-    } else {
+    } else if (!g_focusRight) {
         keys[*n] = "Enter", words[(*n)++] = "Open";
     }
     if (sw_devices) {

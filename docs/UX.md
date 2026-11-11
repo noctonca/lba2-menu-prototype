@@ -213,9 +213,16 @@ voice. A setting exists only if players really disagree about it.
 
 **Postel's Law** (be liberal in what you accept).
 - Keys and pad both work everywhere, except while a binding waits: then only
-  the device the view shows. Esc, or 5 s, gives up the wait, and the voice
-  says so: "Press a button, or wait to keep it." No pad button is kept back
-  for cancelling (decided 2026-11-03).
+  the device the view shows. Esc, Start on the pad, or 5 s, gives up the
+  wait, and the voice says so: "Press a button, or Menu to keep it."
+  (decided 2026-11-11, replacing 2026-11-03's "no pad button is kept back").
+- **No binding locks a pad-only player out** (decided 2026-11-11). Start
+  always opens the game menu and can't be bound elsewhere, as Esc on the
+  keyboard; the menu's A, B and arrows are fixed as the keyboard's Enter, Esc
+  and arrows are. In lba2cc today only the arrows are: moving Start off Menus,
+  or both confirm actions (Recentre, Behaviour action) off the pad, leaves an
+  Xbox, Switch, Vita or Android TV player no way back to Options (measured
+  2026-11-11 on main, Vita and default layouts). **[self test: padonly]**
 - A key already in use asks first, as choosing Classic and Reset settings do:
   the voice says who has it ("J is on Jetpack, in Magic and items."), and two
   answers take the actions' place, the safe one first: "No, keep it on

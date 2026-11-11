@@ -81,6 +81,9 @@ S32 Engine_RawPressed();
 // The control channel: "J", "Left Alt", "Keypad 5" (SDL names) or "pad:<n|name>"
 // (pad:a, pad:lb, pad:lstick-up ...). Counts on the next frame.
 bool Engine_InjectRaw(const char *name);
+// A pad button as a pad gives it: the raw press and the menu key it is fixed to
+// (a Enter, b Esc ...), by its pad: name without the prefix ("a", "start").
+bool Engine_InjectPad(const char *name);
 // What the player touched last: true when it was the pad.
 bool Engine_LastInputWasPad();
 // The connected pad's family: 0 none, 1 Xbox-like, 2 PlayStation, 3 Nintendo.

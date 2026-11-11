@@ -46,3 +46,5 @@ int Controls_Conflicts(ConflictView *out, int max);
 int Controls_Where(char *buf, size_t n);
 // What an action's chip in a column says (0 Key 1, 1 Key 2, 2 the pad).
 bool Controls_Binding(const char *action, int column, char *out, size_t n);
+// The pad's Start as the voice says it (Menu, Options, Plus).
+void Controls_StartSaid(char *out, size_t n);

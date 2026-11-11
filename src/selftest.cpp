@@ -480,6 +480,14 @@ struct Walker {
         Engine_InjectRaw(raw);
         Frame();
     }
+    // A pad button, as a pad-only player presses it: the raw press and its fixed menu key.
+    void Pad(const char *name, int count = 1) {
+        for (int i = 0; i < count; i++) {
+            path.push_back(std::string("pad ") + name);
+            Engine_InjectPad(name);
+            Frame();
+        }
+    }
     void Wait(int frames) {
         path.push_back(Fmt("wait %d", frames));
         for (int i = 0; i < frames; i++)
@@ -1163,14 +1171,40 @@ struct Walker {
     void BindOne(int device, int group, int column, bool pad) {
         ToChip(device, group, column);
         std::string before = ChipText();
+        char start[32], said[32];
+        Controls_Binding("Game menu", 2, start, sizeof start);
+        Controls_StartSaid(said, sizeof said);
+        if (pad && !strcmp(kGroupFirst[group], "Game menu")) {
+            // Start always opens the game menu: Enter does not wait and Del leaves it, and the
+            // voice says why.
+            Key("enter");
+            std::string why = std::string(said) + " always opens the game menu, so it can't be changed.";
+            Expect(!Waiting() && Voice() == why,
+                   Fmt("bind: Game menu's %s waits or reads %s", Repr(start).c_str(), Repr(Voice().c_str()).c_str()));
+            Check();
+            Key("del");
+            Expect(ChipText() == start, Fmt("bind: Del changed Game menu's %s to %s", Repr(start).c_str(), Repr(ChipText().c_str()).c_str()));
+            return;
+        }
         Key("enter");
         if (!Expect(Waiting(), "bind: Enter does not wait for a key"))
             return;
-        const char *ask = pad ? "Press a button, or wait to keep it." : "Press a key, or Esc to keep it.";
+        std::string ask = pad ? std::string("Press a button, or ") + said + " to keep it." : "Press a key, or Esc to keep it.";
         Expect(Voice() == ask, Fmt("bind: the voice does not ask for the key and say the way out: %s", Repr(Voice().c_str()).c_str()));
         Check();
         Key("esc");
         if (!Expect(!Waiting(), "bind: Esc leaves the wait for a key going"))
+            return;
+        if (pad) {  // and Start, the pad's way out
+            Key("enter");
+            Press("pad:start");
+            if (!Expect(!Waiting() && !Asking() && ChipText() == before,
+                        Fmt("bind: %s on the pad's wait left %s (was %s)%s", start, Repr(ChipText().c_str()).c_str(),
+                            Repr(before.c_str()).c_str(), Waiting() ? ", still waiting" : "")))
+                return;
+        }
+        if (!Expect(ChipText() == before,
+                    Fmt("bind: Esc changed the chip to %s (was %s)", Repr(ChipText().c_str()).c_str(), Repr(before.c_str()).c_str())))
             return;
 
         // The other device's input does not bind.
@@ -1318,6 +1352,57 @@ struct Walker {
         }
     }
 
+    // A pad-only player (Xbox, Switch, Vita, Android TV) cannot lock themselves out: with
+    // only pad buttons, every pad binding is offered Start and then cleared, and the pad
+    // still has Start on Game menu and still leaves and reopens these options.
+    void PadOnly(bool twoDevices) {
+        if (!Wanted("Keys and buttons"))
+            return;
+        Fresh("Keys and buttons");
+        char start[32];
+        Controls_Binding("Game menu", 2, start, sizeof start);
+        if (twoDevices)
+            Pad("back");
+        const int groups = (int)(sizeof kGroupFirst / sizeof kGroupFirst[0]);
+        for (int g = 0; g < groups; g++) {
+            Pad("dpad-down", g ? 1 : 0);
+            Pad("a");
+            if (!twoDevices)
+                Pad("dpad-right", 2);
+            for (int r = 0; r < kGroupSizes[g]; r++) {
+                std::string where = ControlsWhere(), before = ChipText();
+                bool fixed = where.find("| Game menu |") != std::string::npos;
+                if (!Expect(where.find("Gamepad") != std::string::npos || !twoDevices,
+                            Fmt("padonly: Back did not switch to the Gamepad view (%s)", Repr(where.c_str()).c_str())))
+                    return;
+                Pad("a");
+                if (Waiting()) {
+                    Pad("start");
+                    if (!Expect(!Waiting() && !Asking() && ChipText() == before,
+                                Fmt("padonly: %s on %s left %s%s", start, Repr(where.c_str()).c_str(),
+                                    Repr(ChipText().c_str()).c_str(), Asking() ? ", asking" : "")))
+                        return;
+                } else if (!Expect(fixed, Fmt("padonly: A does not wait on %s", Repr(where.c_str()).c_str()))) {
+                    return;
+                }
+                Pad("x");
+                if (!Expect(fixed ? ChipText() == start : ChipText().empty(),
+                            Fmt("padonly: X left %s on %s", Repr(ChipText().c_str()).c_str(), Repr(where.c_str()).c_str())))
+                    return;
+                Pad("dpad-down");
+            }
+            Pad("b");
+        }
+        char now[32];
+        Controls_Binding("Game menu", 2, now, sizeof now);
+        Expect(!strcmp(now, start), Fmt("padonly: every pad binding cleared leaves Game menu %s, not %s", Repr(now).c_str(), Repr(start).c_str()));
+        Pad("b");
+        if (!Expect(!Controls_Active(), "padonly: B does not leave Keys and buttons with every pad binding cleared"))
+            return;
+        Pad("a");
+        Expect(Controls_Active(), "padonly: A does not reopen Keys and buttons with every pad binding cleared");
+    }
+
     void Behaviour(bool gameplay, bool twoDevices) {
         Reach(gameplay);
         for (size_t p = 0; p < sizeof kPages / sizeof kPages[0]; p++)
@@ -1328,6 +1413,7 @@ struct Walker {
         Experimental();
         Console();
         Binding(twoDevices);
+        PadOnly(twoDevices);
     }
 };
 

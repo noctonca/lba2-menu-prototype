@@ -395,6 +395,21 @@ U32 Engine_Frame() { return s_frame; }
 
 const U8 *Engine_Palette() { return s_palCurrent; }
 
+// The menu's pad buttons are fixed, as the arrows, Enter and Esc are on the keyboard:
+// no binding moves them, so a pad-only player can always use the menu. By pad input,
+// in lba2cc's K_GAMEPAD order (PadRawDown): A Enter, B Esc, View Tab, X Del, LB and RB
+// a page, the d-pad and the left stick the arrows.
+struct PadMenuKey {
+    UiKey key;
+    int pad;
+};
+static const PadMenuKey kPadMenuKeys[] = {
+    {KEY_ENTER, 0}, {KEY_ESC, 1},   {KEY_DEL, 2},   {KEY_TAB, 4},    {KEY_PGUP, 9},   {KEY_PGDN, 10},
+    {KEY_UP, 11},   {KEY_DOWN, 12}, {KEY_LEFT, 13}, {KEY_RIGHT, 14}, {KEY_UP, 15},    {KEY_DOWN, 16},
+    {KEY_LEFT, 17}, {KEY_RIGHT, 18},
+};
+static bool PadRawDown(int n);
+
 // A pad, read straight from SDL (lba2cc's joystick code is in the game layer).
 static SDL_Gamepad *s_pad;
 
@@ -411,19 +426,10 @@ static bool PadDown(int k) {
         if (!s_pad)
             return false;
     }
-    switch (k) {
-    case KEY_UP: return SDL_GetGamepadButton(s_pad, SDL_GAMEPAD_BUTTON_DPAD_UP) || SDL_GetGamepadAxis(s_pad, SDL_GAMEPAD_AXIS_LEFTY) < -16000;
-    case KEY_DOWN: return SDL_GetGamepadButton(s_pad, SDL_GAMEPAD_BUTTON_DPAD_DOWN) || SDL_GetGamepadAxis(s_pad, SDL_GAMEPAD_AXIS_LEFTY) > 16000;
-    case KEY_LEFT: return SDL_GetGamepadButton(s_pad, SDL_GAMEPAD_BUTTON_DPAD_LEFT) || SDL_GetGamepadAxis(s_pad, SDL_GAMEPAD_AXIS_LEFTX) < -16000;
-    case KEY_RIGHT: return SDL_GetGamepadButton(s_pad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT) || SDL_GetGamepadAxis(s_pad, SDL_GAMEPAD_AXIS_LEFTX) > 16000;
-    case KEY_ENTER: return SDL_GetGamepadButton(s_pad, SDL_GAMEPAD_BUTTON_SOUTH);
-    case KEY_ESC: return SDL_GetGamepadButton(s_pad, SDL_GAMEPAD_BUTTON_EAST);
-    case KEY_TAB: return SDL_GetGamepadButton(s_pad, SDL_GAMEPAD_BUTTON_BACK);
-    case KEY_DEL: return SDL_GetGamepadButton(s_pad, SDL_GAMEPAD_BUTTON_WEST);
-    case KEY_PGUP: return SDL_GetGamepadButton(s_pad, SDL_GAMEPAD_BUTTON_LEFT_SHOULDER);
-    case KEY_PGDN: return SDL_GetGamepadButton(s_pad, SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER);
-    default: return false;
-    }
+    for (const PadMenuKey &m : kPadMenuKeys)
+        if (m.key == k && PadRawDown(m.pad))
+            return true;
+    return false;
 }
 
 // Raw state: every scancode and every pad input, for rebinding.
@@ -494,6 +500,19 @@ bool Engine_InjectRaw(const char *name) {
         return false;
     s_rawInjected = (S32)sc;
     return true;
+}
+
+bool Engine_InjectPad(const char *name) {
+    for (int n = 0; n < PAD_CODE_COUNT; n++) {
+        if (!strcmp(name, kPadCodeNames[n])) {
+            s_rawInjected = PAD_CODE_BASE + n;
+            for (const PadMenuKey &m : kPadMenuKeys)
+                if (m.pad == n)
+                    s_injected[m.key] = true;
+            return true;
+        }
+    }
+    return false;
 }
 
 const char *Engine_ScancodeName(S32 code) {
