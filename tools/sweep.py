@@ -278,6 +278,11 @@ def check(state):
     for r in state["rows"]:
         if r["setting"] and not r["value"]:
             problems.append(f"value: setting {r['label']!r} shows no value")
+    # Wide, a page has no Return row: Esc goes back (docs/UX.md, Fitts's Law).
+    if state["layout"] == "wide":
+        for r in state["rows"]:
+            if r["label"].startswith("Return to "):
+                problems.append(f"return: the wide layout shows {r['label']!r}")
     # Proximity: a pane's last row is further from the help below than rows are apart (5).
     if v["where"] != "none":
         for pane, rows in panes.items():

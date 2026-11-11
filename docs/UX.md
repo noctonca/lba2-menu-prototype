@@ -120,8 +120,8 @@ the call is answered.
 **Fitts's Law** (target size and distance) becomes *presses to reach*. There
 is no pointer, so the cost of a target is the number of key presses to it.
 - A page opens on its first row (one column: the Return row, as 1997; wide:
-  the first setting). Esc is always one press back, whatever row has the
-  cursor.
+  the first setting, as a wide page has no Return row). Esc is always one press
+  back, whatever row has the cursor. **[self test: return]**
 - The cursor wraps at both ends of a list, so the last row is one press up.
 - A slider crosses its range in about 16 steps; holding the key does it in
   under 2 s (350 ms, then 90 ms a step).

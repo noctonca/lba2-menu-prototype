@@ -38,8 +38,8 @@ struct WideFrame {
     S32 x0, y0, w, h;
 };
 WideFrame Menu_WideFrame();
-// The `panes` switch: 1 (decided 2026-11-03) one pane at a time, centred, DRILL_W
-// wide: the hub, then a page, as the 1997 menu goes; 0 two panes side by side.
+// Wide, one page at a time (decided 2026-11-03), centred and DRILL_W wide: the hub,
+// then a page, as the 1997 menu goes.
 enum { DRILL_W = 640 };
 
 // The foot of a wide page: the band (voice + legend) or the help line and the

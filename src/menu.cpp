@@ -17,6 +17,7 @@
 #include <SVGA/FIL_LINE.H>
 #include <SVGA/FONT.H>
 
+#include <assert.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -166,18 +167,16 @@ static ScreenSize ScreenNow() { return ScreenSize{Engine_PhysW(), Engine_PhysH()
 static bool SameScreen(ScreenSize a, ScreenSize b) { return a.w == b.w && a.h == b.h; }
 static ScreenSize PresetScreen(int preset) { return preset == 1 ? ScreenSize{640, 480} : g_modernScreen; }
 
-static void SyncLayout();
+static void SyncView();
 
 // A preset, Reset settings or an undo can cross between the one column and the wide layout
-// in the middle of a frame: the place is made over for the new layout at once, so what the
-// same frame does next (an undo row going, the cursor kept in range) is done in it. Left to
-// the next draw, the wide page drew a row past its end for a frame after Undo preset.
+// in the middle of a frame; the view starts its scroll again at once, as at any crossing.
 static void SetScreenTo(ScreenSize to) {
     if (SameScreen(to, ScreenNow()))
         return;
     if (Engine_SetScreen(to.w, to.h, true))
         Menu_NoteScreen();
-    SyncLayout();
+    SyncView();
 }
 
 // "Changed": the player's values differ from the chosen preset in a setting presets set,
@@ -314,26 +313,33 @@ static void ResetSettings() {
 
 enum RowType { R_RETURN, R_CATEGORY, R_PRESET_ROW, R_SETTING, R_PRESET_CHOICE, R_BACK_TO_MINE, R_ACTION };
 
+// A check on the menu's state, for the menu plan's "shown when" and "active when".
+typedef bool (*RowCheck)();
+
+// A row of a page, as the menu plan's page model has it. A page's rows never change: a row
+// that comes and goes (Undo preset) has a "shown when" check, asked each time the page is
+// walked or drawn, so the cursor stays on the row it was on.
 struct Row {
     RowType type;
-    const char *label;
-    int arg;  // setting, page or preset
-    const char *help;
+    const char *label;  // a setting row's is its setting's (RowLabel)
+    int arg;            // setting, page or preset
+    const char *help;   // a setting row's is its setting's (RowHelp)
+    RowCheck shown;     // NULL: always there
+    RowCheck active;    // NULL: always active; else dimmed while false, the help saying `needs`
+    const char *needs;
 };
 
-enum { A_KEYS, A_RESET, A_EXP, A_CONSOLE };  // R_ACTION: opens Keys and buttons, asks to reset, opens Experimental
-                                              // settings, opens the console
+enum { A_KEYS, A_RESET, A_EXP, A_CONSOLE };  // R_ACTION: opens Keys and buttons, asks to reset, opens More
+                                              // options, opens the console
 enum { BACK_PRESET, BACK_RESET };  // R_BACK_TO_MINE: undoes a preset, or a reset
 
 enum { P_HUB, P_PRESET, P_LANG, P_DISPLAY, P_SOUND, P_CONTROLS, P_ADVANCED, P_FIRST, P_ORIGINAL, P_COUNT };
 
 struct Page {
     const char *name;
-    Row rows[12];
+    const Row *rows;
     int count;
 };
-
-static Page g_pages[P_COUNT];
 
 // Switches (prototype aids; every review switch was pruned 2026-11-12, keeping what was decided).
 static int sw_overlay = 0;
@@ -353,113 +359,107 @@ static const char *FormatPresetRow(char *buf, size_t n, const char *name, bool c
     return buf;
 }
 
-static void AddRow(Page &p, RowType t, const char *label, int arg, const char *help) {
-    Row &r = p.rows[p.count++];
-    r.type = t;
-    r.label = label;
-    r.arg = arg;
-    r.help = help;
-}
+static bool UndoPresetOffered() { return UndoOffered(g_presetBackup); }
+static bool UndoResetOffered() { return UndoOffered(g_resetBackup); }
+static bool AutoCamera() { return g_val[S_CAM_OUT] == 1; }  // Invert and speed only mean something with it
 
-static void AddSetting(Page &p, int s) {
-    AddRow(p, R_SETTING, kSettings[s].label, s, kSettings[s].help);
-}
+#define SETTING_ROW(s) {R_SETTING, NULL, s, NULL, NULL, NULL, NULL}
+#define AUTO_CAMERA_ROW(s) {R_SETTING, NULL, s, NULL, NULL, AutoCamera, "Only with the Auto camera."}
+#define RETURN_ROW {R_RETURN, "Return to previous menu", 0, "", NULL, NULL, NULL}
 
-static void BuildPages() {
-    memset(g_pages, 0, sizeof g_pages);
+static const Row kHubRows[] = {
+    {R_RETURN, "Return to the game", 0, "Back to where you were.", NULL, NULL, NULL},
+    {R_PRESET_ROW, "", P_PRESET, "As in 1997, or today's look with bugs fixed.", NULL, NULL, NULL},
+    {R_CATEGORY, "Language and interface", P_LANG, "Text, voices, the font and the background.", NULL, NULL, NULL},
+    {R_CATEGORY, "Display and graphics", P_DISPLAY, "Resolution, window and detail.", NULL, NULL, NULL},
+    {R_CATEGORY, "Sound", P_SOUND, "Volumes.", NULL, NULL, NULL},
+    {R_CATEGORY, "Controls and camera", P_CONTROLS, "Keys, pad and the camera.", NULL, NULL, NULL},
+    {R_CATEGORY, "Advanced and reset", P_ADVANCED, "The rules switch, experiments and a fresh start.", NULL, NULL,
+     NULL},
+};
 
-    Page &hub = g_pages[P_HUB];
-    hub.name = "Options";
-    AddRow(hub, R_RETURN, "Return to the game", 0, "Back to where you were.");
-    AddRow(hub, R_PRESET_ROW, "", P_PRESET, "As in 1997, or today's look with bugs fixed.");
-    AddRow(hub, R_CATEGORY, "Language and interface", P_LANG, "Text, voices, the font and the background.");
-    AddRow(hub, R_CATEGORY, "Display and graphics", P_DISPLAY, "Resolution, window and detail.");
-    AddRow(hub, R_CATEGORY, "Sound", P_SOUND, "Volumes.");
-    AddRow(hub, R_CATEGORY, "Controls and camera", P_CONTROLS, "Keys, pad and the camera.");
-    AddRow(hub, R_CATEGORY, "Advanced and reset", P_ADVANCED, "The rules switch, experiments and a fresh start.");
+static const Row kPresetRows[] = {
+    RETURN_ROW,
+    {R_PRESET_CHOICE, "Modern", 0, "Today's look, cameras that follow, bugs fixed.", NULL, NULL, NULL},
+    {R_PRESET_CHOICE, "Classic", 1, "The 1997 look and cameras, bugs and all.", NULL, NULL, NULL},
+    {R_BACK_TO_MINE, "Undo preset", BACK_PRESET, "Puts back the settings you had before you chose a preset.",
+     UndoPresetOffered, NULL, NULL},
+};
 
-    Page &pr = g_pages[P_PRESET];
-    pr.name = "Preset";
-    AddRow(pr, R_RETURN, "Return to previous menu", 0, "");
-    AddRow(pr, R_PRESET_CHOICE, "Modern", 0, "Today's look, cameras that follow, bugs fixed.");
-    AddRow(pr, R_PRESET_CHOICE, "Classic", 1, "The 1997 look and cameras, bugs and all.");
-    if (UndoOffered(g_presetBackup))
-        AddRow(pr, R_BACK_TO_MINE, "Undo preset", BACK_PRESET, "Puts back the settings you had before you chose a preset.");
+static const Row kLangRows[] = {
+    RETURN_ROW, SETTING_ROW(S_TEXT_LANG), SETTING_ROW(S_VOICE_LANG), SETTING_ROW(S_SUBTITLES),
+    SETTING_ROW(S_BACKGROUND), SETTING_ROW(S_FONT),
+};
 
-    Page &lang = g_pages[P_LANG];
-    lang.name = "Language and interface";
-    AddRow(lang, R_RETURN, "Return to previous menu", 0, "");
-    AddSetting(lang, S_TEXT_LANG);
-    AddSetting(lang, S_VOICE_LANG);
-    AddSetting(lang, S_SUBTITLES);
-    AddSetting(lang, S_BACKGROUND);
-    AddSetting(lang, S_FONT);
+static const Row kDisplayRows[] = {
+    RETURN_ROW, SETTING_ROW(S_RESOLUTION), SETTING_ROW(S_FULLSCREEN), SETTING_ROW(S_VSYNC),
+    SETTING_ROW(S_FPS), SETTING_ROW(S_IMAGE),
+};
 
-    Page &disp = g_pages[P_DISPLAY];
-    disp.name = "Display and graphics";
-    AddRow(disp, R_RETURN, "Return to previous menu", 0, "");
-    AddSetting(disp, S_RESOLUTION);
-    AddSetting(disp, S_FULLSCREEN);
-    AddSetting(disp, S_VSYNC);
-    AddSetting(disp, S_FPS);
-    AddSetting(disp, S_IMAGE);
+static const Row kSoundRows[] = {
+    RETURN_ROW, SETTING_ROW(S_MASTER), SETTING_ROW(S_SFX), SETTING_ROW(S_VOICES), SETTING_ROW(S_MUSIC),
+};
 
-    Page &snd = g_pages[P_SOUND];
-    snd.name = "Sound";
-    AddRow(snd, R_RETURN, "Return to previous menu", 0, "");
-    AddSetting(snd, S_MASTER);
-    AddSetting(snd, S_SFX);
-    AddSetting(snd, S_VOICES);
-    AddSetting(snd, S_MUSIC);
+static const Row kControlsRows[] = {
+    RETURN_ROW,
+    {R_ACTION, "Keys and buttons", A_KEYS, "Change which key or button does what.", NULL, NULL, NULL},
+    SETTING_ROW(S_CAM_OUT),
+    SETTING_ROW(S_CAM_IN),
+    SETTING_ROW(S_MOVIE_CAM),
+    AUTO_CAMERA_ROW(S_INVERT),
+    AUTO_CAMERA_ROW(S_SENS),
+};
 
-    Page &ctl = g_pages[P_CONTROLS];
-    ctl.name = "Controls and camera";
-    AddRow(ctl, R_RETURN, "Return to previous menu", 0, "");
-    AddRow(ctl, R_ACTION, "Keys and buttons", A_KEYS, "Change which key or button does what.");
-    AddSetting(ctl, S_CAM_OUT);
-    AddSetting(ctl, S_CAM_IN);
-    AddSetting(ctl, S_MOVIE_CAM);
-    AddSetting(ctl, S_INVERT);
-    AddSetting(ctl, S_SENS);
-
-    Page &adv = g_pages[P_ADVANCED];
-    adv.name = "Advanced and reset";
-    AddRow(adv, R_RETURN, "Return to previous menu", 0, "");
-    AddSetting(adv, S_FIXBUGS);
+static const Row kAdvancedRows[] = {
+    RETURN_ROW,
+    SETTING_ROW(S_FIXBUGS),
     // Always offered (decided 2026-11-03): its help carries the warning a switch once did.
     // The page holds every console setting without a row of its own: tuning for finished
     // features and the few unfinished ones, which it marks experimental.
     // Help within 750 px (2026-11-12); an experimental row's own help says it is experimental.
-    AddRow(adv, R_ACTION, "More options", A_EXP, "Tuning and 1997 extras, in English.");
+    {R_ACTION, "More options", A_EXP, "Tuning and 1997 extras, in English.", NULL, NULL, NULL},
     // The row's value is the version, so a bug report can name the build from the menu.
-    AddRow(adv, R_ACTION, "Console", A_CONSOLE, "Messages, and commands from a keyboard.");
-    AddRow(adv, R_ACTION, "Reset settings", A_RESET, "Puts every setting back as a fresh install has it.");
-    if (UndoOffered(g_resetBackup))
-        AddRow(adv, R_BACK_TO_MINE, "Undo reset", BACK_RESET, "Puts back what you had before the reset.");
+    {R_ACTION, "Console", A_CONSOLE, "Messages, and commands from a keyboard.", NULL, NULL, NULL},
+    {R_ACTION, "Reset settings", A_RESET, "Puts every setting back as a fresh install has it.", NULL, NULL, NULL},
+    {R_BACK_TO_MINE, "Undo reset", BACK_RESET, "Puts back what you had before the reset.", UndoResetOffered, NULL,
+     NULL},
+};
 
-    // A fixture: today's Options page from the boot menu, to diff against lba2cc's
-    // `ui menu-main-options` capture.
-    Page &og = g_pages[P_ORIGINAL];
-    og.name = "original";
-    AddRow(og, R_RETURN, "Return to previous menu", 0, "");
-    AddRow(og, R_ACTION, "Display", 0, "");
-    AddRow(og, R_ACTION, "Sound volume", 0, "");
-    AddRow(og, R_ACTION, "Choose language", 0, "");
-    AddRow(og, R_ACTION, "Advanced options", 0, "");
-    AddRow(og, R_ACTION, "Controls", 0, "");
+static const Row kFirstRows[] = {
+    {R_PRESET_CHOICE, "Modern", 0, "Today's look, bugs fixed. You can change this later in the Options Menu.", NULL,
+     NULL, NULL},
+    {R_PRESET_CHOICE, "Classic", 1, "As in 1997, bugs and all. You can change this later in the Options Menu.", NULL,
+     NULL, NULL},
+};
 
-    Page &fl = g_pages[P_FIRST];
-    fl.name = "First launch";
-    AddRow(fl, R_PRESET_CHOICE, "Modern", 0, "Today's look, bugs fixed. You can change this later in the Options Menu.");
-    AddRow(fl, R_PRESET_CHOICE, "Classic", 1, "As in 1997, bugs and all. You can change this later in the Options Menu.");
-}
+// A fixture: today's Options page from the boot menu, to diff against lba2cc's
+// `ui menu-main-options` capture.
+static const Row kOriginalRows[] = {
+    RETURN_ROW,
+    {R_ACTION, "Display", 0, "", NULL, NULL, NULL},
+    {R_ACTION, "Sound volume", 0, "", NULL, NULL, NULL},
+    {R_ACTION, "Choose language", 0, "", NULL, NULL, NULL},
+    {R_ACTION, "Advanced options", 0, "", NULL, NULL, NULL},
+    {R_ACTION, "Controls", 0, "", NULL, NULL, NULL},
+};
 
-// Invert and speed only mean something with the Auto camera: dimmed, not hidden.
-static bool RowActive(const Row &r) {
-    if (r.type == R_SETTING && (r.arg == S_INVERT || r.arg == S_SENS))
-        return g_val[S_CAM_OUT] == 1;
-    return true;
-}
+#define PAGE(name, rows) {name, rows, (int)(sizeof rows / sizeof rows[0])}
+static const Page kPages[P_COUNT] = {
+    PAGE("Options", kHubRows),
+    PAGE("Preset", kPresetRows),
+    PAGE("Language and interface", kLangRows),
+    PAGE("Display and graphics", kDisplayRows),
+    PAGE("Sound", kSoundRows),
+    PAGE("Controls and camera", kControlsRows),
+    PAGE("Advanced and reset", kAdvancedRows),
+    PAGE("First launch", kFirstRows),
+    PAGE("original", kOriginalRows),
+};
+#undef PAGE
+
+static const char *RowLabel(const Row &r) { return r.type == R_SETTING ? kSettings[r.arg].label : r.label; }
+static const char *RowHelp(const Row &r) { return r.type == R_SETTING ? kSettings[r.arg].help : r.help; }
+static bool RowActive(const Row &r) { return !r.active || r.active(); }
 
 static const char *PresetRowLabel(char *buf, size_t n) {
     return FormatPresetRow(buf, n, kPresetNames[g_preset], PresetChanged());
@@ -488,15 +488,16 @@ static bool ValueChanged(int s) {
 
 // ───────────────────────────── Navigation state ─────────────────────────────
 
-enum Focus { F_LEFT, F_RIGHT };
-
-static int g_stack[8];
-static int g_cursorStack[8];
+// Where the player is: one stack of pages, each with the row its cursor is on, the same in
+// every layout (the menu plan's page model). A row is its index in the page's table, never a
+// position on the screen, so a layout change or a row that comes or goes leaves it in place.
+struct Place {
+    int page;
+    int row;
+};
+static Place g_stack[8];
 static int g_depth;
-static int g_cursor;       // one column: cursor on the top page; wide: cursor in the focused pane
-static int g_leftCursor;   // wide: cursor in the left pane
-static Focus g_focus;
-static int g_scroll;
+static int g_scroll;       // the first shown row drawn: the view's, counted as its layout shows rows
 static bool g_first;       // first-launch screen
 static bool g_confirm;     // a question is up: Classic, or Reset settings
 static int g_confirmCursor;
@@ -556,35 +557,68 @@ void Menu_NoteScreen() {
     Trace("screen %s", note);
 }
 
-// The page in the right pane (wide) or on screen (one column).
-static int TopPage() {
-    return g_stack[g_depth - 1];
+static int TopPage() { return g_stack[g_depth - 1].page; }
+
+// A row as the layout shows it: a wide page has no Return row (Esc goes back), and a row
+// with a "shown when" check is there only while it holds.
+static bool RowShown(const Page &p, int i) {
+    const Row &r = p.rows[i];
+    if (r.type == R_RETURN && Wide() && !g_first)
+        return false;
+    return !r.shown || r.shown();
 }
 
-// Wide: the left pane is the hub without its Return row.
-static int LeftRowToHub(int i) { return i + 1; }
-static int LeftCount() { return g_pages[P_HUB].count - 1; }
+enum { PAGE_ROWS_MAX = 16 };
 
-static int RightPage() {
-    if (g_depth > 1)
-        return TopPage();
-    const Row &r = g_pages[P_HUB].rows[LeftRowToHub(g_leftCursor)];
-    return r.arg;
+// The rows a page shows, in order: their indices in its table.
+static int ShownRows(int page, int *out) {
+    const Page &p = kPages[page];
+    int n = 0;
+    for (int i = 0; i < p.count && n < PAGE_ROWS_MAX; i++)
+        if (RowShown(p, i))
+            out[n++] = i;
+    return n;
 }
 
-// Wide right pane skips the Return row.
-static int RightFirst() { return 1; }
+// Where a row is among the rows its page shows: 0 the first; -1 when it is not shown.
+static int Position(int page, int row) {
+    int shown[PAGE_ROWS_MAX];
+    const int n = ShownRows(page, shown);
+    for (int i = 0; i < n; i++)
+        if (shown[i] == row)
+            return i;
+    return -1;
+}
+
+// A row the cursor can be on: the row itself when shown, else the next one shown, else the
+// one before (an undo row that went, after the undo).
+static int ResolveRow(int page, int row) {
+    const Page &p = kPages[page];
+    if (row >= 0 && row < p.count && RowShown(p, row))
+        return row;
+    for (int i = row + 1; i < p.count; i++)
+        if (RowShown(p, i))
+            return i;
+    for (int i = (row < p.count ? row : p.count) - 1; i >= 0; i--)
+        if (RowShown(p, i))
+            return i;
+    return 0;
+}
+
+// The top of the stack, its row checked as it is read: nothing has to remember to move the
+// cursor off a row that went.
+static Place &Top() {
+    Place &t = g_stack[g_depth - 1];
+    t.row = ResolveRow(t.page, t.row);
+    assert(RowShown(kPages[t.page], t.row) && "the cursor is on a row its page shows");
+    return t;
+}
 
 static const Row *CursorRow() {
     if (g_confirm)
         return NULL;
-    if (g_first)
-        return &g_pages[P_FIRST].rows[g_cursor];
-    if (!Wide())
-        return &g_pages[TopPage()].rows[g_cursor];
-    if (g_focus == F_LEFT)
-        return &g_pages[P_HUB].rows[LeftRowToHub(g_leftCursor)];
-    return &g_pages[RightPage()].rows[RightFirst() + g_cursor];
+    const Place &t = Top();
+    return &kPages[t.page].rows[t.row];
 }
 
 static void LegendFor(const Row *r, const char **keys, const char **words, int *n);
@@ -612,8 +646,8 @@ static const char *HelpFor(const Row *r) {
     if (!r)
         return "";
     // One message at a time: a dimmed row says why it is dimmed, not what it does.
-    if (r->type == R_SETTING && !RowActive(*r))
-        return "Only with the Auto camera.";
+    if (!RowActive(*r))
+        return r->needs;
     if (r->type == R_BACK_TO_MINE) {
         // What the undo puts back (BackupDiffers, as RestoreBackup does it); as many named
         // as the voice holds, the rest counted, so the help never pages.
@@ -635,9 +669,9 @@ static const char *HelpFor(const Row *r) {
             if (VoiceFits(buf, r))
                 return buf;
         }
-        return r->help;
+        return RowHelp(*r);
     }
-    return r->help ? r->help : "";
+    return RowHelp(*r) ? RowHelp(*r) : "";
 }
 
 // Shorter help for translation (decided 2026-11-03): English at most about 750 px,
@@ -706,35 +740,18 @@ static void UpdateVoice() {
 }
 
 static void Push(int page) {
-    g_cursorStack[g_depth - 1] = g_cursor;
-    g_stack[g_depth++] = page;
-    g_cursor = 0;  // the 1997 sub-menus open on their Return row
+    g_stack[g_depth].page = page;
+    g_stack[g_depth].row = ResolveRow(page, 0);  // the first row shown: 1997's sub-menus open on their Return row
+    g_depth++;
     g_scroll = 0;
-    Trace("open page=%s", g_pages[page].name);
+    Trace("open page=%s", kPages[page].name);
 }
 
-// The layout the navigation state was made in. The screen can change under it (a
-// new size, the scale rule, the sheet switch), and the two layouts keep the place
-// differently: one column stacks hub, category, sub-page, each cursor counting
-// the Return row; wide keeps the category as the left pane's cursor and the right
-// pane's stack under the hub, its cursors past the Return row.
+// The layout the view was last made in. The place is the same in every layout; only the
+// scroll, which counts rows as a layout shows them, starts again when the layout changes.
 static int g_layoutWide = -1;
 
-static int HubRowFor(int page) {
-    for (int i = 0; i < LeftCount(); i++)
-        if (g_pages[P_HUB].rows[LeftRowToHub(i)].arg == page)
-            return LeftRowToHub(i);
-    return -1;
-}
-
-static bool PageLeadsTo(int from, int to) {
-    for (int i = 0; i < g_pages[from].count; i++)
-        if (g_pages[from].rows[i].arg == to && g_pages[from].rows[i].type != R_SETTING)
-            return true;
-    return false;
-}
-
-static void SyncLayout() {
+static void SyncView() {
     const int wide = Wide() ? 1 : 0;
     if (g_layoutWide == wide)
         return;
@@ -743,61 +760,14 @@ static void SyncLayout() {
     if (was < 0 || g_first)
         return;
     g_scroll = 0;
-    if (wide) {
-        int hubRow = g_depth >= 2 ? HubRowFor(g_stack[1]) : -1;
-        if (g_depth == 1) {
-            g_leftCursor = g_cursor > 0 ? g_cursor - 1 : 0;
-            g_focus = F_LEFT;
-            g_cursor = 0;
-        } else if (hubRow >= 0) {
-            // Drop the category from the stack: the left cursor holds it.
-            g_leftCursor = hubRow - 1;
-            for (int i = 1; i + 1 < g_depth; i++) {
-                g_stack[i] = g_stack[i + 1];
-                g_cursorStack[i - 1] = g_cursorStack[i] > 0 ? g_cursorStack[i] - 1 : 0;
-            }
-            g_depth--;
-            g_cursor = g_cursor > 0 ? g_cursor - 1 : 0;
-            g_focus = F_RIGHT;
-        } else {
-            for (int i = 1; i + 1 < g_depth; i++)
-                g_cursorStack[i] = g_cursorStack[i] > 0 ? g_cursorStack[i] - 1 : 0;
-            g_leftCursor = 0;
-            g_cursor = g_cursor > 0 ? g_cursor - 1 : 0;
-            g_focus = F_RIGHT;
-        }
-    } else {
-        const int hubRow = LeftRowToHub(g_leftCursor);
-        const int cat = g_pages[P_HUB].rows[hubRow].arg;
-        g_leftCursor = 0;  // one column has no left pane
-        if (g_focus == F_LEFT) {
-            g_depth = 1;
-            g_cursor = hubRow;
-        } else if (g_depth == 1 || (g_depth < 8 && PageLeadsTo(cat, g_stack[1]))) {
-            // Put the category back between the hub and the right pane's pages.
-            for (int i = g_depth; i >= 2; i--) {
-                g_stack[i] = g_stack[i - 1];
-                g_cursorStack[i - 1] = g_cursorStack[i - 2] + 1;
-            }
-            g_stack[1] = cat;
-            g_cursorStack[0] = hubRow;
-            g_depth++;
-            g_cursor++;
-        } else {
-            for (int i = 1; i + 1 < g_depth; i++)
-                g_cursorStack[i]++;
-            g_cursor++;
-        }
-    }
-    Trace("layout %s page=%s cursor=%d", wide ? "wide" : "column",
-          g_pages[wide && g_focus == F_RIGHT ? RightPage() : TopPage()].name, g_cursor);
+    const Place &t = Top();
+    Trace("layout %s page=%s cursor=%d", wide ? "wide" : "column", kPages[t.page].name, Position(t.page, t.row));
 }
 
 static void Pop() {
     if (g_depth > 1) {
-        Trace("close page=%s", g_pages[TopPage()].name);
+        Trace("close page=%s", kPages[TopPage()].name);
         g_depth--;
-        g_cursor = g_cursorStack[g_depth - 1];
         g_scroll = 0;
     } else {
         g_closed = true;
@@ -810,15 +780,10 @@ void Menu_Init(bool firstLaunch) {
     for (int s = 0; s < S_COUNT; s++)
         g_val[s] = FreshValue(s);
     g_preset = 0;
-    BuildPages();
-    g_depth = 1;
-    g_stack[0] = P_HUB;
-    g_cursor = 1;  // the preset row, as the mock draws it
-    g_leftCursor = 0;
-    g_focus = F_LEFT;
     g_first = firstLaunch;
-    if (g_first)
-        g_cursor = 0;
+    g_depth = 1;
+    g_stack[0].page = g_first ? P_FIRST : P_HUB;
+    g_stack[0].row = g_first ? 0 : 1;  // the preset row, as the mock draws it
     g_voice.text[0] = 0;
     g_layoutWide = Wide() ? 1 : 0;
     Trace("init layout=%s logical=%ux%u first=%d", Wide() ? "wide" : "column",
@@ -858,7 +823,6 @@ static void ChangeSetting(int s, int dir) {
         g_val[s] = v;
         char buf[32];
         Trace("set %s=%s", st.id, ValueText(s, buf, sizeof buf));
-        BuildPages();
     }
 }
 
@@ -870,13 +834,7 @@ static void Activate(const Row &r) {
         break;
     case R_CATEGORY:
     case R_PRESET_ROW:
-        if (Wide()) {
-            g_focus = F_RIGHT;
-            g_cursor = 0;
-            Trace("focus right page=%s", g_pages[r.arg].name);
-        } else {
-            Push(r.arg);
-        }
+        Push(r.arg);
         break;
     case R_SETTING:
         if (kSettings[r.arg].kind == K_CHOICE || kSettings[r.arg].kind == K_TOGGLE)
@@ -887,23 +845,20 @@ static void Activate(const Row &r) {
             ApplyPreset(r.arg);
             g_first = false;
             g_presetBackup.have = false;
-            g_cursor = 1;
+            g_depth = 1;
+            g_stack[0].page = P_HUB;
+            g_stack[0].row = 1;  // on the preset row
             Trace("first launch chose=%s", kPresetNames[r.arg]);
             break;
         }
-        if (r.arg == 1 && g_preset != 1) {
+        if (r.arg == 1 && g_preset != 1)
             Ask(Q_CLASSIC);
-        } else {
+        else
             ApplyPreset(r.arg);
-            BuildPages();
-        }
         break;
     case R_BACK_TO_MINE:
         RestoreBackup(r.arg == BACK_RESET ? g_resetBackup : g_presetBackup);
         Trace("back to my settings");
-        BuildPages();
-        if (!Wide() && g_cursor >= g_pages[TopPage()].count)
-            g_cursor = g_pages[TopPage()].count - 1;
         break;
     case R_ACTION:
         if (r.arg == A_RESET)
@@ -920,53 +875,37 @@ static void Activate(const Row &r) {
     }
 }
 
-static int CountOnFocus() {
-    if (g_first)
-        return g_pages[P_FIRST].count;
-    if (!Wide())
-        return g_pages[TopPage()].count;
-    if (g_focus == F_LEFT)
-        return LeftCount();
-    return g_pages[RightPage()].count - RightFirst();
-}
-
 static void Move(int dir) {
-    int n = CountOnFocus();
+    Place &t = Top();
+    int shown[PAGE_ROWS_MAX];
+    const int n = ShownRows(t.page, shown);
     if (n <= 0)
         return;
-    if (Wide() && !g_first && g_focus == F_LEFT) {
-        g_leftCursor = (g_leftCursor + dir + n) % n;
-    } else {
-        g_cursor = (g_cursor + dir + n) % n;
-    }
+    t.row = shown[(Position(t.page, t.row) + dir + n) % n];
     const Row *r = CursorRow();
-    Trace("cursor %s", r ? (r->type == R_PRESET_ROW ? "preset row" : r->label) : "-");
+    Trace("cursor %s", r ? (r->type == R_PRESET_ROW ? "preset row" : RowLabel(*r)) : "-");
 }
 
-// After the page changed shape: the cursor back on the row it was on, if it is still there.
-static void KeepCursorOn(const char *label) {
-    if (!label || g_first || (Wide() && g_focus == F_LEFT))
-        return;
-    const Page &p = g_pages[Wide() ? RightPage() : TopPage()];
-    int first = Wide() ? RightFirst() : 0;
-    for (int i = first; i < p.count; i++) {
-        if (p.rows[i].label && !strcmp(p.rows[i].label, label)) {
-            g_cursor = i - first;
+// The cursor on the top page's row of that kind, as Enter on it leaves it.
+static void PutCursorOn(RowType type, int arg) {
+    Place &t = g_stack[g_depth - 1];
+    const Page &p = kPages[t.page];
+    for (int i = 0; i < p.count; i++) {
+        if (p.rows[i].type == type && p.rows[i].arg == arg) {
+            t.row = i;
             return;
         }
     }
 }
 
 void Menu_Update() {
-    SyncLayout();
+    SyncView();
     if (Controls_Active()) {
         Controls_Update();
         return;
     }
     if (Exp_Active()) {
         Exp_Update();
-        if (!Exp_Active())
-            BuildPages();  // a changed tuning value can change the Undo rows
         return;
     }
     if (g_console) {
@@ -1003,14 +942,10 @@ void Menu_Update() {
             g_confirm = false;
             Trace("answer %s", g_confirmCursor ? "yes" : "no");
             if (g_confirmCursor) {
-                const Row *was = CursorRow();
-                const char *label = was ? was->label : NULL;
                 if (g_question == Q_RESET)
                     ResetSettings();
                 else
                     ApplyPreset(1);
-                BuildPages();
-                KeepCursorOn(label);  // the page was rebuilt; an Undo row comes and goes
             }
         }
         UpdateVoice();
@@ -1028,32 +963,20 @@ void Menu_Update() {
             ChangeSetting(r->arg, -1);
         if (Engine_Pressed(KEY_RIGHT))
             ChangeSetting(r->arg, +1);
-    } else if (Wide() && !g_first && g_focus == F_LEFT && Engine_Pressed(KEY_RIGHT) && r) {
-        Activate(*r);
+    } else if (Wide() && !g_first && g_depth == 1 && Engine_Pressed(KEY_RIGHT) && r) {
+        Activate(*r);  // wide, Right opens a hub row as Enter does
     }
     r = CursorRow();
     if (r && Engine_Pressed(KEY_ENTER) && RowActive(*r))
         Activate(*r);
 
     if (Engine_Pressed(KEY_ESC)) {
-        if (g_first) {
-            Activate(g_pages[P_FIRST].rows[0]);  // Escape answers Modern
-        } else if (Wide() && g_focus == F_RIGHT) {
-            g_focus = F_LEFT;
-            Trace("focus left");
-        } else {
+        if (g_first)
+            Activate(kPages[P_FIRST].rows[0]);  // Escape answers Modern
+        else
             Pop();
-        }
     }
 
-    // Keep cursors in range after pages change shape.
-    int n = CountOnFocus();
-    if (Wide() && !g_first && g_focus == F_LEFT) {
-        if (g_leftCursor >= n)
-            g_leftCursor = n - 1;
-    } else if (g_cursor >= n) {
-        g_cursor = n - 1;
-    }
     if (!Controls_Active() && !Exp_Active())  // a page just opened: its help, not this row's
         UpdateVoice();
 }
@@ -1128,11 +1051,11 @@ static void DrawColumnRow(const Row &r, S32 x0, S32 y0, S32 x1, S32 y1, bool cur
     if (r.type == R_PRESET_ROW)
         PresetRowLabel(text, sizeof text);
     else if (r.type == R_SETTING && kSettings[r.arg].kind != K_SLIDER)
-        snprintf(text, sizeof text, "%s: %s", r.label, ValueText(r.arg, val, sizeof val));
+        snprintf(text, sizeof text, "%s: %s", RowLabel(r), ValueText(r.arg, val, sizeof val));
     else if (r.type == R_ACTION && r.arg == A_CONSOLE)
-        snprintf(text, sizeof text, "%s: %s", r.label, kVersion);
+        snprintf(text, sizeof text, "%s: %s", RowLabel(r), kVersion);
     else
-        snprintf(text, sizeof text, "%s", r.label);
+        snprintf(text, sizeof text, "%s", RowLabel(r));
     Menu_RowLabelCentred(x0, x1, yc, text, active ? INK_WHITE : INK_DISABLED, false, cursor);
 
     DrawnRow &d = Menu_Record("column", text,
@@ -1177,7 +1100,7 @@ static void DrawWideRow(const char *pane, const Row &r, S32 x0, S32 y0, S32 x1, 
         }
         snprintf(label, sizeof label, "%s", presetText);
     } else {
-        snprintf(label, sizeof label, "%s", r.label);
+        snprintf(label, sizeof label, "%s", RowLabel(r));
     }
 
     DrawnRow &d = Menu_Record(pane, label, "", fill, x0, y0, x1, y1);
@@ -1341,7 +1264,7 @@ static void DrawLegendStacked(S32 x, S32 y0, const char **keys, const char **wor
 
 // The question's answers, the safe one first; the question itself is in the voice.
 // One column: a small panel in the middle, labels centred, as 1997. Wide: in place
-// of the right pane's rows, labels on the pane's label edge.
+// of the page's rows, labels on their label edge.
 static void DrawConfirm(const char *pane, S32 x0, S32 x1, S32 y0) {
     bool centred = !strcmp(pane, "confirm");
     const char *const *answers = kQuestions[g_question].answers;
@@ -1401,7 +1324,11 @@ void Menu_DrawDialogueIn(S32 x0, S32 y0, S32 x1, S32 y1) {
 
 static void DrawColumn() {
     S32 W = (S32)Engine_LogicalW(), H = (S32)Engine_LogicalH();
-    const Page &p = g_first ? g_pages[P_FIRST] : g_pages[TopPage()];
+    const Place &t = Top();
+    const Page &p = kPages[t.page];
+    int shown[PAGE_ROWS_MAX];
+    const int count = ShownRows(t.page, shown);
+    const int cursor = Position(t.page, t.row);
 
     // First launch on a canvas that takes the wide composition sits in its frame,
     // the dialogue window where the band is on every other page.
@@ -1425,14 +1352,14 @@ static void DrawColumn() {
         if (g_first)
             top = 168 - 8;
         int visible = (bottom - top + ROW_GAP) / ROW_PITCH;
-        if (visible > p.count)
-            visible = p.count;
-        if (g_scroll > p.count - visible)
-            g_scroll = p.count - visible;  // a row went (Undo reset): no rows past the end
-        if (g_cursor < g_scroll)
-            g_scroll = g_cursor;
-        if (g_cursor >= g_scroll + visible)
-            g_scroll = g_cursor - visible + 1;
+        if (visible > count)
+            visible = count;
+        if (g_scroll > count - visible)
+            g_scroll = count - visible;  // a row went (Undo reset): no rows past the end
+        if (cursor < g_scroll)
+            g_scroll = cursor;
+        if (cursor >= g_scroll + visible)
+            g_scroll = cursor - visible + 1;
         S32 stackH = visible * ROW_PITCH - ROW_GAP;
         S32 y = top + (bottom - top - stackH) / 2;  // centred above the dialogue window
         if (g_first)
@@ -1440,12 +1367,12 @@ static void DrawColumn() {
         // The 1997 width: LargeurMenu 550, centred.
         S32 x0 = W / 2 - 275, x1 = W / 2 + 275;
         for (int i = g_scroll; i < g_scroll + visible; i++) {
-            DrawColumnRow(p.rows[i], x0, y, x1, y + ROW_H, i == g_cursor);
+            DrawColumnRow(p.rows[shown[i]], x0, y, x1, y + ROW_H, i == cursor);
             y += ROW_PITCH;
         }
-        if (visible < p.count)
+        if (visible < count)
             Menu_DrawScrollBar(x1 + 9, y - visible * ROW_PITCH, y - visible * ROW_PITCH + stackH - 1, g_scroll, visible,
-                          p.count);
+                          count);
     }
     if (framed)
         Menu_DrawDialogueIn(fr.x0 + 32, fr.y0 + fr.h - 25 - 137, fr.x0 + fr.w - 33, fr.y0 + fr.h - 25);
@@ -1453,72 +1380,50 @@ static void DrawColumn() {
         Menu_DrawDialogue();
 }
 
+// Wide: one page at a time, centred and as wide as the 1997 canvas: the hub, then a page,
+// as the 1997 menu goes. A page names itself in a title; the hub has none.
 static void DrawWide() {
     WideFrame f = Menu_WideFrame();
-    const S32 side = 32, gap = 16;
     const S32 top = f.y0 + 24;
-    S32 inner = f.w - 2 * side - gap;
-    S32 leftW = inner * 464 / 880;
-    S32 lx0 = f.x0 + side, lx1 = lx0 + leftW - 1;
-    S32 rx0 = lx1 + 1 + gap, rx1 = f.x0 + f.w - side - 1;
-    // One pane at a time, the focused one, centred and as wide as the 1997 canvas.
-    lx0 = rx0 = f.x0 + (f.w - DRILL_W) / 2;
-    lx1 = rx1 = lx0 + DRILL_W - 1;
-    bool drawLeft = g_focus == F_LEFT && !g_confirm;
-    bool drawRight = !drawLeft;
+    const S32 x0 = f.x0 + (f.w - DRILL_W) / 2, x1 = x0 + DRILL_W - 1;
+    const Place &t = Top();
+    const Page &page = kPages[t.page];
 
-    // Left pane: the hub's categories.
-    const Page &hub = g_pages[P_HUB];
-    S32 y = top;
-    for (int i = 0; drawLeft && i < LeftCount(); i++) {
-        RowFill fill = FILL_SHADE;
-        if (i == g_leftCursor)
-            fill = g_focus == F_LEFT ? FILL_CURSOR : FILL_CURRENT;
-        DrawWideRow("left", hub.rows[LeftRowToHub(i)], lx0, y, lx1, y + ROW_H, fill);
-        y += ROW_PITCH;
-    }
-
-    // Right pane: the page of the category under the left cursor, or, while a
-    // question is up, its answers in place of the rows.
-    if (!drawRight) {
-    } else if (g_confirm) {
-        S32 qtop = Ui_Title(rx0, rx1, top, g_pages[RightPage()].name);
-        DrawConfirm("right", rx0, rx1, qtop);
+    if (g_confirm) {
+        // The question's answers in place of the rows.
+        DrawConfirm("wide", x0, x1, Ui_Title(x0, x1, top, page.name));
     } else {
-        int rp = RightPage();
-        const Page &page = g_pages[rp];
-        int n = page.count - RightFirst();
-        S32 limit = Menu_WideRowsLimit();
-        // Alone, the page names itself: a title in the seventh row's place.
-        S32 rtop = Ui_Title(rx0, rx1, top, page.name);
-        Menu_Record("title", page.name, "", FILL_SHADE, rx0, top, rx1, top + 38).textLeft =
-            (rx0 + rx1 + 1) / 2 - Ui_TextWidth(page.name) / 2;
-        int visible = (limit - rtop + ROW_GAP) / ROW_PITCH;
+        int shown[PAGE_ROWS_MAX];
+        const int n = ShownRows(t.page, shown);
+        const int cursor = Position(t.page, t.row);
+        S32 rowsTop = top;
+        if (g_depth > 1) {
+            rowsTop = Ui_Title(x0, x1, top, page.name);
+            Menu_Record("title", page.name, "", FILL_SHADE, x0, top, x1, top + 38).textLeft =
+                (x0 + x1 + 1) / 2 - Ui_TextWidth(page.name) / 2;
+        }
+        int visible = (Menu_WideRowsLimit() - rowsTop + ROW_GAP) / ROW_PITCH;
         if (visible > n)
             visible = n;
-        if (g_focus == F_RIGHT) {
-            if (g_scroll > n - visible)
-                g_scroll = n - visible;  // a row went (Undo reset): no rows past the end
-            if (g_cursor < g_scroll)
-                g_scroll = g_cursor;
-            if (g_cursor >= g_scroll + visible)
-                g_scroll = g_cursor - visible + 1;
-        } else {
-            g_scroll = 0;
-        }
-        y = rtop;
+        if (g_scroll > n - visible)
+            g_scroll = n - visible;  // a row went (Undo reset): no rows past the end
+        if (cursor < g_scroll)
+            g_scroll = cursor;
+        if (cursor >= g_scroll + visible)
+            g_scroll = cursor - visible + 1;
+        S32 y = rowsTop;
         for (int i = g_scroll; i < g_scroll + visible; i++) {
+            const Row &row = page.rows[shown[i]];
             RowFill fill = FILL_SHADE;
-            const Row &row = page.rows[RightFirst() + i];
-            if (g_focus == F_RIGHT && i == g_cursor)
+            if (i == cursor)
                 fill = FILL_CURSOR;
             else if (row.type == R_PRESET_CHOICE && !g_first && row.arg == g_preset)
                 fill = FILL_CURRENT;  // the chosen preset wears the current-value plasma, as in the column
-            DrawWideRow("right", row, rx0, y, rx1, y + ROW_H, fill);
+            DrawWideRow("wide", row, x0, y, x1, y + ROW_H, fill);
             y += ROW_PITCH;
         }
         if (visible < n)
-            Menu_DrawScrollBar(rx1 + 9, rtop, rtop + visible * ROW_PITCH - ROW_GAP - 1, g_scroll, visible, n);
+            Menu_DrawScrollBar(x1 + 9, rowsTop, rowsTop + visible * ROW_PITCH - ROW_GAP - 1, g_scroll, visible, n);
     }
 
     // Help and legend.
@@ -1652,7 +1557,7 @@ void Menu_Draw() {
     VFont_Set(g_val[S_FONT]);  // before the layout: widths follow the font
     Ui_SetLang(g_val[S_TEXT_LANG]);  // and the language
     VFont_BeginFrame();
-    SyncLayout();
+    SyncView();
     g_drawnCount = 0;
     g_helpBox.shown = false;
     g_helpBox.x0 = g_helpBox.y0 = g_helpBox.x1 = g_helpBox.y1 = 0;  // where it was is no help on a new screen
@@ -1719,7 +1624,6 @@ bool Menu_SetSwitch(const char *name, int v) {
         if (v < s.min || v > s.max)
             v = s.min + ((v - s.min) % (s.max - s.min + 1) + (s.max - s.min + 1)) % (s.max - s.min + 1);
         *s.value = v;
-        BuildPages();
         g_voice.text[0] = 0;  // say it again under the new rules
         Toast("%s = %d", name, v);
         Trace("switch %s=%d", name, v);
@@ -1736,22 +1640,22 @@ int Menu_GetSwitch(const char *name) {
 }
 
 bool Menu_Open(const char *name) {
-    SyncLayout();  // what follows is made in the layout in use
+    SyncView();
     if (!strcmp(name, "Keys and buttons")) {
         Menu_Open("Controls and camera");
-        KeepCursorOn("Keys and buttons");  // as Enter on it leaves it
+        PutCursorOn(R_ACTION, A_KEYS);  // as Enter on it leaves it
         Controls_Open();
         return true;
     }
     if (!strcmp(name, "More options")) {
         Menu_Open("Advanced and reset");
-        KeepCursorOn("More options");  // as Enter on it leaves it
+        PutCursorOn(R_ACTION, A_EXP);
         Exp_Open();
         return true;
     }
     if (!strcmp(name, "Console")) {
         Menu_Open("Advanced and reset");
-        KeepCursorOn("Console");  // as Enter on it leaves it
+        PutCursorOn(R_ACTION, A_CONSOLE);
         g_console = Engine_LastInputWasPad() ? CON_READONLY : CON_FULL;
         return true;
     }
@@ -1759,33 +1663,24 @@ bool Menu_Open(const char *name) {
     Controls_Close();
     Exp_Close();
     for (int p = 0; p < P_COUNT; p++) {
-        if (g_pages[p].name && !strcmp(g_pages[p].name, name)) {
-            g_first = false;
-            g_confirm = false;
-            g_closed = false;
-            g_depth = 1;
-            g_focus = F_LEFT;
-            g_leftCursor = 0;  // the same place whatever was open before
-            if (Wide() && p != P_HUB) {
-                // Put the left cursor on the page's category; focus the right pane.
-                bool found = false;
-                for (int i = 0; i < LeftCount(); i++) {
-                    if (g_pages[P_HUB].rows[LeftRowToHub(i)].arg == p) {
-                        g_leftCursor = i;
-                        found = true;
-                    }
-                }
-                if (!found)
-                    Push(p);
-                g_focus = F_RIGHT;
-            } else if (p != P_HUB) {
-                Push(p);
-            }
-            g_cursor = 0;
-            g_scroll = 0;
-            Trace("open page=%s (control)", name);
-            return true;
-        }
+        if (strcmp(kPages[p].name, name) != 0)
+            continue;
+        // Esc comes back to the page's own row on the hub, as after Enter on it.
+        int hubRow = 0;
+        for (int i = 0; i < kPages[P_HUB].count; i++)
+            if (kPages[P_HUB].rows[i].type != R_RETURN && kPages[P_HUB].rows[i].arg == p)
+                hubRow = i;
+        g_first = false;
+        g_confirm = false;
+        g_closed = false;
+        g_depth = 1;
+        g_stack[0].page = P_HUB;
+        g_stack[0].row = hubRow;
+        if (p != P_HUB)
+            Push(p);
+        g_scroll = 0;
+        Trace("open page=%s (control)", name);
+        return true;
     }
     return false;
 }
@@ -1797,15 +1692,10 @@ bool Menu_Set(const char *id, int value) {
         if (value < 0 || value > kSettings[s].max)
             return false;
         g_val[s] = value;
-        BuildPages();
         Trace("set %s=%d (control)", id, value);
         return true;
     }
-    if (Exp_Set(id, value)) {
-        BuildPages();
-        return true;
-    }
-    return false;
+    return Exp_Set(id, value);
 }
 
 void Menu_Reset() {
@@ -1823,7 +1713,6 @@ void Menu_Reset() {
     g_scroll = 0;
     g_toast[0] = 0;
     g_toastUntil = 0;
-    memset(g_cursorStack, 0, sizeof g_cursorStack);
     Menu_Init(false);
 }
 
@@ -1855,14 +1744,18 @@ bool Menu_WantsQuit() { return g_quit; }
 const char *Menu_Layout() { return g_closed ? "closed" : g_first ? "first-launch" : Wide() ? "wide" : "column"; }
 
 const char *Menu_PageName() {
-    return Controls_Active() ? "Keys and buttons" : Exp_Active() ? "More options" : g_first ? "First launch" : g_pages[Wide() ? RightPage() : TopPage()].name;
+    if (Controls_Active())
+        return "Keys and buttons";
+    if (Exp_Active())
+        return "More options";
+    return kPages[Top().page].name;
 }
 
-// One for the hub; each page pushed, the wide right pane and a question add one.
+// One for the hub; each page opened and a question add one.
 static int Depth() {
     if (g_first)
         return 1;
-    return g_depth + (Wide() && g_focus == F_RIGHT ? 1 : 0) + (g_confirm ? 1 : 0);
+    return g_depth + (g_confirm ? 1 : 0);
 }
 
 const char *Menu_CursorLabel() {
@@ -1870,7 +1763,7 @@ const char *Menu_CursorLabel() {
     const Row *r = Controls_Active() || Exp_Active() || g_closed ? NULL : CursorRow();
     if (!r)
         return "";
-    return r->type == R_PRESET_ROW ? PresetRowLabel(buf, sizeof buf) : r->label;
+    return r->type == R_PRESET_ROW ? PresetRowLabel(buf, sizeof buf) : RowLabel(*r);
 }
 
 int Menu_Where(char *buf, size_t n) {
@@ -1963,22 +1856,22 @@ void Menu_WriteMeasure(FILE *f) {
                 st.id, st.label, Ui_TextWidth(st.label), vmax, Ui_TextWidth(st.help));
     }
     fprintf(f, "],\"hub\":[");
-    for (int i = 0; i < g_pages[P_HUB].count; i++) {
-        const Row &r = g_pages[P_HUB].rows[i];
+    for (int i = 0; i < kPages[P_HUB].count; i++) {
+        const Row &r = kPages[P_HUB].rows[i];
         char label[160];
         if (r.type == R_PRESET_ROW) {
             FormatPresetRow(label, sizeof label, "Classic", true);
         } else {
-            snprintf(label, sizeof label, "%s", r.label);
+            snprintf(label, sizeof label, "%s", RowLabel(r));
         }
         fprintf(f, "%s{\"label\":\"%s\",\"w\":%d,\"help_w\":%d}", i ? "," : "", label, Ui_TextWidth(label),
-                Ui_TextWidth(r.help ? r.help : ""));
+                Ui_TextWidth(RowHelp(r) ? RowHelp(r) : ""));
     }
     fprintf(f, "]}\n");
 }
 
 void Menu_WriteState(FILE *f) {
-    SyncLayout();
+    SyncView();
     char buf[160];
     fprintf(f, "{\"t\":%u,\"physical\":[%u,%u],\"logical\":[%u,%u],\"scale\":%u,\"layout\":",
             (unsigned)Engine_TimeMs(), (unsigned)Engine_PhysW(), (unsigned)Engine_PhysH(),
@@ -1987,12 +1880,21 @@ void Menu_WriteState(FILE *f) {
     Menu_JsonString(f, Menu_Layout());
     fprintf(f, ",\"page\":");
     Menu_JsonString(f, Menu_PageName());
-    fprintf(f, ",\"focus\":\"%s\",\"cursor\":%d,\"left_cursor\":%d,\"scroll\":%d,\"confirm\":%s",
-            Wide() ? (g_focus == F_LEFT ? "left" : "right") : "column", g_cursor, g_leftCursor, g_scroll,
+    const Place &top = Top();
+    fprintf(f, ",\"stack\":[");
+    for (int i = 0; i < g_depth; i++) {
+        const Row &r = kPages[g_stack[i].page].rows[g_stack[i].row];
+        fprintf(f, "%s{\"page\":", i ? "," : "");
+        Menu_JsonString(f, kPages[g_stack[i].page].name);
+        fprintf(f, ",\"row\":");
+        Menu_JsonString(f, r.type == R_PRESET_ROW ? PresetRowLabel(buf, sizeof buf) : RowLabel(r));
+        fprintf(f, "}");
+    }
+    fprintf(f, "],\"cursor\":%d,\"scroll\":%d,\"confirm\":%s", Position(top.page, top.row), g_scroll,
             g_confirm ? "true" : "false");
     const Row *r = Controls_Active() || Exp_Active() ? NULL : CursorRow();
     fprintf(f, ",\"cursor_row\":");
-    Menu_JsonString(f, r ? (r->type == R_PRESET_ROW ? PresetRowLabel(buf, sizeof buf) : r->label) : "");
+    Menu_JsonString(f, r ? (r->type == R_PRESET_ROW ? PresetRowLabel(buf, sizeof buf) : RowLabel(*r)) : "");
     fprintf(f, ",\"preset\":\"%s\",\"preset_changed\":%s,\"preset_row\":", kPresetNames[g_preset],
             PresetChanged() ? "true" : "false");
     Menu_JsonString(f, PresetRowLabel(buf, sizeof buf));

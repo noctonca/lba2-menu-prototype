@@ -234,7 +234,9 @@ widest value and its help, and of the hub's rows, for sizing panes.
 width and the voice lines the text needs (620 wide unless given). It is how
 the 1997 game's six languages were compared for the help review.
 
-- `state` prints one JSON line: layout, sizes, page, focus, cursor, every row
+- `state` prints one JSON line: layout, sizes, page, the stack of pages with the
+  row each cursor is on (the same in both layouts), the cursor's place among the
+  rows shown, every row
   drawn (label, value, fill, rectangle, dimmed, changed, change marks, whether
   it is a setting, where its text starts and ends: `text_left`, `text_right`,
   and the last pixel column of what it shows on the right, a value, a slider,
@@ -344,7 +346,8 @@ heads are a line above the rows; `margin:` nothing on a wide page is drawn in
 its margins (32 at the sides, 24 at the top and bottom); `trailing:` wide, what
 a row shows on the right ends 24 in from its right edge; `pitch:` rows in a pane
 are 56 apart and 50 tall; `current:` at most one current-value row in a pane;
-`value:` every setting row shows its value; `proximity:` a pane's last row is
+`value:` every setting row shows its value; `return:` the wide layout shows no
+Return row (Esc goes back); `proximity:` a pane's last row is
 further from the help below than rows are from each other, a column head above
 the rows is nearer them than the row above it, and a column head inside a row
 is in its pane's first row, above its own chip, and clear of the action's name.

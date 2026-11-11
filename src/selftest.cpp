@@ -334,6 +334,10 @@ static void Check(std::vector<std::string> *found) {
     for (int i = 0; i < n; i++)
         if (rows[i].setting && !rows[i].value[0])
             found->push_back(Fmt("value: setting %s shows no value", Repr(rows[i].label).c_str()));
+    // Wide, a page has no Return row: Esc goes back (docs/UX.md, Fitts's Law).
+    for (int i = 0; wide && i < n; i++)
+        if (!strncmp(rows[i].label, "Return to ", 10))
+            found->push_back(Fmt("return: the wide layout shows %s", Repr(rows[i].label).c_str()));
     // Proximity: a pane's last row is further from the help below than rows are apart (5).
     if (help) {
         for (size_t p = 0; p < paneNames.size(); p++) {
@@ -596,8 +600,7 @@ struct Walker {
         checks++;
         std::vector<std::string> found;
         const char *page = Menu_PageName();
-        // Wide pages name the right pane, so the hub has no page of its own there.
-        if (expectPage && strcmp(expectPage, "Options") != 0 && strcmp(page, expectPage) != 0)
+        if (expectPage && strcmp(page, expectPage) != 0)
             found.push_back(Fmt("walk did not reach %s (on %s)", Repr(expectPage).c_str(), Repr(page).c_str()));
         ::Check(&found);
         for (size_t i = 0; i < found.size(); i++)
