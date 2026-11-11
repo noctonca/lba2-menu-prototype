@@ -126,3 +126,4 @@
 {"Clear", "Effacer", "L\x94""schen", "Borrar", "Cancella", "Apagar"},
 {"Default", "D\x82""faut", "Standard", "Por defecto", "Predefinito", "Padr\xc6""o"},
 {"Cancel", "Annuler", "Abbrechen", "Cancelar", "Annulla", "Cancelar"},
+{"Reverse stereo", "St\x82""r\x82""o inverse", "Stereo invertieren", "Invertir canales est\x82""reo", "Ribaltare suono stereo", "Est\x82""reo inverso"},

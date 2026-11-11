@@ -37,7 +37,7 @@ PAGES = ["Options", "Preset", "Language and interface", "Display and graphics", 
 CONTROL_GROUPS = [5, 6, 4, 7, 4, 4, 6]
 
 # Rows per group on the More options page (more_options.cpp kTuning).
-MORE_OPTIONS_GROUPS = [22, 9, 7, 3, 3]
+MORE_OPTIONS_GROUPS = [22, 9, 7, 3, 2]
 MORE_OPTIONS_PAGE = "More options"
 
 # The same as selftest.cpp kCombos: the pad's names of each family.

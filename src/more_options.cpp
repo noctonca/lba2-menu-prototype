@@ -139,7 +139,6 @@ static const Tuning kTuning[] = {
     // Named as lba2cc's glossary names it: "Movies at original size / Movies fit to screen".
     {4, "Movies", "FullScreen", T_CHOICE, 1, 0, 1, 1, {"At original size", "Fit to screen"},
      "For slow CD drives: the movies fit to the screen, or play at their original size."},
-    {4, "Reverse stereo", "ReverseStereo", T_TOGGLE, 0, 0, 1, 1, {0}, "Swaps the left and right speakers."},
 };
 enum { TUNING_COUNT = sizeof kTuning / sizeof kTuning[0] };
 static_assert(TUNING_COUNT <= MORE_OPTIONS_MAX, "MORE_OPTIONS_MAX holds every tuning row");

@@ -40,7 +40,7 @@ struct Setting {
 enum {
     S_TEXT_LANG, S_VOICE_LANG, S_SUBTITLES, S_BACKGROUND, S_FONT,
     S_RESOLUTION, S_FULLSCREEN, S_VSYNC, S_FPS, S_IMAGE,
-    S_MASTER, S_SFX, S_VOICES, S_MUSIC,
+    S_MASTER, S_SFX, S_VOICES, S_MUSIC, S_REVERSE,
     S_CAM_OUT, S_CAM_IN, S_MOVIE_CAM, S_INVERT, S_SENS,
     S_FIXBUGS,
     S_COUNT
@@ -88,6 +88,9 @@ static const Setting kSettings[S_COUNT] = {
     {"sfx", "Sound effects", K_SLIDER, 127, {0}, 100, 100, false, "Footsteps, doors, magic."},
     {"voices", "Voices volume", K_SLIDER, 127, {0}, 110, 110, false, "The characters' voices."},
     {"music", "Music", K_SLIDER, 127, {0}, 90, 90, false, "The score."},
+    // ReverseStereo, back from More options' From 1997 group (EPmager, 2026-11-11): speakers
+    // or headphones the wrong way round are not a 1997 machine's limit. The 1997 game's label.
+    {"reverse_stereo", "Reverse stereo", K_TOGGLE, 1, {"Off", "On"}, 0, 0, false, "Swaps the left and right speakers."},
     {"cam_out", "Outdoors camera", K_CHOICE, 1, {"Classic", "Auto"}, 0, 0, true,
      "Classic holds still and cuts; Auto turns to follow you."},
     {"cam_in", "Indoors camera", K_CHOICE, 1, {"Classic", "Follow"}, 0, 0, true,
@@ -372,6 +375,7 @@ static const Row kDisplayRows[] = {
 
 static const Row kSoundRows[] = {
     RETURN_ROW, SETTING_ROW(S_MASTER), SETTING_ROW(S_SFX), SETTING_ROW(S_VOICES), SETTING_ROW(S_MUSIC),
+    SETTING_ROW(S_REVERSE),
 };
 
 static const Row kControlsRows[] = {

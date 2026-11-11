@@ -265,7 +265,7 @@ the 1997 game's six languages were compared for the help review.
 A More options row on Advanced and reset opens a page of the 41
 values lba2cc's settings tables give a console name and no row in Options
 (the Auto camera 22, the mouse 9, the gamepad 7, graphics 3), with their
-defaults, ranges and console help as lba2cc has them, and three rows from
+defaults, ranges and console help as lba2cc has them, and two rows from
 1997 (below). It is the menu plan's step 8, generated from a table rather
 than made row by row, in English. The row is always there (decided
 2026-11-03, no Show experimental settings switch); its help says the page is
@@ -284,15 +284,16 @@ chosen there (Reset settings).
 The settings tables have no field saying which rows are experimental yet; the plan's ring field would give it, and the hand list in
 `more_options.cpp` stands in for it.
 
-A fifth group, From 1997, holds three rows the 1997 Options had for the
+A fifth group, From 1997, holds two rows the 1997 Options had for the
 machines of the day: Detail level (each step down takes away animated water,
-rain, the far scenery, then shadows), Movies (at original size or fit to
-screen; original size was for slow CD drives) and Reverse stereo. They came off Display and
-Advanced (decided 2026-11-11); they keep their game labels, having no console
+rain, the far scenery, then shadows) and Movies (at original size or fit to
+screen; original size was for slow CD drives). They came off Display
+(decided 2026-11-11); they keep their game labels, having no console
 name, and the plan's 1997 Options page keeps them where they were. Movie
 camera (1997's scenario cameras: off skips the outdoor shots that cut once) is
 camera behavior, not a machine's limit, so it went to Controls and camera
-instead.
+instead, and Reverse stereo, which is for speakers or headphones the wrong way
+round rather than a 1997 machine, went back to Sound (EPmager, 2026-11-11).
 
 - One dense table in the 8x8 font at 1x, as the 1997 key binding screen
   (decided 2026-11-03): a line per value under its group's head, the cursor a
@@ -386,7 +387,7 @@ walk finds starts with the walk's name:
   and leaves a number; Page Down and Page Up stop at the last and first rows,
   and the page opened again starts at its top; Modern puts a changed tuning value back to its default,
   Undo preset names it and puts it back; Reset settings and Undo reset do the
-  same, and the cursor stays on Reset settings; Reverse stereo, the last row
+  same, and the cursor stays on Reset settings; Movies, the last row
   and a player's setting, keeps its value through Classic.
 - `console:` the Console row shows the version; Enter after a key opens the
   full console, which Down and Enter leave open and Esc closes; Enter after a

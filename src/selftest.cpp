@@ -35,7 +35,7 @@ static const char *kPages[] = {
 // Actions per group on the Controls page (bindings.cpp kActions).
 static const int kGroupSizes[] = {5, 6, 4, 7, 4, 4, 6};
 // Rows per group on the More options page (more_options.cpp kTuning).
-static const int kExpGroups[] = {22, 9, 7, 3, 3};
+static const int kExpGroups[] = {22, 9, 7, 3, 2};
 static const char *kExpPage = "More options";
 
 struct Switch {
@@ -1190,7 +1190,7 @@ struct Walker {
         Expect(MoreOptions_CursorValue() == v1, Fmt("more_options: Undo reset after a reset leaves %s at %s, not %s",
                                              name.c_str(), Repr(MoreOptions_CursorValue()).c_str(), Repr(v1.c_str()).c_str()));
 
-        // A player's setting (the last row, From 1997's Reverse stereo): a preset leaves it.
+        // A player's setting (the last row, From 1997's Movies): a preset leaves it.
         Fresh(kExpPage);
         Key("pgdn", 10);
         std::string mineName = MoreOptions_CursorName();
