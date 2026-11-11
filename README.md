@@ -82,6 +82,13 @@ page tells the player, and key chips in lba2cc's 8x8 font
 font is game data (`RESS.HQR`) and is not served; the page's display face is
 Zilla Slab Bold, the menu's Modern font.
 
+How it works (reached from About and the file picker) lists seven promises
+the menu keeps, in a player's words, each with a way to see it: nothing is
+lost by accident, Back is one press, every row explains itself, Classic looks
+like 1997, keyboard and pad are equal, one language for the whole menu, the
+picture is never stretched. They are drawn from `docs/UX.md`; a change to a
+rule there that breaks a promise changes the panel too.
+
 ## Play
 
     ./play.sh                      # 640x480, one column

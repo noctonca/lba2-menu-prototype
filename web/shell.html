@@ -104,7 +104,11 @@
   /* Pages over the stage: the scene behind, one framed panel in front. */
   .page { position: absolute; inset: 0; overflow: auto; padding: 24px 16px;
     background: linear-gradient(165deg, var(--plasma-mid), var(--plasma-lo) 60%, var(--fill-selected)); }
-  #about { background: var(--ink-black); }
+  #about, #ways { background: var(--ink-black); }
+  .ways { margin: 0 0 14px; padding-left: 1.4em; }
+  .ways li { margin: 0 0 10px; }
+  .ways b { color: var(--ink-white); }
+  .ways .try { display: block; color: var(--ink-config-menu); }
   .panel { max-width: 720px; margin: 0 auto; padding: 18px calc(var(--pad-text) + 12px) 16px; background: var(--shade-panel); }
   .files { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 14px; }
   .legend { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; margin: 0 0 14px; }
@@ -141,7 +145,35 @@
     <input id="folder" type="file" webkitdirectory multiple>
     <input id="files" type="file" multiple accept=".hqr,.HQR">
     <p id="status" class="voice"></p>
-    <p class="voice">What this is, and its keys: <a href="#" id="aboutLink">About</a>.</p>
+    <p class="voice">What this is, and its keys: <a href="#" id="aboutLink">About</a>. What the menu promises:
+      <a href="#" id="waysLink">How it works</a>.</p>
+  </div></section>
+
+  <section id="ways" class="page" hidden><div class="panel frame">
+    <h2 class="title">How it works</h2>
+    <p class="voice">Seven things this menu promises. Each one says how to see it.</p>
+    <ol class="ways voice">
+      <li><b>Nothing is lost by accident.</b> A row that throws your settings away asks first, and the question
+        starts on No. <span class="try">Try it: Preset, choose Classic, then Undo preset.</span></li>
+      <li><b>Back is always one press.</b> Esc leaves any page, whichever row you are on. On a pad it is B; in a
+        browser, Q works too.</li>
+      <li><b>Every row explains itself.</b> Its help appears as you move onto it, in the game's dialogue voice,
+        and never runs onto a second page. A greyed-out row says why.
+        <span class="try">Try it: Controls and camera, set Outdoors camera to Classic, then move onto Camera
+        speed.</span></li>
+      <li><b>Classic looks like 1997.</b> At 640x480 the menu looks as the 1997 one does, and the Classic preset
+        brings back the 1997 picture and font. <span class="try">Try it: press F2 until the size reads 640x480,
+        then choose the Classic preset.</span></li>
+      <li><b>Keyboard and pad are equal.</b> The key list at the bottom uses your pad's button names, and no key
+        binding can lock the pad out of the menu.</li>
+      <li><b>One language for the whole menu.</b> Changing Text changes every word, the help included.
+        <span class="try">Try it: Language and interface, Text.</span></li>
+      <li><b>The picture is never stretched.</b> It is scaled evenly to fill the screen and cropped at the edges,
+        and the menu grows in whole steps. <span class="try">Try it: resize the window, or press F2.</span></li>
+    </ol>
+    <div class="rows">
+      <button class="row" id="waysClose">Back to the menu</button>
+    </div>
   </div></section>
 
   <section id="about" class="page" hidden><div class="panel frame">
@@ -161,6 +193,7 @@
     <p class="voice">In fullscreen, Firefox and Safari keep Esc for leaving it: use Q to go back. In Chrome and
       Edge, Esc goes back and holding Esc leaves fullscreen.</p>
     <div class="rows">
+      <button class="row" id="aboutWays">How it works</button>
       <button class="row" id="aboutClose">Back to the menu</button>
       <button class="row" id="forget" hidden>Forget the saved game files</button>
     </div>
@@ -178,10 +211,13 @@
   var forgetBtn = document.getElementById('forget');
   var fsBtn = document.getElementById('fullscreen');
   var about = document.getElementById('about');
-  function showAbout(on) {
-    about.hidden = !on;
+  var ways = document.getElementById('ways');
+  function showPanel(el, on) {
+    about.hidden = true; ways.hidden = true;
+    el.hidden = !on;
     if (!on && started) document.getElementById('canvas').focus();
   }
+  function showAbout(on) { showPanel(about, on); }
   // Buttons give the focus back, so Enter and Space reach the menu, not the button.
   function onClick(id, fn) {
     document.getElementById(id).addEventListener('click', function (e) { e.preventDefault(); this.blur(); fn(); });
@@ -189,6 +225,9 @@
   onClick('aboutBtn', function () { showAbout(about.hidden); });
   onClick('aboutLink', function () { showAbout(true); });
   onClick('aboutClose', function () { showAbout(false); });
+  onClick('aboutWays', function () { showPanel(ways, true); });
+  onClick('waysLink', function () { showPanel(ways, true); });
+  onClick('waysClose', function () { showPanel(ways, false); });
   onClick('fullscreen', function () {
     if (document.fullscreenElement) document.exitFullscreen();
     else document.getElementById('stage').requestFullscreen().catch(function () {});
@@ -202,7 +241,7 @@
     else kb.unlock();
   });
   window.addEventListener('keydown', function (e) {
-    if (!started || !about.hidden || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (!started || !about.hidden || !ways.hidden || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
     if ((e.key === 'q' || e.key === 'Q') && Module._WebBack) Module._WebBack();
   }, true);
 
