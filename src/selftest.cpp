@@ -1623,6 +1623,35 @@ struct Walker {
         PadOnly();
         Devices();
         Languages();
+        PadNames();
+    }
+
+    // The pad's family from the names browsers and SDL give (2026-11-12): the vendor a
+    // browser writes in wins over the words, so a Switch pad named "Wireless Gamepad" on
+    // Windows gets Nintendo's names.
+    void PadNames() {
+        if (opt->only)
+            return;
+        static const struct {
+            const char *name;
+            S32 family;
+        } kNames[] = {
+            {"Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e Product: 0b13)", 1},
+            {"Wireless Gamepad (STANDARD GAMEPAD Vendor: 057e Product: 2009)", 3},
+            {"Controller (STANDARD GAMEPAD Vendor: 057e Product: 2009)", 3},
+            {"57e-2009-Wireless Gamepad", 3},
+            {"54c-ce6-Wireless Controller", 2},
+            {"DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)", 2},
+            {"Joy-Con L+R", 3},
+            {"PS4 Controller", 2},
+            {"Xbox 360 Controller (XInput STANDARD GAMEPAD)", 1},
+            {"2dc8-6001-8BitDo SN30 Pro", 1},
+            {"Wireless Gamepad", 1},
+        };
+        for (const auto &n : kNames) {
+            const S32 got = Host_PadFamilyOfName(n.name);
+            Expect(got == n.family, Fmt("padnames: %s is family %d, not %d", Repr(n.name).c_str(), (int)got, (int)n.family));
+        }
     }
 
     // Every voice text in lang/help.tsv fits its window in every Text language and both

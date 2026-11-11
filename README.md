@@ -185,6 +185,12 @@ memory like the other settings.
   below.
 - One device per view: Tab (the pad's View button) switches Keyboard and
   Gamepad; the page opens on the one touched last.
+- The pad's buttons are named as its maker names them: SDL's own pad type on a
+  desktop, and in a browser the vendor in the pad's name (Chrome's
+  "Vendor: 057e", Firefox's "57e-2009-"), then words such as DualSense or
+  Joy-Con. Anything else gets Xbox names. Button names on Controls and camera
+  holds one family instead. The pad and the names chosen are printed on
+  connect ("pad: ... (Nintendo names)", the browser's console on the web).
 - Enter waits for a key: the chip takes the current-value plasma and the voice
   asks for it and says the way out: "Press a key, or <ESC> to keep it." on the
   keyboard view, "Press a button, or <MENU> to keep it." on the pad view (Start,

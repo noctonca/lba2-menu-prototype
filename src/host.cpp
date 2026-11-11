@@ -576,8 +576,9 @@ static bool PadDown(int k) {
             s_pad = g_platform.input.open_gamepad(ids[0]);
             s_padId = ids[0];
             if (s_pad) {
+                static const char *const kFamily[] = {"", "Xbox", "PlayStation", "Nintendo"};
                 const char *name = g_platform.input.gamepad_name(s_pad);
-                fprintf(stderr, "pad: %s\n", name ? name : "(no name)");
+                fprintf(stderr, "pad: %s (%s names)\n", name ? name : "(no name)", kFamily[Host_PadFamily()]);
             }
         }
         if (ids)
@@ -717,14 +718,43 @@ const char *Host_ScancodeName(S32 code) {
     return name ? name : "";
 }
 
-// The pad's family from its name: the platform layer has no pad type.
-// 1 Xbox (and anything else), 2 PlayStation, 3 Nintendo.
-S32 Host_PadFamily() {
-    if (!s_pad)
-        return 0;
-    const char *name = g_platform.input.gamepad_name(s_pad);
+// The family a USB vendor makes: 0 when it is not one of the three.
+static S32 VendorFamily(unsigned vendor) {
+    switch (vendor) {
+    case 0x045e: return 1;  // Microsoft
+    case 0x054c: return 2;  // Sony
+    case 0x057e: return 3;  // Nintendo
+    default: return 0;
+    }
+}
+
+// The vendor a browser writes into the pad's name: Chrome's "Name (STANDARD GAMEPAD
+// Vendor: 057e Product: 2009)", Firefox's "57e-2009-Name". 0 when there is none.
+static unsigned NameVendor(const char *name) {
+    if (const char *v = strstr(name, "Vendor: "))
+        return (unsigned)strtoul(v + 8, NULL, 16);
+    const char *p = name;
+    int digits = 0;
+    while (isxdigit((unsigned char)*p) && digits < 5)
+        p++, digits++;
+    if (digits >= 1 && digits <= 4 && *p == '-') {
+        const char *q = p + 1;
+        int product = 0;
+        while (isxdigit((unsigned char)*q) && product < 5)
+            q++, product++;
+        if (product >= 1 && product <= 4 && *q == '-')
+            return (unsigned)strtoul(name, NULL, 16);
+    }
+    return 0;
+}
+
+S32 Host_PadFamilyOfName(const char *name) {
     if (!name)
         return 1;
+    // The vendor first: a Switch pad in a browser on Windows is "Wireless Gamepad"
+    // (EPmager, 2026-11-11).
+    if (S32 f = VendorFamily(NameVendor(name)))
+        return f;
     if (NameHas(name, "PS3") || NameHas(name, "PS4") || NameHas(name, "PS5") || NameHas(name, "DualShock") ||
         NameHas(name, "DualSense") || NameHas(name, "PlayStation"))
         return 2;
@@ -732,6 +762,33 @@ S32 Host_PadFamily() {
         NameHas(name, "Pro Controller"))
         return 3;
     return 1;
+}
+
+// The pad's family: SDL's own type where it knows one (from the vendor and product, on a
+// desktop), else from the name. lba2cc's platform layer has no pad type yet; the plan puts
+// one there.
+S32 Host_PadFamily() {
+    if (!s_pad)
+        return 0;
+#ifdef LBA2_PROTO_SDL
+    switch (SDL_GetGamepadTypeForID((SDL_JoystickID)s_padId)) {
+    case SDL_GAMEPAD_TYPE_XBOX360:
+    case SDL_GAMEPAD_TYPE_XBOXONE:
+        return 1;
+    case SDL_GAMEPAD_TYPE_PS3:
+    case SDL_GAMEPAD_TYPE_PS4:
+    case SDL_GAMEPAD_TYPE_PS5:
+        return 2;
+    case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_PRO:
+    case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_LEFT:
+    case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_RIGHT:
+    case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_PAIR:
+        return 3;
+    default:
+        break;
+    }
+#endif
+    return Host_PadFamilyOfName(g_platform.input.gamepad_name(s_pad));
 }
 
 bool Host_BeginFrame() {

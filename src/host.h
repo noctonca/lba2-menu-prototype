@@ -100,6 +100,9 @@ void Host_SetKeyboardSeen(bool seen);  // the "keyboard" switch: try a console's
 // game data has no sprites.hqr.
 // The connected pad's family: 0 none, 1 Xbox-like, 2 PlayStation, 3 Nintendo.
 S32 Host_PadFamily();
+// The family a pad's name tells: the vendor a browser writes into it, else words such as
+// DualSense or Joy-Con. 1 Xbox (and anything else), 2 PlayStation, 3 Nintendo.
+S32 Host_PadFamilyOfName(const char *name);
 // The SDL name of a keyboard scancode.
 const char *Host_ScancodeName(S32 code);
 
