@@ -37,6 +37,7 @@
 #include "trace.h"
 #include "ui.h"
 
+#include <PLATFORM/PLATFORM.H>
 #include <SYSTEM/WINDOW.H>
 
 #include <errno.h>
@@ -168,9 +169,40 @@ static void SwitchScreen(U32 w, U32 h, bool sizeWindow) {
         Menu_NoteScreen();
 }
 
-int main(int argc, char **argv) {
+#ifndef LBA2_PROTO_SDL
+// A console has no terminal: what the prototype says goes to lba2menu.log in
+// the app's LocalState, with the platform layer's own messages.
+static void PlatformToStderr(void *, PlatformLogLevel, const char *message) {
+    fprintf(stderr, "platform: %s\n", message);
+}
+
+static void LogToLocalState() {
+    char *dir = g_platform.host.pref_path("LBA2CC", "lba2menu");
+    if (!dir)
+        return;
+    std::string path = std::string(dir) + "lba2menu.log";
+    g_platform.host.free_memory(dir);
+    if (freopen(path.c_str(), "w", stderr))
+        setvbuf(stderr, NULL, _IONBF, 0);
+    if (freopen(path.c_str(), "a", stdout))
+        setvbuf(stdout, NULL, _IONBF, 0);
+    Platform_SetLogOutput(PlatformToStderr, NULL);
+}
+#endif
+
+// lba2cc's platform entry calls this: SDL's main on a desktop, the app's view on the Xbox.
+int Lba2Main(int argc, char *argv[]) {
+#ifndef LBA2_PROTO_SDL
+    LogToLocalState();
+    for (int i = 0; i < argc; i++)
+        fprintf(stderr, "argument %d: %s\n", i, argv[i]);
+#endif
     std::string data = ExpandHome(getenv("LBA2_GAME_DIR") ? getenv("LBA2_GAME_DIR") : kDefaultData);
+#ifdef LBA2_PROTO_SDL
     U32 w = 640, h = 480, fixedDt = 0;
+#else
+    U32 w = 0, h = 0, fixedDt = 0;  // the display's size
+#endif
     bool first = false, headless = false, live = false, selftest = false;
     const char *script = NULL, *trace = NULL, *control = NULL;
     std::vector<std::string> switches, inline_cmds;
@@ -179,7 +211,8 @@ int main(int argc, char **argv) {
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i];
         const char *v = i + 1 < argc ? argv[i + 1] : "";
-        if (!strcmp(a, "--data")) {
+        // --game-dir is lba2cc's name, which the Xbox's entry passes for LocalState\Game.
+        if (!strcmp(a, "--data") || !strcmp(a, "--game-dir")) {
             data = ExpandHome(v);
             i++;
         } else if (!strcmp(a, "--size")) {
@@ -251,7 +284,9 @@ int main(int argc, char **argv) {
         return 2;
     }
     if (headless) {
+#ifdef LBA2_PROTO_SDL
         setenv("SDL_VIDEO_DRIVER", "dummy", 1);
+#endif
         if (!fixedDt)
             fixedDt = 16;
     }
@@ -306,8 +341,13 @@ int main(int argc, char **argv) {
     run.lines.insert(run.lines.end(), inline_cmds.begin(), inline_cmds.end());
     int liveFd = -1;
     if (live) {
+#ifdef _WIN32
+        fprintf(stderr, "--stdin is not available here; use --control FILE\n");
+        return 2;
+#else
         liveFd = 0;
         fcntl(0, F_SETFL, fcntl(0, F_GETFL) | O_NONBLOCK);
+#endif
     }
     if (control) {
         // A plain file the driver appends lines to; read from where we left off.

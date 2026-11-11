@@ -19,8 +19,11 @@
 #include <SYSTEM/WINDOW.H>
 #include <POLYGON/POLY.H>
 
-#include <SDL3/SDL.h>
+#ifdef LBA2_PROTO_SDL
+#include <SDL3/SDL.h>  // the desktop window's size and title only
+#endif
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -100,9 +103,13 @@ U32 Engine_LogicalH() { return s_logH; }
 U32 Engine_PhysW() { return s_physW; }
 U32 Engine_PhysH() { return s_physH; }
 
+static void PadRemoved(uint32_t id);
+
 static int EventFilter(const PlatformEvent *event) {
     if (event->type == PLATFORM_EVENT_QUIT)
         s_quit = true;
+    else if (event->type == PLATFORM_EVENT_GAMEPAD_REMOVED)
+        PadRemoved(event->gdevice.which);
     return 0;
 }
 
@@ -111,6 +118,10 @@ static void JoinPath(char *out, size_t n, const char *dir, const char *name) {
     snprintf(out, n, "%s%s%s", dir, (len && dir[len - 1] == '/') ? "" : "/", name);
 }
 
+static bool s_headless;
+static bool s_fullscreen;  // the window fills the display; the screen size stays as chosen
+
+#ifdef LBA2_PROTO_SDL
 // The window opens at the logical size; grow it by a whole step so the
 // picture is the size it would be on the pretend screen, as far as the
 // desktop allows.
@@ -122,9 +133,7 @@ static SDL_Window *TheWindow() {
     return win;
 }
 
-static bool s_headless;
 static int s_winPxW, s_winPxH;  // the window's pixels after the prototype last sized it
-static bool s_fullscreen;       // the window fills the display; the screen size stays as chosen
 
 static void NoteWindowPixels(SDL_Window *win) {
     SDL_GetWindowSizeInPixels(win, &s_winPxW, &s_winPxH);
@@ -162,6 +171,10 @@ static void SizeWindow() {
     NoteWindowPixels(win);
     TitleWindow(win);
 }
+#else
+// A console's window is the display: nothing to size or name.
+static void SizeWindow() {}
+#endif
 
 bool Engine_SetScreen(U32 w, U32 h, bool sizeWindow) {
     w &= ~7u;
@@ -189,12 +202,16 @@ bool Engine_SetScreen(U32 w, U32 h, bool sizeWindow) {
     s_logH = lh;
     if (s_headless)
         return true;
+#ifdef LBA2_PROTO_SDL
     if (sizeWindow) {
         SizeWindow();
     } else if (SDL_Window *win = TheWindow()) {
         NoteWindowPixels(win);
         TitleWindow(win);
     }
+#else
+    (void)sizeWindow;
+#endif
     return true;
 }
 
@@ -236,6 +253,7 @@ bool Engine_SetFullscreen(bool on) {
         s_fullscreen = on;
         return true;
     }
+#ifdef LBA2_PROTO_SDL
     SDL_Window *win = TheWindow();
     if (!win)
         return false;
@@ -243,10 +261,19 @@ bool Engine_SetFullscreen(bool on) {
     SDL_SyncWindow(win);      // macOS animates into its own space; wait for it to land
     s_fullscreen = (SDL_GetWindowFlags(win) & SDL_WINDOW_FULLSCREEN) != 0;
     SizeWindow();  // back out: the window the screen size asks for
+#else
+    SetWindowFullscreen(on);
+    s_fullscreen = g_platform.window.is_fullscreen();
+#endif
     return s_fullscreen == on;
 }
 
 bool Engine_WindowResized(U32 *w, U32 *h) {
+#ifndef LBA2_PROTO_SDL
+    (void)w;
+    (void)h;
+    return false;  // a console's window never changes size
+#else
     if (s_headless)
         return false;
     SDL_Window *win = TheWindow();
@@ -274,17 +301,12 @@ bool Engine_WindowResized(U32 *w, U32 *h) {
     *w = (U32)pw;
     *h = (U32)ph;
     return true;
+#endif
 }
 
-bool Engine_ShiftHeld() { return (SDL_GetModState() & SDL_KMOD_SHIFT) != 0; }
+bool Engine_ShiftHeld() { return (g_platform.input.modifiers() & PLATFORM_KMOD_SHIFT) != 0; }
 
 bool Engine_Init(const EngineConfig &cfg) {
-    s_physW = cfg.physW;
-    s_physH = cfg.physH;
-    U32 scale = Engine_Scale(s_physW, s_physH);
-    s_logW = s_physW / scale;
-    s_logH = s_physH / scale;
-
     if (!InitEvents()) {
         fprintf(stderr, "events failed\n");
         return false;
@@ -294,6 +316,19 @@ bool Engine_Init(const EngineConfig &cfg) {
         fprintf(stderr, "window/video failed\n");
         return false;
     }
+    s_physW = cfg.physW;
+    s_physH = cfg.physH;
+    if (!s_physW || !s_physH) {  // no size given: the display's (a console's TV)
+        uint32_t dw = 0, dh = 0;
+        if (!g_platform.window.display_size(&dw, &dh) || dw < 640 || dh < 480)
+            dw = 640, dh = 480;
+        s_physW = dw & ~7u;
+        s_physH = dh;
+        fprintf(stderr, "screen: the display's, %ux%u\n", (unsigned)s_physW, (unsigned)s_physH);
+    }
+    U32 scale = Engine_Scale(s_physW, s_physH);
+    s_logW = s_physW / scale;
+    s_logH = s_physH / scale;
     if (!InitGraphics(s_logW, s_logH, false)) {
         fprintf(stderr, "InitGraphics %ux%u failed\n", (unsigned)s_logW, (unsigned)s_logH);
         return false;
@@ -301,7 +336,8 @@ bool Engine_Init(const EngineConfig &cfg) {
     SizeWindow();
     InitKeyboard();
     InitTimer();
-    SDL_InitSubSystem(SDL_INIT_GAMEPAD);
+    if (!g_platform.input.init_gamepads())
+        fprintf(stderr, "pad: none (gamepads did not start)\n");
     BoxInit(512);
 
     // Data: plain files, or a disc image in the folder (the US CD is an ISO).
@@ -410,19 +446,34 @@ static const PadMenuKey kPadMenuKeys[] = {
 };
 static bool PadRawDown(int n);
 
-// A pad, read straight from SDL (lba2cc's joystick code is in the game layer).
-static SDL_Gamepad *s_pad;
+// A pad, read through lba2cc's platform layer, so the same code runs on SDL and
+// on the Xbox (lba2cc's joystick code is in the game layer, which this does not take).
+static PlatformGamepad *s_pad;
+static uint32_t s_padId;
+
+// A pad that sleeps or is unplugged goes; the next frame opens whichever is there.
+static void PadRemoved(uint32_t id) {
+    if (s_pad && id == s_padId) {
+        g_platform.input.close_gamepad(s_pad);
+        s_pad = NULL;
+        fprintf(stderr, "pad: gone\n");
+    }
+}
 
 static bool PadDown(int k) {
     if (!s_pad) {
-        int n = 0;
-        SDL_JoystickID *ids = SDL_GetGamepads(&n);
+        int32_t n = 0;
+        uint32_t *ids = g_platform.input.gamepads(&n);
         if (ids && n > 0) {
-            s_pad = SDL_OpenGamepad(ids[0]);
-            if (s_pad)
-                fprintf(stderr, "pad: %s\n", SDL_GetGamepadName(s_pad));
+            s_pad = g_platform.input.open_gamepad(ids[0]);
+            s_padId = ids[0];
+            if (s_pad) {
+                const char *name = g_platform.input.gamepad_name(s_pad);
+                fprintf(stderr, "pad: %s\n", name ? name : "(no name)");
+            }
         }
-        SDL_free(ids);
+        if (ids)
+            g_platform.host.free_memory(ids);
         if (!s_pad)
             return false;
     }
@@ -437,23 +488,25 @@ static bool s_rawDown[256 + PAD_CODE_COUNT];
 static S32 s_rawPressed, s_rawInjected;
 static bool s_lastPad;
 
+static int Axis(PlatformGamepadAxis a) { return g_platform.input.gamepad_axis(s_pad, a); }
+
 static bool PadRawDown(int n) {
     if (!s_pad)
         return false;
     const int dead = 16000;
-    if (n <= 14)  // SDL's button order is lba2cc's K_GAMEPAD order up to the d-pad
-        return SDL_GetGamepadButton(s_pad, (SDL_GamepadButton)n);
+    if (n < PLATFORM_GAMEPAD_BUTTON_COUNT)  // the platform's button order is lba2cc's K_GAMEPAD order
+        return g_platform.input.gamepad_button(s_pad, (PlatformGamepadButton)n);
     switch (n) {
-    case 15: return SDL_GetGamepadAxis(s_pad, SDL_GAMEPAD_AXIS_LEFTY) < -dead;
-    case 16: return SDL_GetGamepadAxis(s_pad, SDL_GAMEPAD_AXIS_LEFTY) > dead;
-    case 17: return SDL_GetGamepadAxis(s_pad, SDL_GAMEPAD_AXIS_LEFTX) < -dead;
-    case 18: return SDL_GetGamepadAxis(s_pad, SDL_GAMEPAD_AXIS_LEFTX) > dead;
-    case 19: return SDL_GetGamepadAxis(s_pad, SDL_GAMEPAD_AXIS_RIGHTY) < -dead;
-    case 20: return SDL_GetGamepadAxis(s_pad, SDL_GAMEPAD_AXIS_RIGHTY) > dead;
-    case 21: return SDL_GetGamepadAxis(s_pad, SDL_GAMEPAD_AXIS_RIGHTX) < -dead;
-    case 22: return SDL_GetGamepadAxis(s_pad, SDL_GAMEPAD_AXIS_RIGHTX) > dead;
-    case 23: return SDL_GetGamepadAxis(s_pad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > dead;
-    case 24: return SDL_GetGamepadAxis(s_pad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > dead;
+    case 15: return Axis(PLATFORM_GAMEPAD_AXIS_LEFTY) < -dead;
+    case 16: return Axis(PLATFORM_GAMEPAD_AXIS_LEFTY) > dead;
+    case 17: return Axis(PLATFORM_GAMEPAD_AXIS_LEFTX) < -dead;
+    case 18: return Axis(PLATFORM_GAMEPAD_AXIS_LEFTX) > dead;
+    case 19: return Axis(PLATFORM_GAMEPAD_AXIS_RIGHTY) < -dead;
+    case 20: return Axis(PLATFORM_GAMEPAD_AXIS_RIGHTY) > dead;
+    case 21: return Axis(PLATFORM_GAMEPAD_AXIS_RIGHTX) < -dead;
+    case 22: return Axis(PLATFORM_GAMEPAD_AXIS_RIGHTX) > dead;
+    case 23: return Axis(PLATFORM_GAMEPAD_AXIS_LEFT_TRIGGER) > dead;
+    case 24: return Axis(PLATFORM_GAMEPAD_AXIS_RIGHT_TRIGGER) > dead;
     }
     return false;
 }
@@ -485,6 +538,25 @@ static const char *kPadCodeNames[PAD_CODE_COUNT] = {
     "rstick-up", "rstick-down", "rstick-left", "rstick-right", "lt", "rt",
 };
 
+static bool SameNoCase(const char *a, const char *b) {
+    for (; *a && *b; a++, b++)
+        if (tolower((unsigned char)*a) != tolower((unsigned char)*b))
+            return false;
+    return *a == *b;
+}
+
+static bool NameHas(const char *name, const char *part) {
+    const size_t n = strlen(part);
+    for (; *name; name++) {
+        size_t i = 0;
+        while (i < n && name[i] && tolower((unsigned char)name[i]) == tolower((unsigned char)part[i]))
+            i++;
+        if (i == n)
+            return true;
+    }
+    return false;
+}
+
 bool Engine_InjectRaw(const char *name) {
     if (!strncmp(name, "pad:", 4)) {
         for (int n = 0; n < PAD_CODE_COUNT; n++) {
@@ -495,11 +567,15 @@ bool Engine_InjectRaw(const char *name) {
         }
         return false;
     }
-    SDL_Scancode sc = SDL_GetScancodeFromName(name);
-    if (sc == SDL_SCANCODE_UNKNOWN || sc >= 256)
-        return false;
-    s_rawInjected = (S32)sc;
-    return true;
+    // A key by its name, as the platform names it ("J", "Left Alt", "Keypad 5"), any case.
+    for (int sc = 1; sc < 256; sc++) {
+        const char *known = g_platform.input.scancode_name(sc);
+        if (known && *known && SameNoCase(known, name)) {
+            s_rawInjected = sc;
+            return true;
+        }
+    }
+    return false;
 }
 
 bool Engine_InjectPad(const char *name) {
@@ -516,25 +592,25 @@ bool Engine_InjectPad(const char *name) {
 }
 
 const char *Engine_ScancodeName(S32 code) {
-    return SDL_GetScancodeName((SDL_Scancode)code);
+    const char *name = g_platform.input.scancode_name(code);
+    return name ? name : "";
 }
 
+// The pad's family from its name: the platform layer has no pad type.
+// 1 Xbox (and anything else), 2 PlayStation, 3 Nintendo.
 S32 Engine_PadFamily() {
     if (!s_pad)
         return 0;
-    switch (SDL_GetGamepadType(s_pad)) {
-    case SDL_GAMEPAD_TYPE_PS3:
-    case SDL_GAMEPAD_TYPE_PS4:
-    case SDL_GAMEPAD_TYPE_PS5:
-        return 2;
-    case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_PRO:
-    case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_LEFT:
-    case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_RIGHT:
-    case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_PAIR:
-        return 3;
-    default:
+    const char *name = g_platform.input.gamepad_name(s_pad);
+    if (!name)
         return 1;
-    }
+    if (NameHas(name, "PS3") || NameHas(name, "PS4") || NameHas(name, "PS5") || NameHas(name, "DualShock") ||
+        NameHas(name, "DualSense") || NameHas(name, "PlayStation"))
+        return 2;
+    if (NameHas(name, "Nintendo") || NameHas(name, "Switch") || NameHas(name, "Joy-Con") ||
+        NameHas(name, "Pro Controller"))
+        return 3;
+    return 1;
 }
 
 bool Engine_BeginFrame() {

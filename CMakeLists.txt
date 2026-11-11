@@ -25,7 +25,13 @@ if(APPLE)
     add_link_options(-Wl,-no_warn_duplicate_libraries)
 endif()
 
-find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3-shared)
+# sdl3 on a desktop; uwp for an Xbox in Developer Mode, with lba2cc's UWP
+# toolchain (tools/build-xbox.sh).
+if(PLATFORM_BACKEND STREQUAL "sdl3")
+    find_package(SDL3 REQUIRED CONFIG REQUIRED COMPONENTS SDL3-shared)
+elseif(NOT PLATFORM_BACKEND STREQUAL "uwp")
+    message(FATAL_ERROR "The prototype builds with PLATFORM_BACKEND sdl3 or uwp, not ${PLATFORM_BACKEND}")
+endif()
 add_subdirectory(${LBA2CC_DIR}/LIB386/PLATFORM lib386_platform)
 # lba2cc's PLATFORM CMake names its headers through CMAKE_SOURCE_DIR, which is
 # this repository here; point the targets at the submodule's headers.
@@ -53,10 +59,20 @@ add_executable(lba2menu
     src/shot.cpp
     src/selftest.cpp
     ${LBA2CC_GAME_SOURCES}
+    $<TARGET_OBJECTS:lba2_platform_entry>
 )
 target_include_directories(lba2menu PRIVATE
     src
     ${LBA2CC_DIR}/LIB386/H
     ${LBA2CC_DIR}/SOURCES)
-target_link_libraries(lba2menu PRIVATE svg sys poly 3D lba2_platform SDL3::SDL3)
+target_link_libraries(lba2menu PRIVATE svg sys poly 3D lba2_platform)
+if(PLATFORM_BACKEND STREQUAL "sdl3")
+    # SDL only for the desktop window's size and title; input goes through lba2cc's platform layer.
+    target_link_libraries(lba2menu PRIVATE SDL3::SDL3)
+    target_compile_definitions(lba2menu PRIVATE LBA2_PROTO_SDL=1)
+else()
+    # As lba2cc's SOURCES/CMakeLists.txt links its UWP exe: the C++ runtime inside,
+    # the entry's wWinMain, no console, and the entry's exit wrapper.
+    target_link_options(lba2menu PRIVATE -static -municode -mwindows -Wl,--wrap=exit)
+endif()
 set_target_properties(lba2menu PROPERTIES CXX_STANDARD 17)

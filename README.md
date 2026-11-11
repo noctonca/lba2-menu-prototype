@@ -26,7 +26,24 @@ GPL-2.0, as lba2cc.
     cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
     cmake --build build
 
-Needs SDL3 (Homebrew `sdl3`).
+Needs SDL3 (Homebrew `sdl3`). The keyboard and the pad are read through
+lba2cc's platform layer (`g_platform`); SDL is used directly only to size and
+name the desktop window.
+
+### Xbox (Developer Mode)
+
+    LLVM_MINGW_ROOT=<llvm-mingw> bash tools/build-xbox.sh
+
+builds with lba2cc's UWP backend and packs `out/xbox/lba2menu-xbox-x64.appx`,
+signed with a throwaway certificate. `LLVM_MINGW_ROOT` is an unpacked
+llvm-mingw release; lba2cc's `scripts/dev/build-uwp.sh` downloads the one it
+pins (`out/toolchains/` of an lba2cc checkout). It is its own app, "LBA2 menu
+prototype" (`LBA2CC.MenuProto`): lba2cc's game, settings and saves are not
+touched. Install it as lba2cc's `docs/XBOX.md` says, start it once, then put
+`RESS.HQR` and `SCREEN.HQR` (any 1997 or Classic copy; the menu picture is the
+same) in its `LocalState\Game`. The screen is the TV's (1920x1080, the wide
+layout); what it says goes to `LocalState\lba2menu.log`. `--stdin` is not
+available there; a `LocalState\args.txt` gives it other arguments, one a line.
 
 ## Play
 
