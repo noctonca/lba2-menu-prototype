@@ -1049,6 +1049,11 @@ struct Walker {
         for (size_t g = 0; g < sizeof kExpGroups / sizeof kExpGroups[0]; g++) {
             for (int r = 0; r < kExpGroups[g]; r++) {
                 ExpRow();
+                // The table's voice says the help of the row's own group (2026-11-11: it
+                // stayed on the first group's all the way down).
+                if (Table() && Menu_GetSwitch("exphelp"))
+                    Expect(Voice() == Menu_Tr(Exp_CursorGroupHelp()),
+                           Fmt("experimental: on %s the voice says %s", Exp_CursorName(), Repr(Voice().c_str()).c_str()));
                 Key("down");
             }
             if (!Table()) {

@@ -45,6 +45,7 @@ struct ExpTable {
 bool Exp_Table(ExpTable *out);
 const char *Exp_CursorName();  // the console name under the cursor, "" on the list's groups
 const char *Exp_CursorValue();
+const char *Exp_CursorGroupHelp();  // the help of the group the cursor's row is in
 
 // Where the cursor is ("Auto camera | cam_ease_ms"), and how deep within the page.
 int Exp_Where(char *buf, size_t n);

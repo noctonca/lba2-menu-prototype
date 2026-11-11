@@ -435,7 +435,11 @@ static void Say() {
     if (Table() && sw_exphelp) {
         // The row's help is in the table's own status lines, in the 8x8 font (decided
         // 2026-11-12): the console's English, whole, never paged. The voice keeps the group's.
-        Menu_Say(Wide() || g_colCursor > 0 || i >= 0 ? kGroups[g_group].help : "");
+        // The table's cursor walks every group's rows; g_group is the list's.
+        if (i >= 0)
+            Menu_Say(kGroups[kTuning[i].group].help);
+        else
+            Menu_Say(Wide() || g_colCursor > 0 ? kGroups[g_group].help : "");
         return;
     }
     if (i >= 0 && IsExperimental(i)) {
@@ -797,6 +801,11 @@ bool Exp_Table(ExpTable *out) {
         return false;
     *out = g_table;
     return true;
+}
+
+const char *Exp_CursorGroupHelp() {
+    int i = CursorTuning();
+    return kGroups[i >= 0 ? kTuning[i].group : g_group].help;
 }
 
 const char *Exp_CursorName() {
