@@ -1937,11 +1937,11 @@ void Menu_WriteState(FILE *f) {
     Menu_JsonString(f, kVersion);
 
     if (Bindings_Active()) {
-        fprintf(f, ",\"controls\":");
+        fprintf(f, ",\"bindings\":");
         Bindings_WriteState(f);
     }
     if (MoreOptions_Active()) {
-        fprintf(f, ",\"experimental\":");
+        fprintf(f, ",\"more_options\":");
         MoreOptions_WriteState(f);
     }
     fprintf(f, ",\"switches\":{");

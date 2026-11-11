@@ -388,7 +388,7 @@ void Bindings_Open() {
         g_bindingsReady = true;
     }
     Say();  // the group's help from the first frame, not the row's that opened the page
-    Trace("controls open device=%s", DeviceName(g_device));
+    Trace("bindings open device=%s", DeviceName(g_device));
 }
 
 void Bindings_Close() {
@@ -396,7 +396,7 @@ void Bindings_Close() {
         return;
     g_active = false;
     g_waiting = false;
-    Trace("controls close");
+    Trace("bindings close");
 }
 
 bool Bindings_Active() { return g_active; }
@@ -547,7 +547,7 @@ static void StartWaiting() {
     g_waiting = true;
     g_waitStart = Host_TimeMs();
     g_waitFrame = Host_Frame();
-    Trace("controls wait action=\"%s\" column=\"%s\"", kActions[CursorAction()].name, ColumnHead(CursorColumn()));
+    Trace("bindings wait action=\"%s\" column=\"%s\"", kActions[CursorAction()].name, ColumnHead(CursorColumn()));
 }
 
 static void UpdateWaiting() {
@@ -559,7 +559,7 @@ static void UpdateWaiting() {
     bool cancel = raw == K_ESC || (raw == 0 && Host_Pressed(KEY_ESC)) || (column >= 2 && raw == PAD_START);
     if (cancel) {
         g_waiting = false;
-        Trace("controls wait cancelled");
+        Trace("bindings wait cancelled");
         return;
     }
     if (raw && ((column < 2) == (raw < PAD_CODE_BASE))) {
@@ -569,7 +569,7 @@ static void UpdateWaiting() {
     }
     if (Host_TimeMs() - g_waitStart > 5000) {
         g_waiting = false;
-        Trace("controls wait timed out");
+        Trace("bindings wait timed out");
     }
 }
 
@@ -578,7 +578,7 @@ static void SwitchDevice() {
         return;
     g_device ^= 1;
     g_column = 0;
-    Trace("controls device=%s", DeviceName(g_device));
+    Trace("bindings device=%s", DeviceName(g_device));
 }
 
 void Bindings_Update() {
@@ -637,7 +637,7 @@ void Bindings_Update() {
             g_row = 0;
             g_column = 0;
             g_scroll = 0;
-            Trace("controls group=%s", kGroups[g_group].name);
+            Trace("bindings group=%s", kGroups[g_group].name);
         } else if (Host_Pressed(KEY_ESC)) {
             Bindings_Close();
             return;
@@ -669,7 +669,7 @@ void Bindings_Update() {
             Trace("clear action=\"%s\" column=\"%s\"", kActions[a].name, ColumnHead(c));
         } else if (Host_Pressed(KEY_ESC)) {
             g_focusRight = false;
-            Trace("controls back to groups");
+            Trace("bindings back to groups");
         }
     }
     Say();
@@ -967,14 +967,14 @@ static void DrawWideControls() {
             fill = g_focusRight ? FILL_CURRENT : FILL_CURSOR;
         Ui_RowBackground(lx0, y, lx1, y + ROW_H, fill);
         Ui_TextInRoom(lx0 + 16, lx1 - 16, y + ROW_H / 2 - 18, Ui_Tr(kGroups[g].name), INK_WHITE, fill == FILL_CURSOR);
-        DrawnRow &d = Menu_Record("controls-left", kGroups[g].name, "", fill, lx0, y, lx1, y + ROW_H);
+        DrawnRow &d = Menu_Record("bindings-left", kGroups[g].name, "", fill, lx0, y, lx1, y + ROW_H);
         d.textLeft = lx0 + 16;
         d.textRight = lx0 + 16 + Ui_TextWidth(kGroups[g].name);
         y += ROW_PITCH;
     }
     if (drawRight) {
         S32 atop = Ui_Title(rx0, rx1, top, kGroups[g_group].name);
-        DrawActions(rx0, rx1, atop, Menu_WideRowsLimit(), "controls-right");
+        DrawActions(rx0, rx1, atop, Menu_WideRowsLimit(), "bindings-right");
     }
 
     const char *keys[4], *words[4];

@@ -21,8 +21,9 @@ the closed note) is made an Enter, until no run quits on that build.
 
 diff prints, per run, the first state that differs, field by field, and which
 pictures differ; exit 1 if any run differs. --ignore leaves out fields with
-that name at any depth; --rename compares A's field old as if named new, for a
-state key renamed on purpose. --context N prints the N keys before the first
+that name at any depth; --rename compares A's field old (its path from the
+top, as `bindings` or `bindings.heads`) as if it were new, for a state field
+renamed on purpose. --context N prints the N keys before the first
 difference with the page and row each left, from A and B.
 
     tools/baseline.py record .runs/before          # on the commit before
@@ -89,13 +90,13 @@ def jobs():
                 pre.append("set text_lang 1")
             out.append((f"walk-s{seed}-{size}", size, seed == 5,
                         pre + walk_lines(seed * 1000 + SIZES.index(size))))
-        lines = ["switch whole 1", "wait 1"] + sweep.controls_lines() + [SHOT]
+        lines = ["switch whole 1", "wait 1"] + sweep.bindings_lines() + [SHOT]
         for page in sweep.PAGES:
             lines += [f"open {page}", "wait 1", "state"]
             for _ in range(1, 12):
                 lines += ["key down", "wait 1", "state"]
             lines.append(SHOT)
-        lines += sweep.experimental_lines() + [SHOT]
+        lines += sweep.more_options_lines() + [SHOT]
         out.append((f"layout-{size}", size, False, lines))
     return out
 
@@ -192,8 +193,11 @@ def flat(d, prefix=""):
 
 
 def renamed(path, renames):
-    return ".".join(renames.get(p.split("[")[0], p.split("[")[0]) + p[len(p.split("[")[0]):]
-                    for p in path.split("."))
+    """The path with a renamed field's path (from the top) put in its new name's place."""
+    for old, new in renames.items():
+        if path == old or path.startswith((old + ".", old + "[")):
+            return new + path[len(old):]
+    return path
 
 
 def read_lines(path):

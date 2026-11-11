@@ -37,8 +37,8 @@ PAGES = ["Options", "Preset", "Language and interface", "Display and graphics", 
 CONTROL_GROUPS = [5, 6, 4, 7, 4, 4, 6]
 
 # Rows per group on the More options page (more_options.cpp kTuning).
-EXP_GROUPS = [22, 9, 7, 3, 3]
-EXP_PAGE = "More options"
+MORE_OPTIONS_GROUPS = [22, 9, 7, 3, 3]
+MORE_OPTIONS_PAGE = "More options"
 
 # The same as selftest.cpp kCombos: the pad's names of each family.
 COMBOS = ["padnames=0", "padnames=2", "padnames=3"]
@@ -69,7 +69,7 @@ def run_selftest(binary, size, combo, only, layout_only):
 
 # ───────────────────────────── The script path ─────────────────────────────
 
-def controls_lines():
+def bindings_lines():
     """Every chip of every group, on the keyboard view (two columns) and the pad's (one)."""
     lines = ["open Keys and buttons", "wait 1", "state"]
     for d, cols in enumerate([2, 1]):
@@ -86,10 +86,10 @@ def controls_lines():
             lines += ["key esc", "wait 1", "key down"]
     return lines
 
-def experimental_lines():
+def more_options_lines():
     """Every row of the More options table."""
-    lines = [f"open {EXP_PAGE}", "wait 1", "state"]
-    for _ in range(sum(EXP_GROUPS)):
+    lines = [f"open {MORE_OPTIONS_PAGE}", "wait 1", "state"]
+    for _ in range(sum(MORE_OPTIONS_GROUPS)):
         lines += ["key down", "wait 1", "state"]
     return lines
 
@@ -99,7 +99,7 @@ def run_scripts(binary, size, combo, only, shots):
     # Help shown whole, as the self test runs.
     lines = [f"switch {k} {v}" for k, v in switches.items()] + ["switch whole 1", "wait 1"]
     if not only or only == "Keys and buttons":
-        lines += controls_lines()
+        lines += bindings_lines()
         if shots:
             lines += [f"shot {shots}/{tag}-Keys_and_buttons.png"]
     for page in PAGES:
@@ -110,10 +110,10 @@ def run_scripts(binary, size, combo, only, shots):
             lines += ["key down", "wait 1", "state"]
         if shots:
             lines += [f"shot {shots}/{tag}-{page.replace(' ', '_')}.png"]
-    if not only or only == EXP_PAGE:
-        lines += experimental_lines()
+    if not only or only == MORE_OPTIONS_PAGE:
+        lines += more_options_lines()
         if shots:
-            lines += [f"shot {shots}/{tag}-Experimental_settings.png"]
+            lines += [f"shot {shots}/{tag}-More_options.png"]
     lines.append("quit")
     p = subprocess.run([binary, "--headless", "--size", size, "--script", "/dev/stdin"],
                        input="\n".join(lines) + "\n", capture_output=True, text=True, timeout=300)
@@ -150,14 +150,14 @@ def check(state):
             problems.append(f"row overlaps the {v['where']} by {y1 - hy0 + 1} px: {r['label']!r}")
         if r["text_right"] > x1:
             problems.append(f"text spills {r['text_right'] - x1} px: {r['label']!r} {r['value']!r}")
-    controls = state.get("controls", {})
-    chips = controls.get("chips", [])
+    bindings = state.get("bindings", {})
+    chips = bindings.get("chips", [])
     for k in chips:
         if not k["fits"]:
             problems.append(f"key name cut in its chip: {k['action']!r} {k['column']} {k['name']!r}")
-    exp = state.get("experimental", {})
-    table = exp.get("table")
-    lines = exp.get("lines", []) if table else []
+    more = state.get("more_options", {})
+    table = more.get("table")
+    lines = more.get("lines", []) if table else []
     # One cursor: exactly one row, chip or table line wears it.
     if state["rows"] or chips or table:
         cursors = sum(r["fill"] == "cursor" for r in state["rows"])
@@ -170,8 +170,8 @@ def check(state):
         if k["fill"] == "cursor" and k["conflict"] and " is also " not in v["text"]:
             problems.append(f"red key not explained in the help: {k['action']!r} {k['column']} {k['name']!r}")
     # A clash goes both ways: the other action shows one too.
-    clashing = {a for a, _, _ in controls.get("conflicts", [])}
-    for a, col, other in controls.get("conflicts", []):
+    clashing = {a for a, _, _ in bindings.get("conflicts", [])}
+    for a, col, other in bindings.get("conflicts", []):
         if other not in clashing:
             problems.append(f"clash one way: {a!r} {col} is also {other!r}, which shows no clash")
     # The More options table: its panel clear of the canvas edge and the help, its
@@ -188,7 +188,7 @@ def check(state):
         if v["where"] != "none" and 0 <= hy0 - ty1 - 1 <= 5:
             problems.append(f"proximity: {hy0 - ty1 - 1} px between table and the {v['where']}, rows are 5 apart")
         if table["status_right"] > tx1 - 24:
-            problems.append(f"table: the status line ends at x {table['status_right']}, past {tx1 - 24}: {exp['status']!r}")
+            problems.append(f"table: the status line ends at x {table['status_right']}, past {tx1 - 24}: {more['status']!r}")
         for i, l in enumerate(lines):
             x0, y0, x1, y1 = l["rect"]
             if (x0, x1) != (tx0 + 8, tx1 - 8):
@@ -230,7 +230,7 @@ def check(state):
                 problems.append(f"edge: {r['label']!r} starts at x {r['text_left']}, not {x0 + 16}")
     # The Controls page's first column head (the action names') starts on its rows' label edge,
     # when the heads are a line above the rows.
-    heads = controls.get("heads", [])
+    heads = bindings.get("heads", [])
     if wide and heads and head_row(heads[0], state["rows"]) is None:
         h = heads[0]
         for r in state["rows"]:
@@ -242,7 +242,7 @@ def check(state):
     if wide:
         boxes = [(r["label"], r["rect"]) for r in state["rows"]]
         boxes += [(f"{k['action']} {k['column']}", k["rect"]) for k in chips]
-        boxes += [(h["text"], h["rect"]) for h in controls.get("heads", [])]
+        boxes += [(h["text"], h["rect"]) for h in bindings.get("heads", [])]
         if v["where"] != "none":
             boxes.append(("help", v["rect"]))
         if table:
@@ -290,7 +290,7 @@ def check(state):
             if 0 <= gap <= 5:
                 problems.append(f"proximity: {gap} px between {pane} and the {v['where']}, rows are 5 apart")
     # Proximity: a column head is closer to the rows below it than to the rows above it.
-    for h in controls.get("heads", []):
+    for h in bindings.get("heads", []):
         if head_row(h, state["rows"]) is not None:
             continue
         hx0, hy0_, _, hy1_ = h["rect"]
@@ -303,7 +303,7 @@ def check(state):
                             f"{min(above)} px below the row above")
     # Proximity: a column head inside a row is in its pane's first row, above its own chip,
     # and clear of the action's name.
-    for h in controls.get("heads", []):
+    for h in bindings.get("heads", []):
         r = head_row(h, state["rows"])
         if r is None:
             continue
@@ -321,7 +321,7 @@ def check(state):
 # ───────────────────────────── Checking the command lines ─────────────────────────────
 
 # The walks by keys name themselves at the start of each problem they find.
-WALKS = {"esc", "reach", "setting", "preset", "bind", "walk", "experimental"}
+WALKS = {"esc", "reach", "setting", "preset", "bind", "walk", "more_options"}
 
 def check_again(line, again):
     """None when the command line opens a screen with this problem, else what it showed."""

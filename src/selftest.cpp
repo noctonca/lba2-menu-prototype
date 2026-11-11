@@ -712,7 +712,7 @@ struct Walker {
             return true;
         }
         Check();  // the screen Enter opened
-        // More options has its own walk (experimental:), Down there stops at the ends.
+        // More options has its own walk (more_options:), Down there stops at the ends.
         bool leaf = EndsWith(opened, "| confirm") || EndsWith(opened, "| waiting") || MoreOptions_Active();
         if (!leaf && depth < 6 && !Explore(depth + 1, reached))
             return false;
@@ -1020,7 +1020,7 @@ struct Walker {
                                                Repr(Menu_CursorValue()).c_str(), Repr(mine.c_str()).c_str()));
     }
 
-    // experimental: the row is always on Advanced and reset; Enter opens the
+    // more_options: the row is always on Advanced and reset; Enter opens the
     // page and Esc comes back to the row; on every row Right and Left change the value and
     // the other key puts it back, and Del puts the default back; Page Down and Page Up go to
     // the ends; a changed value marks the preset changed, Modern and Reset settings put it
@@ -1028,7 +1028,7 @@ struct Walker {
     void LeaveExp() { Key("esc"); }
     bool OpenAgain(const char *page) {
         OpenToo(page);
-        return Expect(!strcmp(Menu_PageName(), page), Fmt("experimental: open %s lands on %s", page,
+        return Expect(!strcmp(Menu_PageName(), page), Fmt("more_options: open %s lands on %s", page,
                                                           Repr(Menu_PageName()).c_str()));
     }
     void MoreOptionsRow() {
@@ -1038,15 +1038,15 @@ struct Walker {
         Key("left");
         std::string v2 = MoreOptions_CursorValue();
         if (v1 != v0) {
-            if (!Expect(v2 == v0, Fmt("experimental: Right then Left leaves %s at %s, not %s", name.c_str(),
+            if (!Expect(v2 == v0, Fmt("more_options: Right then Left leaves %s at %s, not %s", name.c_str(),
                                       Repr(v2.c_str()).c_str(), Repr(v0.c_str()).c_str())))
                 return;
             Key("right");
         } else {
-            if (!Expect(v2 != v0, Fmt("experimental: neither Left nor Right changes %s", name.c_str())))
+            if (!Expect(v2 != v0, Fmt("more_options: neither Left nor Right changes %s", name.c_str())))
                 return;
             Key("right");
-            if (!Expect(MoreOptions_CursorValue() == v0, Fmt("experimental: Left then Right leaves %s at %s, not %s", name.c_str(),
+            if (!Expect(MoreOptions_CursorValue() == v0, Fmt("more_options: Left then Right leaves %s at %s, not %s", name.c_str(),
                                                      Repr(MoreOptions_CursorValue()).c_str(), Repr(v0.c_str()).c_str())))
                 return;
             Key("left");
@@ -1056,12 +1056,12 @@ struct Walker {
         // Del puts it back.
         const bool marks = MoreOptions_CursorPresetsSet();
         const bool changed = std::string(Menu_PresetLabel()).find(", changed") != std::string::npos;
-        Expect(changed == marks, marks ? Fmt("experimental: %s changed leaves the preset row at %s", name.c_str(),
+        Expect(changed == marks, marks ? Fmt("more_options: %s changed leaves the preset row at %s", name.c_str(),
                                              Repr(Menu_PresetLabel()).c_str())
-                                       : Fmt("experimental: %s, a player's setting, changed makes the preset row %s",
+                                       : Fmt("more_options: %s, a player's setting, changed makes the preset row %s",
                                              name.c_str(), Repr(Menu_PresetLabel()).c_str()));
         Key("del");
-        Expect(MoreOptions_CursorValue() == v0, Fmt("experimental: Del leaves %s at %s, not its default %s", name.c_str(),
+        Expect(MoreOptions_CursorValue() == v0, Fmt("more_options: Del leaves %s at %s, not its default %s", name.c_str(),
                                             Repr(MoreOptions_CursorValue()).c_str(), Repr(v0.c_str()).c_str()));
     }
 
@@ -1070,7 +1070,7 @@ struct Walker {
             return;
         const char *row = "More options";
         Fresh("Advanced and reset");
-        if (!Expect(RowDrawn(row), "experimental: Advanced and reset has no More options row"))
+        if (!Expect(RowDrawn(row), "more_options: Advanced and reset has no More options row"))
             return;
         if (!MoveTo(row))
             return;
@@ -1078,11 +1078,11 @@ struct Walker {
         std::string here = Where(&d0);
         Key("enter");
         Where(&d1);
-        if (!Expect(MoreOptions_Active() && d1 == d0 + 1, "experimental: Enter on the row does not open the page"))
+        if (!Expect(MoreOptions_Active() && d1 == d0 + 1, "more_options: Enter on the row does not open the page"))
             return;
         Check(kExpPage);
         Key("esc");
-        if (!Expect(Where() == here, Fmt("experimental: Esc from the page went to %s, not back to %s",
+        if (!Expect(Where() == here, Fmt("more_options: Esc from the page went to %s, not back to %s",
                                          Repr(Where().c_str()).c_str(), Repr(here.c_str()).c_str())))
             return;
 
@@ -1095,11 +1095,11 @@ struct Walker {
                 // The table's voice says the help of the row's own group (2026-11-11: it
                 // stayed on the first group's all the way down).
                 Expect(Voice() == Menu_Tr(MoreOptions_CursorGroupHelp()),
-                       Fmt("experimental: on %s the voice says %s", MoreOptions_CursorName(), Repr(Voice().c_str()).c_str()));
+                       Fmt("more_options: on %s the voice says %s", MoreOptions_CursorName(), Repr(Voice().c_str()).c_str()));
                 Key("down");
             }
         }
-        if (!Expect(MoreOptions_CursorName() == first, Fmt("experimental: Down does not come back round to %s (on %s)",
+        if (!Expect(MoreOptions_CursorName() == first, Fmt("more_options: Down does not come back round to %s (on %s)",
                                                    first.c_str(), MoreOptions_CursorName())))
             return;
 
@@ -1107,12 +1107,12 @@ struct Walker {
         Key("pgdn");
         std::string one = MoreOptions_CursorName();
         Expect(one != first && Where().find(MoreOptions_Name(1)) == std::string::npos,
-               Fmt("experimental: Page Down moves to %s, not a window on", one.c_str()));
+               Fmt("more_options: Page Down moves to %s, not a window on", one.c_str()));
         Key("pgdn", 10);
         Expect(!strcmp(MoreOptions_CursorName(), MoreOptions_Name(MoreOptions_Count() - 1)),
-               Fmt("experimental: Page Down stops at %s, not the last row", MoreOptions_CursorName()));
+               Fmt("more_options: Page Down stops at %s, not the last row", MoreOptions_CursorName()));
         Key("pgup", 10);
-        Expect(MoreOptions_CursorName() == first, Fmt("experimental: Page Up stops at %s, not the first row", MoreOptions_CursorName()));
+        Expect(MoreOptions_CursorName() == first, Fmt("more_options: Page Up stops at %s, not the first row", MoreOptions_CursorName()));
 
         // Presets: changed, Modern, Undo preset.
         Fresh(kExpPage);
@@ -1124,14 +1124,14 @@ struct Walker {
             return;
         Key("enter");
         Expect(std::string(Menu_PresetLabel()).find(", changed") == std::string::npos,
-               Fmt("experimental: Modern leaves the preset row at %s", Repr(Menu_PresetLabel()).c_str()));
+               Fmt("more_options: Modern leaves the preset row at %s", Repr(Menu_PresetLabel()).c_str()));
         if (!MoveTo("Undo preset"))
             return;
         Expect(Voice().find(name) != std::string::npos || Voice().find(" more.") != std::string::npos,
-               Fmt("experimental: Undo preset does not name %s: %s", name.c_str(), Repr(Voice().c_str()).c_str()));
+               Fmt("more_options: Undo preset does not name %s: %s", name.c_str(), Repr(Voice().c_str()).c_str()));
         if (!OpenAgain(kExpPage))
             return;
-        if (!Expect(MoreOptions_CursorValue() == v0, Fmt("experimental: Modern leaves %s at %s, not %s", name.c_str(),
+        if (!Expect(MoreOptions_CursorValue() == v0, Fmt("more_options: Modern leaves %s at %s, not %s", name.c_str(),
                                                  Repr(MoreOptions_CursorValue()).c_str(), Repr(v0.c_str()).c_str())))
             return;
         LeaveExp();
@@ -1140,7 +1140,7 @@ struct Walker {
         Key("enter");
         if (!OpenAgain(kExpPage))
             return;
-        if (!Expect(MoreOptions_CursorValue() == v1, Fmt("experimental: Undo preset leaves %s at %s, not %s", name.c_str(),
+        if (!Expect(MoreOptions_CursorValue() == v1, Fmt("more_options: Undo preset leaves %s at %s, not %s", name.c_str(),
                                                  Repr(MoreOptions_CursorValue()).c_str(), Repr(v1.c_str()).c_str())))
             return;
 
@@ -1152,27 +1152,27 @@ struct Walker {
         Key("down");
         Key("enter");
         Expect(!strcmp(Menu_CursorLabel(), "Reset settings"),
-               Fmt("experimental: after a reset the cursor is on %s, not Reset settings", Repr(Menu_CursorLabel()).c_str()));
+               Fmt("more_options: after a reset the cursor is on %s, not Reset settings", Repr(Menu_CursorLabel()).c_str()));
         Expect(std::string(Menu_PresetLabel()).find(", changed") == std::string::npos,
-               Fmt("experimental: Reset settings leaves the preset row at %s", Repr(Menu_PresetLabel()).c_str()));
+               Fmt("more_options: Reset settings leaves the preset row at %s", Repr(Menu_PresetLabel()).c_str()));
         Key("down");
         if (!Expect(!strcmp(Menu_CursorLabel(), "Undo reset"),
-                    Fmt("experimental: after a reset the row after Reset settings is %s", Repr(Menu_CursorLabel()).c_str())))
+                    Fmt("more_options: after a reset the row after Reset settings is %s", Repr(Menu_CursorLabel()).c_str())))
             return;
         Expect(Voice().find(name) != std::string::npos || Voice().find(" more.") != std::string::npos,
-               Fmt("experimental: Undo reset after a reset does not name %s: %s", name.c_str(),
+               Fmt("more_options: Undo reset after a reset does not name %s: %s", name.c_str(),
                    Repr(Voice().c_str()).c_str()));
         Key("enter");
         if (!OpenAgain(kExpPage))
             return;
-        Expect(MoreOptions_CursorValue() == v1, Fmt("experimental: Undo reset after a reset leaves %s at %s, not %s",
+        Expect(MoreOptions_CursorValue() == v1, Fmt("more_options: Undo reset after a reset leaves %s at %s, not %s",
                                              name.c_str(), Repr(MoreOptions_CursorValue()).c_str(), Repr(v1.c_str()).c_str()));
 
         // A player's setting (the last row, From 1997's Reverse stereo): a preset leaves it.
         Fresh(kExpPage);
         Key("pgdn", 10);
         std::string mineName = MoreOptions_CursorName();
-        if (!Expect(!MoreOptions_CursorPresetsSet(), Fmt("experimental: %s, the last row, is a tuning value", mineName.c_str())))
+        if (!Expect(!MoreOptions_CursorPresetsSet(), Fmt("more_options: %s, the last row, is a tuning value", mineName.c_str())))
             return;
         Key("right");
         std::string mine = MoreOptions_CursorValue();
@@ -1185,7 +1185,7 @@ struct Walker {
         if (!OpenAgain(kExpPage))
             return;
         Key("pgdn", 10);
-        Expect(MoreOptions_CursorValue() == mine, Fmt("experimental: Classic puts %s, a player's setting, from %s to %s",
+        Expect(MoreOptions_CursorValue() == mine, Fmt("more_options: Classic puts %s, a player's setting, from %s to %s",
                                               mineName.c_str(), Repr(mine.c_str()).c_str(), Repr(MoreOptions_CursorValue()).c_str()));
     }
 

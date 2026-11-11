@@ -265,14 +265,14 @@ void MoreOptions_Open() {
     g_active = true;
     g_cursor = g_scroll = 0;
     Say();
-    Trace("experimental open");
+    Trace("more_options open");
 }
 
 void MoreOptions_Close() {
     if (!g_active)
         return;
     g_active = false;
-    Trace("experimental close");
+    Trace("more_options close");
 }
 
 bool MoreOptions_Active() { return g_active; }

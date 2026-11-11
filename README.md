@@ -244,7 +244,7 @@ the 1997 game's six languages were compared for the help review.
   with how many letters are typed, which window of it shows of how many
   (`page`, `pages`) and whether it was cut off, the legend, the
   switches and every setting.
-- On the Controls page `state` adds `controls`: the device, group, action and
+- On the Controls page `state` adds `bindings`: the device, group, action and
   column under the cursor, whether it waits for a key, every chip drawn
   (name, rectangle, fill, conflict, whether the name fits), the column heads
   (`heads`: text and rectangle; inside the first row wide, above the actions
@@ -378,7 +378,7 @@ walk finds starts with the walk's name:
   key and the preset back as a fresh install has them and keeps Text and
   Voices, and an Undo reset row comes right after Reset settings; Enter on it
   puts back the setting, the cleared key and Classic, and the row goes.
-- `experimental:` Advanced and reset has the More options row; Enter opens the page and Esc comes back to the row;
+- `more_options:` Advanced and reset has the More options row; Enter opens the page and Esc comes back to the row;
   on every row Right and Left change the value and the other key puts it back,
   the change marks the preset row on a tuning row and not on a player's
   setting, and Del puts the default back; Page Down and Page Up stop at the
@@ -453,8 +453,8 @@ that differs and which pictures differ, and exits 1 if any run does.
 
 - `--context N` prints the N keys before the first difference and the page
   each one left.
-- `--rename old=new` compares a state field renamed on purpose; `--ignore`
-  leaves fields out.
+- `--rename old=new` compares a state field renamed on purpose (its path from
+  the top, as `bindings.heads`); `--ignore` leaves fields out by name.
 - The scripts are made from the first build recorded, into
   `.runs/baseline/scripts.json`; `scripts` makes them again (needed when a
   change moves where an Esc closes the menu, which the walks avoid).
