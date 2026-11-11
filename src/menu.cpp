@@ -1010,6 +1010,8 @@ void Menu_Update() {
     r = CursorRow();
     if (r && r->type == R_BINDING && Host_Pressed(KEY_DEL))
         Bindings_Clear();
+    else if (TopPage() == P_KEYS && Host_Pressed(KEY_DEL))
+        Bindings_AskReset();
 
     if (Host_Pressed(KEY_ESC)) {
         if (g_first)

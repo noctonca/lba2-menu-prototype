@@ -1405,6 +1405,59 @@ struct Walker {
                Fmt("bind: 5 s on, the wait %s (chip %s)", Waiting() ? "goes on" : "ended", Repr(ChipText().c_str()).c_str()));
     }
 
+    // keys reset: Del on the groups page asks, as Reset settings does; Esc and No keep the
+    // keys; Yes puts back the device in view, and only that one (EPmager, 2026-11-11).
+    void ResetKeys() {
+        if (!Wanted("Keys and buttons"))
+            return;
+        char key1[32], pad[32], def1[32], defPad[32];
+        Fresh("Keys and buttons");
+        Bindings_Text("Forward", 0, def1, sizeof def1);
+        Bindings_Text("Forward", 2, defPad, sizeof defPad);
+        ToChip(0, 0, 0);
+        Key("enter");
+        Press("Keypad 1");  // Forward's Key 1: Num 1
+        Key("tab");
+        Key("del");  // Forward's buttons cleared
+        Key("tab");
+        Key("esc");  // the groups, the keyboard in view
+        auto forward = [&]() {
+            Bindings_Text("Forward", 0, key1, sizeof key1);
+            Bindings_Text("Forward", 2, pad, sizeof pad);
+        };
+        forward();
+        if (!Expect(std::string(key1) == "Num 1" && !pad[0],
+                    Fmt("reset keys: setting up gave Forward %s and %s", Repr(key1).c_str(), Repr(pad).c_str())))
+            return;
+        Key("del");
+        if (!Expect(Asking(), Fmt("reset keys: Del on the groups does not ask (%s)", BindingsWhere().c_str())))
+            return;
+        Check();
+        Key("esc");
+        forward();
+        Expect(!Asking() && std::string(key1) == "Num 1",
+               Fmt("reset keys: Esc %s and left Forward's Key 1 %s", Asking() ? "kept asking" : "answered", Repr(key1).c_str()));
+        Key("del");
+        Key("enter");  // No, the first answer
+        forward();
+        Expect(!Asking() && std::string(key1) == "Num 1", Fmt("reset keys: No left Forward's Key 1 %s", Repr(key1).c_str()));
+        Key("del");
+        Key("down");
+        Key("enter");
+        forward();
+        Expect(std::string(key1) == def1 && !pad[0],
+               Fmt("reset keys: Yes on the keyboard left Forward %s and %s, not %s and the buttons cleared", Repr(key1).c_str(),
+                   Repr(pad).c_str(), Repr(def1).c_str()));
+        Key("tab");
+        Key("del");
+        Key("down");
+        Key("enter");
+        forward();
+        Expect(std::string(pad) == defPad,
+               Fmt("reset keys: Yes on the gamepad left Forward's buttons %s, not %s", Repr(pad).c_str(), Repr(defPad).c_str()));
+        Check();
+    }
+
     // keys: the Keys and buttons pages go where their keys say, as the Options pages do. Each
     // group says its own help; a group opens on its first chip, whatever chip the group before
     // was left on; Tab switches the device on a group's page too; wide, Right opens a group as
@@ -1566,6 +1619,7 @@ struct Walker {
         Console();
         Binding();
         KeysPages();
+        ResetKeys();
         PadOnly();
         Devices();
         Languages();

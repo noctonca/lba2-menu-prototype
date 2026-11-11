@@ -305,6 +305,14 @@ static struct {
     int answer;               // 0 No (the safe answer, first), 1 Yes
 } g_swap;
 
+// Del on the groups page puts the device in view back as the game ships it, after a
+// question as Options' Reset settings asks (EPmager, 2026-11-11: no way back to the
+// defaults but Reset settings, which resets everything). No first; No or Esc keeps them.
+static struct {
+    bool asking;
+    int answer;  // 0 No, 1 Yes
+} g_reset;
+
 static bool g_bindingsReady;
 
 static bool Wide() { return Menu_Wide(); }
@@ -404,6 +412,7 @@ void Bindings_Open() {
 void Bindings_Close() {
     g_waiting = false;
     g_swap.action = -1;
+    g_reset.asking = false;
 }
 
 bool Bindings_Active() {
@@ -415,6 +424,7 @@ void Bindings_GroupOpened() { g_column = 0; }
 
 void Bindings_Reset() {
     g_waiting = false;
+    g_reset.asking = false;
     g_device = g_column = 0;
     g_lastBound[0] = 0;
     g_swap.action = -1;
@@ -602,6 +612,34 @@ bool Bindings_StepColumn(int dir) {
     return true;
 }
 
+static void ResetDevice(int device) {
+    for (int a = 0; a < ACTION_COUNT; a++) {
+        if (device == 0) {
+            g_bind[a][0] = kActions[a].key[0];
+            g_bind[a][1] = kActions[a].key[1];
+        } else {
+            g_bind[a][2] = kActions[a].pad[0];
+            g_bind[a][3] = kActions[a].pad[1];
+        }
+    }
+    Trace("reset bindings device=%s", DeviceName(device));
+}
+
+void Bindings_AskReset() {
+    BindingsReady();
+    g_reset.asking = true;
+    g_reset.answer = 0;  // the safe answer first
+    Trace("ask reset device=%s", DeviceName(g_device));
+}
+
+// The reset question's answers and title, by the device in view.
+static const char *ResetAnswer(int i) {
+    static const char *const k[2][2] = {{"No, keep my keys", "Yes, reset keys"},
+                                        {"No, keep my buttons", "Yes, reset buttons"}};
+    return k[g_device][i];
+}
+static const char *ResetTitle() { return g_device ? "Confirm gamepad reset" : "Confirm keyboard reset"; }
+
 void Bindings_Enter() {
     if (FixedChip(CursorAction(), CursorColumn()))
         Trace("fixed action=\"%s\"", kActions[CursorAction()].name);
@@ -622,12 +660,25 @@ void Bindings_Clear() {
     Trace("clear action=\"%s\" column=\"%s\"", kActions[a].name, ColumnHead(c));
 }
 
-bool Bindings_Busy() { return g_waiting || g_swap.action >= 0; }
+bool Bindings_Busy() { return g_waiting || g_swap.action >= 0 || g_reset.asking; }
 
 // The wait for a key, and the question about a key another action has: each takes every key.
 void Bindings_UpdateBusy() {
     if (g_waiting) {
         UpdateWaiting();
+    } else if (g_reset.asking) {
+        if (Host_Pressed(KEY_UP) || Host_Pressed(KEY_DOWN)) {
+            g_reset.answer ^= 1;
+            Trace("cursor %s", g_reset.answer ? "Yes" : "No");
+        }
+        if (Host_Pressed(KEY_ENTER) && g_reset.answer) {
+            g_reset.asking = false;
+            Trace("answer yes");
+            ResetDevice(g_device);
+        } else if (Host_Pressed(KEY_ENTER) || Host_Pressed(KEY_ESC)) {
+            g_reset.asking = false;
+            Trace("answer no");
+        }
     } else {
         if (Host_Pressed(KEY_UP) || Host_Pressed(KEY_DOWN)) {
             g_swap.answer ^= 1;
@@ -659,6 +710,8 @@ void Bindings_Say() {
             snprintf(buf, sizeof buf, Menu_Tr("Press a button, or %s to keep it."), start);
             text = buf;
         }
+    } else if (OnGroups() && g_reset.asking) {
+        text = g_device ? "Put every button back as the game ships them?" : "Put every key back as the game ships them?";
     } else if (OnGroups()) {
         if (CurrentGroup() >= 0)
             text = kGroups[CurrentGroup()].help;
@@ -833,16 +886,19 @@ static void Legend(const char **keys, const char **words, int *n) {
         keys[*n] = start, words[(*n)++] = "Cancel";
         return;
     }
-    if (g_swap.action >= 0) {  // as Options' questions
+    if (g_swap.action >= 0 || g_reset.asking) {  // as Options' questions
         keys[*n] = "\x18\x19", words[(*n)++] = "Choose";
         keys[*n] = "Enter", words[(*n)++] = "Answer";
+        keys[*n] = "Esc", words[(*n)++] = "Cancel";
         return;
     }
     if (!OnGroups() && !FixedChip(CursorAction(), CursorColumn())) {
         keys[*n] = "Enter", words[(*n)++] = "Change";
         keys[*n] = "Del", words[(*n)++] = "Clear";
     } else if (OnGroups()) {
-        keys[*n] = "Enter", words[(*n)++] = "Open";
+        if (CurrentGroup() >= 0)
+            keys[*n] = "Enter", words[(*n)++] = "Open";
+        keys[*n] = "Del", words[(*n)++] = "Defaults";
     }
     if (Host_KeyboardSeen()) {
         snprintf(other, sizeof other, "%s", DeviceName(!g_device));
@@ -856,29 +912,44 @@ static void Legend(const char **keys, const char **words, int *n) {
 // to keep the cursor in view; with the heads inside the first row, the rows from y top.
 // The swap question's two answers in place of the actions, as Options draws its
 // questions: wide, labels on the pane's label edge; one column, centred.
-static void DrawSwapAnswers(S32 x0, S32 x1, S32 top, const char *pane) {
+static void DrawAnswers(S32 x0, S32 x1, S32 top, const char *pane, const char *const labels[2],
+                        const char *const shownText[2], int answer) {
     bool centred = !Wide();
     for (int i = 0; i < 2; i++) {
-        char label[96], shown[128];
-        SwapAnswer(i, label, sizeof label);
-        SwapAnswer(i, shown, sizeof shown, true);
+        const char *label = labels[i], *shown = shownText[i];
         S32 y0 = top + i * ROW_PITCH, yc = y0 + ROW_H / 2;
-        RowFill fill = i == g_swap.answer ? FILL_CURSOR : FILL_SHADE;
+        RowFill fill = i == answer ? FILL_CURSOR : FILL_SHADE;
         Ui_RowBackground(x0, y0, x1, y0 + ROW_H, fill);
         DrawnRow &d = Menu_Record(pane, label, "", fill, x0, y0, x1, y0 + ROW_H);
         if (centred) {
-            Menu_RowLabelCentred(x0, x1, yc, shown, INK_WHITE, true, i == g_swap.answer);
+            Menu_RowLabelCentred(x0, x1, yc, shown, INK_WHITE, true, i == answer);
             d.textLeft = (x0 + x1) / 2 - Ui_TextWidthAsIs(shown) / 2;
             d.textRight = d.textLeft + Ui_TextWidthAsIs(shown);
         } else {
             const ClipSave clip;
             SetClip(x0 + 1, y0, x1 - 1, y0 + ROW_H);
-            Ui_TextInRoom(x0 + 16, x1 - 16, yc - 18, shown, INK_WHITE, i == g_swap.answer);
+            Ui_TextInRoom(x0 + 16, x1 - 16, yc - 18, shown, INK_WHITE, i == answer);
             clip.Restore();
             d.textLeft = x0 + 16;
             d.textRight = x0 + 16 + Ui_TextWidthAsIs(shown);
         }
     }
+}
+
+static void DrawSwapAnswers(S32 x0, S32 x1, S32 top, const char *pane) {
+    char label[2][96], shown[2][128];
+    for (int i = 0; i < 2; i++) {
+        SwapAnswer(i, label[i], sizeof label[i]);
+        SwapAnswer(i, shown[i], sizeof shown[i], true);
+    }
+    const char *const l[2] = {label[0], label[1]}, *const s[2] = {shown[0], shown[1]};
+    DrawAnswers(x0, x1, top, pane, l, s, g_swap.answer);
+}
+
+static void DrawResetAnswers(S32 x0, S32 x1, S32 top, const char *pane) {
+    const char *const l[2] = {ResetAnswer(0), ResetAnswer(1)};
+    const char *const s[2] = {Ui_Tr(ResetAnswer(0)), Ui_Tr(ResetAnswer(1))};
+    DrawAnswers(x0, x1, top, pane, l, s, g_reset.answer);
 }
 
 static void DrawActions(S32 x0, S32 x1, S32 headsTop, S32 limit, const char *pane) {
@@ -920,7 +991,9 @@ static void DrawWideControls() {
     WideFrame f = Menu_WideFrame();
     const S32 top = f.y0 + 24;
     const S32 x0 = f.x0 + (f.w - DRILL_W) / 2, x1 = x0 + DRILL_W - 1;
-    if (OnGroups()) {
+    if (OnGroups() && g_reset.asking) {
+        DrawResetAnswers(x0, x1, Ui_Title(x0, x1, top, ResetTitle()), "bindings-left");
+    } else if (OnGroups()) {
         S32 y = top;
         for (int g = 0; g < GROUP_COUNT; g++) {
             RowFill fill = g == CurrentGroup() ? FILL_CURSOR : FILL_SHADE;
@@ -953,6 +1026,16 @@ static void DrawWideControls() {
 static void DrawColumnControls() {
     S32 W = (S32)Host_LogicalW(), H = (S32)Host_LogicalH();
     S32 x0 = W / 2 - 275, x1 = W / 2 + 275;
+    if (OnGroups() && g_reset.asking) {
+        // The question: two answers, centred, as wide as the groups' rows so a translated
+        // answer fits ("Nein, meine Tasten behalten").
+        DrawResetAnswers(x0, x1, 120, "confirm");
+        const char *keys[4], *words[4];
+        int nk;
+        Legend(keys, words, &nk);
+        Menu_DrawDialogue(keys, words, nk);
+        return;
+    }
     if (OnGroups()) {
         // The groups, as a 1997 sub-menu: a Return row, then one row each.
         const int cursor = Menu_TopRow();
@@ -1052,8 +1135,9 @@ int Bindings_Conflicts(ConflictView *out, int max) {
 int Bindings_Where(char *buf, size_t n) {
     if (OnGroups()) {
         const int g = CurrentGroup();
-        snprintf(buf, n, "%s | %s", DeviceName(g_device), g < 0 ? "Return to previous menu" : kGroups[g].name);
-        return 1;
+        snprintf(buf, n, "%s | %s%s", DeviceName(g_device), g < 0 ? "Return to previous menu" : kGroups[g].name,
+                 !g_reset.asking ? "" : g_reset.answer ? " | asking reset | Yes" : " | asking reset | No");
+        return g_reset.asking ? 2 : 1;  // Esc takes the question back to the groups
     }
     char chip[32];
     int a = CursorAction(), c = CursorColumn();

@@ -402,6 +402,9 @@ walk finds starts with the walk's name:
   they were; Del clears it. On the pad, Start leaves the wait as Esc does, and
   Game menu's chip neither waits nor clears. Also: Forward's Key 2 put in
   Key 1 leaves Key 2 empty, and the wait gives up after 5 s.
+- `reset keys:` Del on the Keys and buttons groups page asks first (legend
+  "Del Defaults"); Esc and No keep the keys; Yes puts back the device in view
+  as the game ships it and leaves the other device's changes.
 - `keys:` the Keys and buttons pages go where their keys say: each group says
   its own help; a group opens on its first chip, whatever chip the group before
   was left on; Tab switches the device on a group's page too; wide, Right opens

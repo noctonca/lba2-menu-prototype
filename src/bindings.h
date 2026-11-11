@@ -23,6 +23,7 @@ void Bindings_SwitchDevice();      // Tab
 bool Bindings_StepColumn(int dir); // Left, Right along the chips; false at either end
 void Bindings_Enter();             // Enter on a binding row: wait for a key
 void Bindings_Clear();             // Del on a binding row
+void Bindings_AskReset();          // Del on the groups page: asks, then the device's defaults
 bool Bindings_Busy();              // waiting for a key, or asking
 void Bindings_UpdateBusy();        // while busy: takes every key
 void Bindings_Say();               // the help, or what the wait or the question says
