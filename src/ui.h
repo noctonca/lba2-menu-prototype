@@ -46,6 +46,10 @@ S32 Ui_TextWidthAsIs(const char *s);
 S32 Ui_TextInkWidthAsIs(const char *s);
 void Ui_TextAsIs(S32 x, S32 y, const char *s, U8 colour);
 
+// s (as drawn) from x, kept within x..right: whole when it fits; wider, clipped, and with
+// swing (the cursor's row) sliding to show its end and back, as 1997 did. Returns its width.
+S32 Ui_TextInRoom(S32 x, S32 right, S32 y, const char *s, U8 colour, bool swing);
+
 S32 Ui_TextWidth(const char *s);
 // The width of the ink alone: Ui_TextWidth less the spacing after the last letter.
 S32 Ui_TextInkWidth(const char *s);

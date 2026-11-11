@@ -303,6 +303,15 @@ strip at the value edge, which read badly on a TV (switch `slider=0`).
   in all six languages, and a drawn text with no translation is a problem.
   Shortened to fit the 275 px name column at 640x480: eleven action names (the
   spells, the behaviour rows, turning) and three answers.
+- **Text too wide for its room swings, as 1997 did** (2026-11-12). The
+  original (GAMEMENU.CPP DrawOneChoice, "Shake Baby, shake...") draws a row
+  wider than the menu from its left, clipped, and under the cursor slides it
+  until its end shows and back. The prototype does the same for every row
+  label and answer (Ui_TextInRoom, 48 px a second, restarting when the text
+  changes): the room ends where the value, its marks or the first key chip
+  begin. A fallback, not a fix: short text that fits stays the rule, and the
+  self test still reports text that does not fit. Seen with an injected long
+  French name on Keys and buttons at 640x480.
 - **Every language is measured** (2026-11-12). The voice speaks the Text
   row's language (`lang/help.tsv`, stand-in translations made to measure). The self test fills each text's
   formats with long names and checks every language in both fonts: two band

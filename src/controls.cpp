@@ -755,13 +755,14 @@ static void DrawActionRow(int action, S32 x0, S32 y0, S32 x1, S32 y1, const int 
                           const char *pane) {
     S32 yc = (y0 + y1) / 2;
     Ui_RowBackground(x0, y0, x1, y1, FILL_SHADE);
-    MemoClip();
-    SetClip(x0 + 1, y0, x1 - 1, y1);
-    Ui_Text(x0 + 16, yc - 18, kActions[action].name, INK_WHITE);
-    RestoreClip();
-
     S32 cx[3], cw[3];
     ChipLayout(x1, cols, ncols, cx, cw);
+    // The name up to 8 before the first chip; wider, it swings while the row has the cursor.
+    MemoClip();
+    SetClip(x0 + 1, y0, x1 - 1, y1);
+    Ui_TextInRoom(x0 + 16, cx[0] - 8 - 1, yc - 18, Ui_Tr(kActions[action].name), INK_WHITE, cursorRow);
+    RestoreClip();
+
     S32 s = ChipScale(), ch = Ui_KeyChipHeight(s);
     DrawnRow &d = Menu_Record(pane, kActions[action].name, "", FILL_SHADE, x0, y0, x1, y1);
     d.textLeft = x0 + 16;
@@ -873,13 +874,13 @@ static void DrawSwapAnswers(S32 x0, S32 x1, S32 top, const char *pane) {
         Ui_RowBackground(x0, y0, x1, y0 + ROW_H, fill);
         DrawnRow &d = Menu_Record(pane, label, "", fill, x0, y0, x1, y0 + ROW_H);
         if (centred) {
-            Menu_RowLabelCentred(x0, x1, yc, shown, INK_WHITE, true);
+            Menu_RowLabelCentred(x0, x1, yc, shown, INK_WHITE, true, i == g_swap.answer);
             d.textLeft = (x0 + x1) / 2 - Ui_TextWidthAsIs(shown) / 2;
             d.textRight = d.textLeft + Ui_TextWidthAsIs(shown);
         } else {
             MemoClip();
             SetClip(x0 + 1, y0, x1 - 1, y0 + ROW_H);
-            Ui_TextAsIs(x0 + 16, yc - 18, shown, INK_WHITE);
+            Ui_TextInRoom(x0 + 16, x1 - 16, yc - 18, shown, INK_WHITE, i == g_swap.answer);
             RestoreClip();
             d.textLeft = x0 + 16;
             d.textRight = x0 + 16 + Ui_TextWidthAsIs(shown);
@@ -944,7 +945,7 @@ static void DrawWideControls() {
         if (g == g_group)
             fill = g_focusRight ? FILL_CURRENT : FILL_CURSOR;
         Ui_RowBackground(lx0, y, lx1, y + ROW_H, fill);
-        Ui_Text(lx0 + 16, y + ROW_H / 2 - 18, kGroups[g].name, INK_WHITE);
+        Ui_TextInRoom(lx0 + 16, lx1 - 16, y + ROW_H / 2 - 18, Ui_Tr(kGroups[g].name), INK_WHITE, fill == FILL_CURSOR);
         DrawnRow &d = Menu_Record("controls-left", kGroups[g].name, "", fill, lx0, y, lx1, y + ROW_H);
         d.textLeft = lx0 + 16;
         d.textRight = lx0 + 16 + Ui_TextWidth(kGroups[g].name);
@@ -985,7 +986,7 @@ static void DrawColumnControls() {
             const char *label = i == 0 ? "Return to previous menu" : kGroups[i - 1].name;
             RowFill fill = i == g_colCursor ? FILL_CURSOR : FILL_SHADE;
             Ui_RowBackground(x0, y, x1, y + ROW_H, fill);
-            Menu_RowLabelCentred(x0, x1, y + ROW_H / 2, label, INK_WHITE);
+            Menu_RowLabelCentred(x0, x1, y + ROW_H / 2, label, INK_WHITE, false, i == g_colCursor);
             DrawnRow &d = Menu_Record("column", label, "", fill, x0, y, x1, y + ROW_H);
             d.textLeft = (x0 + x1) / 2 - Ui_TextWidth(label) / 2;
             d.textRight = (x0 + x1) / 2 + Ui_TextWidth(label) / 2 + 8;

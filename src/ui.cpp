@@ -108,6 +108,37 @@ void Ui_TextAsIs(S32 x, S32 y, const char *s, U8 colour) {
     Font(x, y, s);
 }
 
+// The 1997 swing (GAMEMENU.CPP DrawOneChoice, "Shake Baby, shake..."): text wider than its
+// room is clipped to it, and under the cursor it slides left until its end shows, then back,
+// at 48 px a second (InitMove(&MoveChoice, 48)), from the start each time the text changes.
+// A fallback: the self test still reports text that does not fit.
+enum { SWING_PX_PER_S = 48 };
+static char s_swingText[256];
+static U32 s_swingStart;
+
+S32 Ui_TextInRoom(S32 x, S32 right, S32 y, const char *s, U8 colour, bool swing) {
+    S32 w = Ui_TextWidthAsIs(s), room = right - x + 1;
+    if (w <= room) {
+        Ui_TextAsIs(x, y, s, colour);
+        return w;
+    }
+    S32 off = 0;
+    if (swing) {
+        if (strcmp(s, s_swingText) != 0) {
+            snprintf(s_swingText, sizeof s_swingText, "%s", s);
+            s_swingStart = Engine_TimeMs();
+        }
+        S32 travel = w - room;
+        S32 d = (S32)((Engine_TimeMs() - s_swingStart) * SWING_PX_PER_S / 1000) % (2 * travel);
+        off = d <= travel ? -d : -(2 * travel - d);
+    }
+    MemoClip();
+    SetClip(x > ClipXMin ? x : ClipXMin, ClipYMin, right < ClipXMax ? right : ClipXMax, ClipYMax);
+    Ui_TextAsIs(x + off, y, s, colour);
+    RestoreClip();
+    return w;
+}
+
 S32 Ui_TextWidth(const char *s) { return Ui_TextWidthAsIs(Ui_Tr(s)); }
 S32 Ui_TextInkWidth(const char *s) { return Ui_TextInkWidthAsIs(Ui_Tr(s)); }
 void Ui_Text(S32 x, S32 y, const char *s, U8 colour) { Ui_TextAsIs(x, y, Ui_Tr(s), colour); }

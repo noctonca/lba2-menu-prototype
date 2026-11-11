@@ -667,21 +667,22 @@ static void DrawListRow(const char *pane, const char *label, int i, S32 x0, S32 
             snprintf(text, sizeof text, "%s: %s", label, val);
         else
             snprintf(text, sizeof text, "%s", label);
-        Menu_RowLabelCentred(x0, x1, yc, text, INK_WHITE, true);  // tuning rows stay English
+        Menu_RowLabelCentred(x0, x1, yc, text, INK_WHITE, true, fill == FILL_CURSOR);  // tuning rows stay English
         d.textLeft = (x0 + x1) / 2 - Ui_TextWidthAsIs(text) / 2;
         d.textRight = (x0 + x1) / 2 + Ui_TextWidthAsIs(text) / 2 + 8;
         return;
     }
-    MemoClip();
-    SetClip(x0 + 1, y0, x1 - 1, y1);
-    Ui_TextAsIs(x0 + 16, yc - 18, label, INK_WHITE);  // tuning rows stay English
-    RestoreClip();
     d.textLeft = x0 + 16;
     d.textRight = x0 + 16 + Ui_TextWidthAsIs(label);
+    S32 valueRight = x1 - 24;
+    S32 left = i < 0 ? 0 : valueRight + 1 - Ui_TextInkWidthAsIs(val);
+    MemoClip();
+    SetClip(x0 + 1, y0, x1 - 1, y1);
+    Ui_TextInRoom(x0 + 16, left ? left - 17 - 8 - 1 : x1 - 16, yc - 18, label, INK_WHITE,
+                  fill == FILL_CURSOR);  // tuning rows stay English
+    RestoreClip();
     if (i < 0)
         return;
-    S32 valueRight = x1 - 24;
-    S32 left = valueRight + 1 - Ui_TextInkWidthAsIs(val);
     if (d.textRight + 8 > left - 17)
         d.textRight = x1 + (d.textRight + 8 - (left - 17));  // the label runs into the value
     Ui_TextAsIs(left, yc - 18, val, changed ? INK_COUNT : INK_WHITE);

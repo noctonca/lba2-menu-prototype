@@ -1173,12 +1173,15 @@ DrawnRow &Menu_Record(const char *pane, const char *label, const char *value, Ro
 }
 
 // Centred text clipped to the row, the original's way (DrawOneChoice).
-void Menu_RowLabelCentred(S32 x0, S32 x1, S32 yc, const char *s, U8 colour, bool asIs) {
+void Menu_RowLabelCentred(S32 x0, S32 x1, S32 yc, const char *s, U8 colour, bool asIs, bool cursor) {
     MemoClip();
     SetClip(x0 + 1, yc - 25, x1 - 1, yc + 25);
     if (!asIs)
         s = Ui_Tr(s);
-    Ui_TextAsIs((x0 + x1) / 2 - Ui_TextWidthAsIs(s) / 2, yc - 18, s, colour);
+    if (Ui_TextWidthAsIs(s) > x1 - x0 - 16)
+        Ui_TextInRoom(x0 + 8, x1 - 8, yc - 18, s, colour, cursor);  // 1997: x0 + 8, swinging
+    else
+        Ui_TextAsIs((x0 + x1) / 2 - Ui_TextWidthAsIs(s) / 2, yc - 18, s, colour);
     RestoreClip();
 }
 
@@ -1214,7 +1217,7 @@ static void DrawColumnRow(const Row &r, S32 x0, S32 y0, S32 x1, S32 y1, bool cur
         snprintf(text, sizeof text, "%s: %s", r.label, kVersion);
     else
         snprintf(text, sizeof text, "%s", r.label);
-    Menu_RowLabelCentred(x0, x1, yc, text, active ? INK_WHITE : INK_DISABLED);
+    Menu_RowLabelCentred(x0, x1, yc, text, active ? INK_WHITE : INK_DISABLED, false, cursor);
 
     DrawnRow &d = Menu_Record("column", text,
                               r.type == R_SETTING                         ? ValueText(r.arg, val, sizeof val)
@@ -1261,11 +1264,6 @@ static void DrawWideRow(const char *pane, const Row &r, S32 x0, S32 y0, S32 x1, 
         snprintf(label, sizeof label, "%s", r.label);
     }
 
-    MemoClip();
-    SetClip(x0 + 1, y0, x1 - 1, y1);
-    Ui_Text(x0 + 16, yc - 18, label, active ? INK_WHITE : INK_DISABLED);
-    RestoreClip();
-
     DrawnRow &d = Menu_Record(pane, label, "", fill, x0, y0, x1, y1);
     d.dim = !active;
     d.setting = r.type == R_SETTING;
@@ -1273,6 +1271,7 @@ static void DrawWideRow(const char *pane, const Row &r, S32 x0, S32 y0, S32 x1, 
     d.textRight = x0 + 16 + Ui_TextWidth(label);
 
     const S32 valueRight = x1 - 24;
+    S32 valueLeft = 0;  // where a value starts: the label's room ends 8 before its marks
     if (r.type == R_SETTING) {
         const Setting &st = kSettings[r.arg];
         bool changed = ValueChanged(r.arg);
@@ -1280,6 +1279,7 @@ static void DrawWideRow(const char *pane, const Row &r, S32 x0, S32 y0, S32 x1, 
         if (st.kind == K_STEPS) {
             Ui_Steps(valueRight, yc, st.max, g_val[r.arg], &left);
             snprintf(d.value, sizeof d.value, "%d/%d", g_val[r.arg], st.max);
+            valueLeft = left;
         } else if (st.kind == K_SLIDER && sw_slider) {
             snprintf(d.value, sizeof d.value, "%d", g_val[r.arg]);  // the bar is the value
         } else if (st.kind == K_SLIDER) {
@@ -1288,6 +1288,7 @@ static void DrawWideRow(const char *pane, const Row &r, S32 x0, S32 y0, S32 x1, 
                 d.textRight = x1 + (d.textRight + 8 - (left - 17));
             Ui_MiniSlider(left, valueRight, yc, g_val[r.arg], st.max, !active);
             snprintf(d.value, sizeof d.value, "%d", g_val[r.arg]);
+            valueLeft = left;
         } else {
             ValueText(r.arg, val, sizeof val);
             left = valueRight + 1 - Ui_TextInkWidth(val);  // the ink ends on the value edge
@@ -1295,6 +1296,7 @@ static void DrawWideRow(const char *pane, const Row &r, S32 x0, S32 y0, S32 x1, 
                 d.textRight = x1 + (d.textRight + 8 - (left - 17));  // label runs into the value
             Ui_Text(left, yc - 18, val, !active ? INK_DISABLED : changed ? INK_COUNT : INK_WHITE);
             snprintf(d.value, sizeof d.value, "%s", val);
+            valueLeft = left;
         }
         d.changed = changed;
         d.valueRight = valueRight;
@@ -1310,6 +1312,7 @@ static void DrawWideRow(const char *pane, const Row &r, S32 x0, S32 y0, S32 x1, 
         Ui_Text(left, yc - 18, kVersion, INK_DISABLED);
         snprintf(d.value, sizeof d.value, "%s", kVersion);
         d.valueRight = valueRight;
+        valueLeft = left;
     } else if (presetValue) {
         S32 left = valueRight + 1 - Ui_TextInkWidth(presetValue);
         if (d.textRight + 8 > left - 17)
@@ -1317,11 +1320,19 @@ static void DrawWideRow(const char *pane, const Row &r, S32 x0, S32 y0, S32 x1, 
         Ui_Text(left, yc - 18, presetValue, PresetChanged() ? INK_COUNT : INK_WHITE);
         snprintf(d.value, sizeof d.value, "%s", presetValue);
         d.valueRight = valueRight;
+        valueLeft = left;
     } else if (r.type == R_PRESET_CHOICE && r.arg == g_preset && PresetChanged()) {
-        Ui_Text(valueRight + 1 - Ui_TextInkWidth("Changed"), yc - 18, "Changed", INK_COUNT);
+        valueLeft = valueRight + 1 - Ui_TextInkWidth("Changed");
+        Ui_Text(valueLeft, yc - 18, "Changed", INK_COUNT);
         snprintf(d.value, sizeof d.value, "Changed");
         d.valueRight = valueRight;
     }
+    // The label last, in the room the value leaves (the 1997 swing when it is wider).
+    MemoClip();
+    SetClip(x0 + 1, y0, x1 - 1, y1);
+    Ui_TextInRoom(x0 + 16, valueLeft ? valueLeft - 17 - 8 - 1 : x1 - 16, yc - 18, Ui_Tr(label),
+                  active ? INK_WHITE : INK_DISABLED, fill == FILL_CURSOR);
+    RestoreClip();
 }
 
 void Menu_DrawScrollBar(S32 x0, S32 y0, S32 y1, int first, int visible, int total) {
@@ -1448,12 +1459,12 @@ static void DrawConfirm(const char *pane, S32 x0, S32 x1, S32 y0) {
         Ui_RowBackground(x0, ry0, x1, ry0 + ROW_H, fill);
         DrawnRow &d = Menu_Record(pane, answers[i], "", fill, x0, ry0, x1, ry0 + ROW_H);
         if (centred) {
-            Menu_RowLabelCentred(x0, x1, yc, answers[i], INK_WHITE);
+            Menu_RowLabelCentred(x0, x1, yc, answers[i], INK_WHITE, false, i == g_confirmCursor);
             d.textLeft = (x0 + x1) / 2 - Ui_TextWidth(answers[i]) / 2;
         } else {
             MemoClip();
             SetClip(x0 + 1, ry0, x1 - 1, ry0 + ROW_H);
-            Ui_Text(x0 + 16, yc - 18, answers[i], INK_WHITE);
+            Ui_TextInRoom(x0 + 16, x1 - 16, yc - 18, Ui_Tr(answers[i]), INK_WHITE, i == g_confirmCursor);
             RestoreClip();
             d.textLeft = x0 + 16;
             d.textRight = x0 + 16 + Ui_TextWidth(answers[i]);

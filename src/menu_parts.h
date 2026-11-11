@@ -22,7 +22,8 @@ struct DrawnRow {
 DrawnRow &Menu_Record(const char *pane, const char *label, const char *value, RowFill fill, int x0, int y0, int x1,
                       int y1);
 
-void Menu_RowLabelCentred(S32 x0, S32 x1, S32 yc, const char *s, U8 colour, bool asIs = false);
+// Centred in the row; wider than the row, from its left (8 in) and, with cursor, swinging.
+void Menu_RowLabelCentred(S32 x0, S32 x1, S32 yc, const char *s, U8 colour, bool asIs = false, bool cursor = false);
 void Menu_DrawScrollBar(S32 x0, S32 y0, S32 y1, int first, int visible, int total);
 
 // Whether pages take the wide layout, and the frame it is composed in. With the
