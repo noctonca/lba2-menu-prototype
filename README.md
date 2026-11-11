@@ -17,6 +17,10 @@ Settings are fakes held in memory. Nothing here writes `lba2.cfg`.
 - `src/cadre.cpp` copies the game-layer drawing helpers this needs
   (`DrawCadre`, `BackupAngles`/`RestoreAngles`, `ShadeBoxBlk`, `DrawFireBar`)
   and names where each came from.
+- `assets/fonts/` holds Zilla Slab Bold (SIL Open Font License,
+  `assets/fonts/OFL.txt`), baked into the binary by `cmake/embed_binary.cmake`
+  for the Font row; `third_party/stb_truetype.h` (public domain) draws it.
+  All three come from lba2cc's parked HD UI branch, `feat/hd-ui-scale`.
 
 GPL-2.0, as lba2cc.
 
@@ -114,6 +118,7 @@ own switches are on F1 to F12 and 0 to 9.
 | 2 | `legend` | the band's legend stacked at its right / in a row beside the voice |
 | 3 | `bg` | the background scaled evenly and cropped / stretched, as lba2cc does |
 | Shift+3 | `bgres` | the menu picture at the screen's own resolution: off, part of the canvas (as before) / whole step: the smallest whole factor that covers the screen, cropped / smooth: the exact cover factor, Catmull-Rom / as the Image row says (the start): Classic whole step, Smooth smooth. The menu stays on the canvas at its whole step; darkened rows and the band darken the screen-size picture through the same fog rows (src/screenbg.cpp) |
+| Shift+9 / Shift+0 | `vfsize` | Zilla Slab's size when the Font row picks it, in percent: 100 makes its capitals as tall as the game font's (22 logical pixels); `switch vfsize 110` from a script |
 | 4 | `scale` | screens 3:2 or wider take the 960x540 composition at the largest whole step it fits, others the one column / the plan's rule |
 | 5 | `panes` | wide: one pane at a time, centred, the page's name as a title / two panes side by side |
 | 6 | `bandshade` | the band darkened to level 15 / 11 |

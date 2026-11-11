@@ -7,6 +7,7 @@
 #include "trace.h"
 #include "menu_parts.h"
 #include "ui.h"
+#include "vfont.h"
 
 #include <SVGA/BOX.H>
 #include <SVGA/CLIP.H>
@@ -34,7 +35,7 @@ struct Setting {
 };
 
 enum {
-    S_TEXT_LANG, S_VOICE_LANG, S_SUBTITLES, S_BACKGROUND,
+    S_TEXT_LANG, S_VOICE_LANG, S_SUBTITLES, S_BACKGROUND, S_FONT,
     S_RESOLUTION, S_FULLSCREEN, S_VSYNC, S_FPS, S_IMAGE,
     S_MASTER, S_SFX, S_VOICES, S_MUSIC,
     S_CAM_OUT, S_CAM_IN, S_MOVIE_CAM, S_INVERT, S_SENS,
@@ -56,6 +57,11 @@ static const Setting kSettings[S_COUNT] = {
     // as they darken the picture. Off is black.
     {"background", "Background", K_CHOICE, 2, {"Picture", "Blue", "Off"}, 0, 0, false,
      "What is behind the menu: the 1997 picture, plain blue, or nothing."},
+    // The menu's letters (asked for 2026-11-11): the game font, or Zilla Slab Bold drawn at
+    // the screen's resolution (src/vfont.cpp), the face lba2cc's parked HD UI overlay chose.
+    // Bold over Medium and the size, decided after play (2026-11-11).
+    {"font", "Font", K_CHOICE, 1, {"Game", "Zilla Slab"}, 0, 0, false,
+     "The game's own letters, or Zilla Slab drawn sharp at the screen's size."},
     // Not a stored value: the row shows the screen in use and steps it through
     // Engine_SizeAt's list, as F2 does. g_val keeps its fresh value, so presets,
     // Reset settings and their undo leave the screen alone.
@@ -216,6 +222,7 @@ static Page g_pages[P_COUNT];
 static int sw_band = 1, sw_typing = 0, sw_chip = 2, sw_tablefont = 1, sw_keyrule = 0, sw_word = 2, sw_island = 0, sw_help640 = 1,
            sw_gameplay = 0, sw_overlay = 0;
 // Composition (2026-11-03 design pass): sheet, legend, bg, scale (scale remakes the canvas).
+static int sw_vfsize = 100;  // Zilla Slab's size, percent of the game font's capitals
 static int sw_bgres = 3;  // the picture at the screen's resolution: 0 off, 1 whole step, 2 smooth,
                           // 3 as the Image row says (Classic whole step, Smooth smooth; decided 2026-11-11)
 static int sw_sheet = 1, sw_legend = 1, sw_bg = 1, sw_scale = 1, sw_bandshade = 15, sw_panes = 1;
@@ -270,7 +277,7 @@ static void BuildPages() {
     hub.name = "Options";
     AddRow(hub, R_RETURN, "Return to the game", 0, "Back to where you were.");
     AddRow(hub, R_PRESET_ROW, "", P_PRESET, "Choose how to play: the 1997 rules, or with the known bugs fixed.");
-    AddRow(hub, R_CATEGORY, "Language and interface", P_LANG, "Text, voices, subtitles and the background.");
+    AddRow(hub, R_CATEGORY, "Language and interface", P_LANG, "Text, voices, subtitles, the font and the background.");
     AddRow(hub, R_CATEGORY, "Display and graphics", P_DISPLAY, "Resolution, window and detail.");
     AddRow(hub, R_CATEGORY, "Sound", P_SOUND, "Volumes.");
     AddRow(hub, R_CATEGORY, "Controls and camera", P_CONTROLS, "Keys, pad and the camera.");
@@ -293,6 +300,7 @@ static void BuildPages() {
     AddSetting(lang, S_VOICE_LANG);
     AddSetting(lang, S_SUBTITLES);
     AddSetting(lang, S_BACKGROUND);
+    AddSetting(lang, S_FONT);
 
     Page &disp = g_pages[P_DISPLAY];
     disp.name = "Display and graphics";
@@ -1375,8 +1383,7 @@ static void DrawColumn() {
         Box(0, 0, W - 1, H - 1, 0);
         const char *title = "Choose how to play";
         S32 tx = W / 2 - Ui_TextWidth(title) / 2;
-        ColorFont(INK_BLACK);
-        Font(tx + 4, oy + 64 + 4, title);  // the title shadow, +4,+4
+        Ui_Text(tx + 4, oy + 64 + 4, title, INK_BLACK);  // the title shadow, +4,+4
         Ui_Text(tx, oy + 64, title, INK_WHITE);
         Menu_Record("title", title, "", FILL_SHADE, tx, oy + 64, tx + Ui_TextWidth(title), oy + 64 + 38).textLeft = tx;
     }
@@ -1652,6 +1659,8 @@ static void SyncBackgroundRes() {
 
 void Menu_Draw() {
     SyncBackgroundRes();
+    VFont_Set(g_val[S_FONT]);  // before the layout: widths follow the font
+    VFont_BeginFrame();
     SyncLayout();
     g_drawnCount = 0;
     g_helpBox.shown = false;
@@ -1706,7 +1715,7 @@ static const SwitchDef kSwitches[] = {
     {"word", &sw_word, 0, 3, 2},           {"island", &sw_island, 0, 1, 0},   {"help640", &sw_help640, 0, 1, 1},
     {"gameplay", &sw_gameplay, 0, 1, 0},   {"overlay", &sw_overlay, 0, 1, 0},
     {"devices", &sw_devices, 0, 1, 1},     {"padnames", &sw_padnames, 0, 3, 0},   {"heads", &sw_heads, 0, 1, 1},
-    {"sheet", &sw_sheet, 0, 1, 1},         {"legend", &sw_legend, 0, 1, 1},       {"bg", &sw_bg, 0, 1, 1},       {"bgres", &sw_bgres, 0, 3, 3},
+    {"sheet", &sw_sheet, 0, 1, 1},         {"legend", &sw_legend, 0, 1, 1},       {"bg", &sw_bg, 0, 1, 1},       {"bgres", &sw_bgres, 0, 3, 3},       {"vfsize", &sw_vfsize, 60, 160, 100},
     {"scale", &sw_scale, 0, 1, 1},         {"bandshade", &sw_bandshade, 0, 15, 15}, {"panes", &sw_panes, 0, 1, 1},
     {"clash", &sw_clash, 0, 1, 1},       {"short", &sw_short, 0, 1, 1},
     {"narrow", &sw_narrow, 0, 1, 1},     {"exptable", &sw_exptable, 0, 1, 1},
@@ -1727,6 +1736,8 @@ bool Menu_SetSwitch(const char *name, int v) {
         *s.value = v;
         if (!strcmp(name, "bg"))
             Engine_SetBackgroundFit(v);
+        if (!strcmp(name, "vfsize"))
+            VFont_SetSizePercent(v);
         if (!strcmp(name, "scale") && v != Engine_ScaleRule()) {
             Engine_SetScaleRule(v);
             if (!Engine_SetScreen(Engine_PhysW(), Engine_PhysH(), true)) {
@@ -1837,6 +1848,7 @@ void Menu_Reset() {
     sw_scale = Engine_ScaleRule();  // the canvas in use was made with it
     sw_bgres = bgres;
     Engine_SetBackgroundFit(sw_bg);
+    VFont_SetSizePercent(sw_vfsize);
     Engine_UseMenuPalette();
     Engine_ResetInput();
     Controls_Reset();

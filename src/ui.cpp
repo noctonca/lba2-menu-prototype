@@ -2,6 +2,7 @@
 
 #include "cadre.h"
 #include "engine.h"
+#include "vfont.h"
 
 #include <SVGA/BOX.H>
 #include <SVGA/CLIP.H>
@@ -38,31 +39,33 @@ void Ui_Panel(S32 x0, S32 y0, S32 x1, S32 y1, S32 level) {
 }
 
 S32 Ui_TextWidth(const char *s) {
-    return SizeFont((char *)s);
+    return VFont_On() ? VFont_Width(s) : SizeFont((char *)s);
 }
 
 S32 Ui_TextInkWidth(const char *s) {
+    if (VFont_On())
+        return VFont_InkWidth(s);
     return s[0] ? SizeFont((char *)s) - InterLeave : 0;
 }
 
 void Ui_Text(S32 x, S32 y, const char *s, U8 colour) {
+    if (VFont_On()) {
+        VFont_Text(x, y, s, colour);
+        return;
+    }
     ColorFont(colour);
     Font(x, y, s);
 }
 
 void Ui_TextShadow(S32 x, S32 y, const char *s, U8 colour) {
-    ColorFont(INK_BLACK);
-    Font(x + 2, y + 4, s);
-    ColorFont(colour);
-    Font(x, y, s);
+    Ui_Text(x + 2, y + 4, s, INK_BLACK);
+    Ui_Text(x, y, s, colour);
 }
 
 S32 Ui_Title(S32 x0, S32 x1, S32 y, const char *s) {
     S32 x = (x0 + x1 + 1) / 2 - Ui_TextWidth(s) / 2;
-    ColorFont(INK_BLACK);
-    Font(x + 4, y + 4, s);
-    ColorFont(INK_WHITE);
-    Font(x, y, s);
+    Ui_Text(x + 4, y + 4, s, INK_BLACK);
+    Ui_Text(x, y, s, INK_WHITE);
     return y + 56;  // the title takes one row's pitch
 }
 
@@ -225,7 +228,7 @@ static S32 Wrap(const char *text, S32 width, const char **starts, S32 *lens, S32
         while (p[n]) {
             memcpy(buf, lineStart, n + 1);
             buf[n + 1] = 0;
-            if (SizeFont(buf) > width)
+            if (Ui_TextWidth(buf) > width)
                 break;
             if (p[n] == ' ')
                 lastBreak = p + n;
@@ -323,6 +326,12 @@ S32 Voice_Draw(const Voice &v, S32 x0, S32 y0, S32 width, S32 maxLines, S32 *nee
             S32 age = shown - 1 - index;
             if (age > RAMP_STEPS - 1)
                 age = RAMP_STEPS - 1;
+            if (VFont_On()) {
+                if (c != ' ')
+                    VFont_Char(x + 2, y + 4, (U8)c, INK_BLACK);
+                x += VFont_Char(x, y, (U8)c, (U8)(DIALOGUE_HERO * 16 + age));
+                continue;
+            }
             if (c != ' ') {
                 ColorFont(INK_BLACK);
                 CarFont(x + 2, y + 4, (U8)c);

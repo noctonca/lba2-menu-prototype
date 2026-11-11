@@ -1,4 +1,5 @@
 #include "engine.h"
+#include "vfont.h"
 
 #include <PLATFORM/PLATFORM.H>
 #include <SVGA/CLIP.H>
@@ -381,6 +382,8 @@ bool Engine_Init(const EngineConfig &cfg) {
     PtrCLUTGouraud = s_xplBoot + ((const XplHeader *)s_xplBoot)->OffsetFog;
 
     SetFont(font, 2, 8);  // as PERSO.CPP sets it
+    VFont_Init();
+    SetOverlayPrePresentCallback(VFont_Paint);  // after the smooth picture's hook
     Rnd_Seed(1997);       // the plasma's start; fixed so captures repeat
     Cadre_InitPlasma();
     Engine_UseMenuPalette();
@@ -726,6 +729,7 @@ bool Engine_ShotScreen(const char *path) {
         argb[i] = 0xff000000u | (U32)rgb[0] << 16 | (U32)rgb[1] << 8 | rgb[2];
     }
     ScreenBg_PaintSmooth(argb, w * 4, w, h, s_palCurrent, s_menuImage);
+    VFont_Paint(argb, w * 4, w, h, s_palCurrent);
     bool ok = Shot_WriteArgb(path, w, h, argb);
     free(idx);
     free(argb);

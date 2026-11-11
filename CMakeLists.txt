@@ -47,6 +47,19 @@ set(LBA2CC_GAME_SOURCES
     ${LBA2CC_DIR}/SOURCES/ANIMTEX.CPP
 )
 
+# Zilla Slab Bold (SIL OFL, assets/fonts/OFL.txt) baked into the binary for the Font row.
+set(EMBEDDED_FONTS_CPP)
+foreach(_face Bold)
+    set(_out ${CMAKE_BINARY_DIR}/embedded_font_${_face}.cpp)
+    add_custom_command(
+        OUTPUT ${_out}
+        COMMAND ${CMAKE_COMMAND} "-DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/ZillaSlab-${_face}.ttf"
+                "-DOUTPUT=${_out}" "-DSYMBOL=g_zillaSlab${_face}Ttf" -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed_binary.cmake
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/ZillaSlab-${_face}.ttf ${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed_binary.cmake
+        COMMENT "Embedding ZillaSlab-${_face}.ttf")
+    list(APPEND EMBEDDED_FONTS_CPP ${_out})
+endforeach()
+
 add_executable(lba2menu
     src/main.cpp
     src/engine.cpp
@@ -58,12 +71,15 @@ add_executable(lba2menu
     src/trace.cpp
     src/shot.cpp
     src/screenbg.cpp
+    src/vfont.cpp
+    ${EMBEDDED_FONTS_CPP}
     src/selftest.cpp
     ${LBA2CC_GAME_SOURCES}
     $<TARGET_OBJECTS:lba2_platform_entry>
 )
 target_include_directories(lba2menu PRIVATE
     src
+    third_party
     ${LBA2CC_DIR}/LIB386/H
     ${LBA2CC_DIR}/SOURCES)
 target_link_libraries(lba2menu PRIVATE svg sys poly 3D lba2_platform)

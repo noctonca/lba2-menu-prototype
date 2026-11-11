@@ -445,10 +445,19 @@ int Lba2Main(int argc, char *argv[]) {
             Menu_SetSwitch("clash", !Menu_GetSwitch("clash"));
         if (Engine_Pressed(KEY_8))
             Menu_SetSwitch("short", !Menu_GetSwitch("short"));
-        if (Engine_Pressed(KEY_9))
-            Menu_SetSwitch("narrow", !Menu_GetSwitch("narrow"));
-        if (Engine_Pressed(KEY_0))
-            Menu_SetSwitch("exptable", !Menu_GetSwitch("exptable"));
+        // Shift+9 and Shift+0: Zilla Slab 5% smaller or larger (the Font row picks it).
+        if (Engine_Pressed(KEY_9)) {
+            if (Engine_ShiftHeld())
+                Menu_SetSwitch("vfsize", Menu_GetSwitch("vfsize") > 60 ? Menu_GetSwitch("vfsize") - 5 : 60);
+            else
+                Menu_SetSwitch("narrow", !Menu_GetSwitch("narrow"));
+        }
+        if (Engine_Pressed(KEY_0)) {
+            if (Engine_ShiftHeld())
+                Menu_SetSwitch("vfsize", Menu_GetSwitch("vfsize") < 160 ? Menu_GetSwitch("vfsize") + 5 : 160);
+            else
+                Menu_SetSwitch("exptable", !Menu_GetSwitch("exptable"));
+        }
 
         Menu_Update();
         if (Menu_WantsQuit())
