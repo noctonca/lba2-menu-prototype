@@ -75,7 +75,7 @@ the call is answered.
   in: at 640 wide, 24 runs action names into them. Its chips are 116 wide at
   2x (120 on the wide canvas), which holds the same 6 letters of the 8x8 font
   (and 14 in the pad view's one chip) and leaves the longest action name,
-  "Behaviour action", 8 clear of its first chip (decided 2026-11-03).
+  "Behavior action", 8 clear of its first chip (decided 2026-11-03).
 - **Controls column heads sit inside the first visible row**, above their
   chips, in the 8x8 font at 1x: the one place 1x is used on the wide canvas,
   since 2x does not fit between a row's frame and its chip. Both panes then
@@ -223,7 +223,7 @@ voice. A setting exists only if players really disagree about it.
   always opens the game menu and can't be bound elsewhere, as Esc on the
   keyboard; the menu's A, B and arrows are fixed as the keyboard's Enter, Esc
   and arrows are. In lba2cc today only the arrows are: moving Start off Menus,
-  or both confirm actions (Recentre, Behaviour action) off the pad, leaves an
+  or both confirm actions (Recenter, Behavior action) off the pad, leaves an
   Xbox, Switch, Vita or Android TV player no way back to Options (measured
   2026-11-11 on main, Vita and default layouts). **[self test: padonly]**
 - A key already in use asks first, as choosing Classic and Reset settings do:
@@ -301,7 +301,7 @@ strip at the value edge, which read badly on a TV.
   options' tuning rows and their help stay English. Every self test walk runs
   in all six languages, and a drawn text with no translation is a problem.
   Shortened to fit the 275 px name column at 640x480: eleven action names (the
-  spells, the behaviour rows, turning) and three answers.
+  spells, the behavior rows, turning) and three answers.
 - **Text too wide for its room swings, as 1997 did** (2026-11-12). The
   original (GAMEMENU.CPP DrawOneChoice, "Shake Baby, shake...") draws a row
   wider than the menu from its left, clipped, and under the cursor slides it

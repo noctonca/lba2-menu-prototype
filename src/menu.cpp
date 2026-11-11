@@ -94,7 +94,7 @@ static const Setting kSettings[S_COUNT] = {
      "Follow keeps Twinsen in view inside houses."},
     // AllCameras, the 1997 "scenario cameras" (lba2cc's Movie camera, on Advanced options there):
     // off skips the outdoor shots that cut once as the hero walks in; held shots and interiors
-    // stay. Camera behaviour, not a machine's limit, so it sits with the cameras (2026-11-11).
+    // stay. Camera behavior, not a machine's limit, so it sits with the cameras (2026-11-11).
     {"movie_cam", "Movie camera", K_TOGGLE, 1, {"Off", "On"}, 1, 1, false,
      "Cuts to the designers' shots outdoors."},
     {"invert", "Invert camera", K_TOGGLE, 1, {"Off", "On"}, 0, 0, false,
@@ -668,7 +668,7 @@ static const char *const kShortHelp[][2] = {
     {"Puts back the settings you had before you chose a preset.", "Puts back what you had before."},
     {"Talking, fighting, and the screens you open in play.", "Talking, fighting and the game's screens."},
     {"The game menu, pause, help, saving and loading.", "Game menu, pause, help, save and load."},
-    {"Does what the behaviour does: jump, hit or hide.", "Jumps, hits or hides, by behaviour."},
+    {"Does what the behavior does: jump, hit or hide.", "Jumps, hits or hides, by behavior."},
 };
 
 const char *Menu_Tr(const char *english) { return Lang_Tr(english, g_val[S_TEXT_LANG]); }

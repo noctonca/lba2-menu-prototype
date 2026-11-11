@@ -33,10 +33,10 @@ struct Group {
 static const Group kGroups[] = {
     {"Movement", "Walking, turning and the dodge."},
     {"Actions", "Talking, fighting, and the screens you open in play."},
-    {"Behaviours", "One key for each of the four behaviours."},
+    {"Behaviors", "One key for each of the four behaviors."},
     {"Weapons", "One key for each weapon."},
     {"Magic and items", "The penguin, the jetpack and the spells."},
-    {"Camera", "Recentring, turning and the camera's height."},
+    {"Camera", "Recentering, turning and the camera's height."},
     {"Menus", "The game menu, pause, help, saving and loading."},
 };
 enum { GROUP_COUNT = sizeof kGroups / sizeof kGroups[0] };
@@ -56,17 +56,17 @@ static const Action kActions[] = {
     {"Turn right", 0, {K_GRAY_RIGHT, K_NUMPAD_6}, {PAD_LRIGHT, 0}, "Turns Twinsen to his right."},
     {"Dodge", 0, {K_X, 0}, {PAD_LS, PAD_RS}, "Jumps aside, out of harm's way."},
 
-    {"Behaviour action", 1, {K_SPACE, K_NUMPAD_5}, {PAD_X, 0}, "Does what the behaviour does: jump, hit or hide."},
+    {"Behavior action", 1, {K_SPACE, K_NUMPAD_5}, {PAD_X, 0}, "Does what the behavior does: jump, hit or hide."},
     {"Talk and search", 1, {K_W, K_GRAY_END}, {PAD_A, 0}, "Talks to people and searches where you stand."},
     {"Use weapon", 1, {K_ALT, 0}, {PAD_RB, 0}, "Uses the weapon you hold."},
-    {"Behaviour menu", 1, {K_CTRL, 0}, {PAD_LB, 0}, "Hold it to choose a behaviour."},
+    {"Behavior menu", 1, {K_CTRL, 0}, {PAD_LB, 0}, "Hold it to choose a behavior."},
     {"Inventory", 1, {K_SHIFT, 0}, {PAD_Y, 0}, "Opens the inventory."},
     {"Holomap", 1, {K_H, K_TAB}, {PAD_BACK, 0}, "Opens the holomap."},
 
-    {"Normal", 2, {K_F5, 0}, {0, 0}, "Switches to the Normal behaviour."},
-    {"Athletic", 2, {K_F6, 0}, {0, 0}, "Switches to the Athletic behaviour."},
-    {"Aggressive", 2, {K_F7, 0}, {0, 0}, "Switches to the Aggressive behaviour."},
-    {"Discreet", 2, {K_F8, 0}, {0, 0}, "Switches to the Discreet behaviour."},
+    {"Normal", 2, {K_F5, 0}, {0, 0}, "Switches to the Normal behavior."},
+    {"Athletic", 2, {K_F6, 0}, {0, 0}, "Switches to the Athletic behavior."},
+    {"Aggressive", 2, {K_F7, 0}, {0, 0}, "Switches to the Aggressive behavior."},
+    {"Discreet", 2, {K_F8, 0}, {0, 0}, "Switches to the Discreet behavior."},
 
     {"Weapon 1", 3, {K_1, 0}, {0, 0}, "Takes out the first weapon."},
     {"Weapon 2", 3, {K_2, 0}, {0, 0}, "Takes out the second weapon."},
@@ -81,7 +81,7 @@ static const Action kActions[] = {
     {"Protection spell", 4, {K_C, 0}, {PAD_DUP, 0}, "Casts the protection spell."},
     {"Lightning spell", 4, {K_F, 0}, {PAD_DLEFT, 0}, "Casts the lightning spell."},
 
-    {"Recentre", 5, {K_ENTER, K_NUMPAD_ENTER}, {PAD_B, 0}, "Puts the camera back behind Twinsen."},
+    {"Recenter", 5, {K_ENTER, K_NUMPAD_ENTER}, {PAD_B, 0}, "Puts the camera back behind Twinsen."},
     {"Turn camera", 5, {K_BACKSPACE, 0}, {PAD_RLEFT, PAD_RRIGHT}, "Turns the camera round Twinsen."},
     {"Camera up", 5, {K_NUMPAD_PLUS, K_GRAY_PAGE_UP}, {PAD_RUP, 0}, "The next camera height."},
     {"Camera down", 5, {K_NUMPAD_MOINS, K_GRAY_PAGE_DOWN}, {PAD_RDOWN, 0}, "The camera height before."},
@@ -724,7 +724,7 @@ static S32 ChipScale() { return 2; }  // the 8x8 key font at 2x (decided 2026-11
 static void ChipLayout(S32 rowX1, const int *cols, int ncols, S32 *x0, S32 *w) {
     S32 s = ChipScale();
     // One column: 58 holds the same 6 letters of the 8x8 font as 60 (and the pad view's one
-    // chip the same 14), and leaves "Behaviour action" 8 clear of its chip (decided 2026-11-03).
+    // chip the same 14), and leaves "Behavior action" 8 clear of its chip (decided 2026-11-03).
     S32 chipW = (Wide() ? 60 : 58) * s, step = chipW + 8;
     S32 right = rowX1 - (Wide() ? 24 : 12);
     if (ncols == 1) {

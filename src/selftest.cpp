@@ -413,7 +413,7 @@ static void Frame(bool draw = true) {
 
 
 // The groups' first actions (bindings.cpp kActions), where the binding walk tries keys.
-static const char *kGroupFirst[] = {"Forward", "Behaviour action", "Normal", "Weapon 1", "Penguin", "Recentre", "Game menu"};
+static const char *kGroupFirst[] = {"Forward", "Behavior action", "Normal", "Weapon 1", "Penguin", "Recenter", "Game menu"};
 
 static bool EndsWith(const std::string &s, const char *tail) {
     size_t n = strlen(tail);
@@ -606,12 +606,12 @@ struct Walker {
         for (size_t i = 0; i < found.size(); i++)
             Record(found[i]);
     }
-    // A behaviour check that failed. The line starts with the walk's name.
+    // A behavior check that failed. The line starts with the walk's name.
     void Fail(const std::string &what) {
         checks++;
         Record(what);
     }
-    // A behaviour check that passed, for the count.
+    // A behavior check that passed, for the count.
     void Pass() { checks++; }
     bool Expect(bool ok, const std::string &what) {
         if (ok)
@@ -1530,7 +1530,7 @@ struct Walker {
         Expect(Bindings_Active(), "padonly: A does not reopen Keys and buttons with every pad binding cleared");
     }
 
-    void Behaviour() {
+    void Behavior() {
         Reach();
         for (size_t p = 0; p < sizeof kPages / sizeof kPages[0]; p++)
             Settings(kPages[p]);
@@ -1553,7 +1553,7 @@ struct Walker {
     void Languages() {
         if (opt->only)
             return;
-        static const char *const kFill[] = {"Right Shift", "Behaviour menu", ", in Magic and items"};
+        static const char *const kFill[] = {"Right Shift", "Behavior menu", ", in Magic and items"};
         for (int font = 0; font < 2; font++) {
             Menu_Set("font", font);
             for (int i = 0; i < Lang_Count(); i++) {
@@ -1658,7 +1658,7 @@ int Selftest_Run(const SelftestOptions &opt, const char *self) {
         w.Pages();
         w.MoreOptionsPage();
         if (!opt.layoutOnly)
-            w.Behaviour();
+            w.Behavior();
     }
     for (std::set<std::string>::const_iterator it = Ui_Missed().begin(); it != Ui_Missed().end(); ++it)
         w.problems[Fmt("lang/menu.tsv has no row for %s", Repr(it->c_str()).c_str())] = "tools/lang.py after adding it";

@@ -164,7 +164,7 @@ picture, the game font, Classic cameras and 640 x 480; Modern Twinsun, Zilla
 Slab, Auto and Follow cameras and the screen the prototype started at. Undo
 preset and Undo reset put the screen back too. The plan has presets set the
 rules only; this is the prototype's call, to show the difference. The
-Gameplay category (Dodge, Behaviour hints) went with its switch.
+Gameplay category (Dodge, Behavior hints) went with its switch.
 
 ## The Controls page
 
@@ -291,7 +291,7 @@ screen; original size was for slow CD drives) and Reverse stereo. They came off 
 Advanced (decided 2026-11-11); they keep their game labels, having no console
 name, and the plan's 1997 Options page keeps them where they were. Movie
 camera (1997's scenario cameras: off skips the outdoor shots that cut once) is
-camera behaviour, not a machine's limit, so it went to Controls and camera
+camera behavior, not a machine's limit, so it went to Controls and camera
 instead.
 
 - One dense table in the 8x8 font at 1x, as the 1997 key binding screen
