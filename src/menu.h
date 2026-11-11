@@ -12,7 +12,7 @@ void Menu_Draw();
 // The prototype's switches (every review switch was pruned 2026-11-12). Names are what
 // the control channel and the trace use.
 //   overlay  1 = show the prototype's key list (F1)
-//   padnames the pad's names: 0 the connected pad's, 1 Xbox, 2 PlayStation, 3 Nintendo (F11)
+//   padnames the Button names row: 0 Auto (the connected pad's), 1 Xbox, 2 PlayStation, 3 Nintendo (F11)
 //   whole    1 = help shown whole, not typed (the self test)
 //   keyboard 0 = as a console before a key is typed (no Keyboard view or Tab)
 bool Menu_SetSwitch(const char *name, int value);
@@ -23,6 +23,8 @@ bool Menu_WantsQuit();
 // After the screen changed: the note with its size and canvas, and a trace line.
 void Menu_NoteScreen();
 int Menu_GetSwitch(const char *name);
+// The Button names row: 0 Auto, 1 Xbox, 2 PlayStation, 3 Nintendo.
+int Menu_ButtonNames();
 bool Menu_Set(const char *setting, int value);  // a fake setting by name
 bool Menu_Open(const char *page);  // jump to a page by name (cursor on its first row)
 

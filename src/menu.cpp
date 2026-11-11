@@ -41,7 +41,7 @@ enum {
     S_TEXT_LANG, S_VOICE_LANG, S_SUBTITLES, S_BACKGROUND, S_FONT,
     S_RESOLUTION, S_FULLSCREEN, S_VSYNC, S_FPS, S_IMAGE,
     S_MASTER, S_SFX, S_VOICES, S_MUSIC, S_REVERSE,
-    S_CAM_OUT, S_CAM_IN, S_MOVIE_CAM, S_INVERT, S_SENS,
+    S_PADNAMES, S_CAM_OUT, S_CAM_IN, S_MOVIE_CAM, S_INVERT, S_SENS,
     S_FIXBUGS,
     S_COUNT
 };
@@ -91,6 +91,11 @@ static const Setting kSettings[S_COUNT] = {
     // ReverseStereo, back from More options' From 1997 group (EPmager, 2026-11-11): speakers
     // or headphones the wrong way round are not a 1997 machine's limit. The 1997 game's label.
     {"reverse_stereo", "Reverse stereo", K_TOGGLE, 1, {"Off", "On"}, 0, 0, false, "Swaps the left and right speakers."},
+    // The names the prompts give the pad's buttons (EPmager, 2026-11-11: a Switch pad in a
+    // browser showed Xbox names). Auto takes the connected pad's family, Xbox when none or
+    // unknown; the others hold one. Was the prototype's F11 switch, which now steps it.
+    {"button_names", "Button names", K_CHOICE, 3, {"Auto", "Xbox", "PlayStation", "Nintendo"}, 0, 0, false,
+     "The pad's button names in the prompts. Auto reads the pad."},
     {"cam_out", "Outdoors camera", K_CHOICE, 1, {"Classic", "Auto"}, 0, 0, true,
      "Classic holds still and cuts; Auto turns to follow you."},
     {"cam_in", "Indoors camera", K_CHOICE, 1, {"Classic", "Follow"}, 0, 0, true,
@@ -346,6 +351,7 @@ static const char *FormatPresetRow(char *buf, size_t n, const char *name, bool c
 
 static bool UndoPresetOffered() { return UndoOffered(g_presetBackup); }
 static bool UndoResetOffered() { return UndoOffered(g_resetBackup); }
+int Menu_ButtonNames() { return g_val[S_PADNAMES]; }
 static bool AutoCamera() { return g_val[S_CAM_OUT] == 1; }  // Invert and speed only mean something with it
 
 #define SETTING_ROW(s) {R_SETTING, NULL, s, NULL, NULL, NULL, NULL}
@@ -389,6 +395,7 @@ static const Row kSoundRows[] = {
 static const Row kControlsRows[] = {
     RETURN_ROW,
     {R_ACTION, "Keys and buttons", A_KEYS, "Change which key or button does what.", NULL, NULL, NULL},
+    SETTING_ROW(S_PADNAMES),
     SETTING_ROW(S_CAM_OUT),
     SETTING_ROW(S_CAM_IN),
     SETTING_ROW(S_MOVIE_CAM),
@@ -1734,7 +1741,7 @@ struct SwitchDef {
 };
 static const SwitchDef kSwitches[] = {
     {"overlay", &sw_overlay, 0, 1, 0},
-    {"padnames", &sw_padnames, 0, 3, 0},
+    {"padnames", &g_val[S_PADNAMES], 0, 3, 0},  // the Button names row
     {"whole", &sw_whole, 0, 1, 0},
     {"greencurrent", &sw_greencurrent, 0, 1, 0},
 };

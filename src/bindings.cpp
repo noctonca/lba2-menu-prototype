@@ -14,7 +14,6 @@
 #include <stdio.h>
 #include <string.h>
 
-int sw_padnames = 0;  // 0 the connected pad's names; 1 Xbox, 2 PlayStation, 3 Nintendo
 
 // ───────────────────────────── The actions ─────────────────────────────
 
@@ -151,8 +150,8 @@ static void KeyName(int code, char *out, size_t n) {
 
 // The pad's own names: Xbox, PlayStation and Nintendo families, by position.
 static int PadFamily() {
-    if (sw_padnames)
-        return sw_padnames;
+    if (int chosen = Menu_ButtonNames())
+        return chosen;
     int f = Host_PadFamily();
     return f ? f : 1;
 }

@@ -7,9 +7,7 @@
 
 // Switches the menu lists with its own:
 //   devices   1 = one device per view, Tab switches (the review); 0 = Key 1, Key 2 and Gamepad side by side
-//   padnames  0 = the connected pad's own names (Xbox when none), 1 Xbox, 2 PlayStation, 3 Nintendo
 //   heads     wide: 1 = the column names inside the first row, above its chips; 0 = a line of heads above the rows
-extern int sw_padnames;
 
 // The page's place is on the menu's stack (menu_parts.h): the groups page, then a group's page
 // of binding rows, which the menu's loop walks, opens and leaves as any other page. What a

@@ -138,3 +138,7 @@
 {"Yes, reset keys", "Oui, r\x82""initialiser", "Ja, zur\x81""cksetzen", "S\xa1"", restablecer", "S\x8d"", ripristina", "Sim, repor"},
 {"No, keep my buttons", "Non, garder mes boutons", "Nein, meine Tasten behalten", "No, mantener mis botones", "No, tieni i miei pulsanti", "N\xc6""o, manter os meus bot\xe4""es"},
 {"Yes, reset buttons", "Oui, r\x82""initialiser", "Ja, zur\x81""cksetzen", "S\xa1"", restablecer", "S\x8d"", ripristina", "Sim, repor"},
+{"Button names", "Noms des boutons", "Tastennamen", "Nombres de botones", "Nomi dei pulsanti", "Nomes dos bot\xe4""es"},
+{"Xbox", "Xbox", "Xbox", "Xbox", "Xbox", "Xbox"},
+{"PlayStation", "PlayStation", "PlayStation", "PlayStation", "PlayStation", "PlayStation"},
+{"Nintendo", "Nintendo", "Nintendo", "Nintendo", "Nintendo", "Nintendo"},
