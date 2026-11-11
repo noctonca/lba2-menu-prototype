@@ -161,6 +161,13 @@ the cursor. The legend is stacked at the band's right, one key per line, so
 the voice keeps the band's width (decided 2026-11-03: a legend in a row left
 the voice 248 to 312 px on the Controls page). The first launch's question
 sits inside the composition, in the band's place.
+In the one column the legend is one line along the bottom of the 1997
+dialogue window, in its third line: the 8x8 chips at 2x when the line fits,
+1x (the 1997 key screen's size) when it does not, and the help keeps two
+lines, as in the band; no help at 640x480 needs a third in any of the six
+languages (measured 2026-11-11). Before, the one column had no legend, so a
+pad player on a 4:3 or 5:4 screen saw no buttons at all (EPmager,
+2026-11-11).
 
 **Law of Similarity** (what looks alike is taken to work alike).
 - One style per role: labels white in the game font; values in a column on the

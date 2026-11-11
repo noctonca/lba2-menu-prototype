@@ -553,7 +553,10 @@ static void DrawColumnExp() {
     S32 W = (S32)Host_LogicalW();
     S32 x0 = W / 2 - 275, x1 = W / 2 + 275;
     DrawTable(x0, x1, 16, Menu_DialogueTop() - 16);
-    Menu_DrawDialogue();
+    const char *keys[4], *words[4];
+    int nk;
+    Legend(keys, words, &nk);
+    Menu_DrawDialogue(keys, words, nk);
 }
 
 void MoreOptions_Draw() {

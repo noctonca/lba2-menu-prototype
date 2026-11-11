@@ -93,8 +93,10 @@ S32 Menu_WideRowsLimit();
 void Menu_DrawFoot(const char **keys, const char **words, int n);
 // The one-column dialogue window with the voice in it. Returns its top.
 S32 Menu_DialogueTop();
-void Menu_DrawDialogue();
-void Menu_DrawDialogueIn(S32 x0, S32 y0, S32 x1, S32 y1);
+// The 1997 dialogue window with the help, and the legend on one line along its bottom
+// (EPmager, 2026-11-11: the one-column layout had none, so a pad player saw no buttons).
+void Menu_DrawDialogue(const char **keys, const char **words, int nk);
+void Menu_DrawDialogueIn(S32 x0, S32 y0, S32 x1, S32 y1, const char **keys, const char **words, int nk);
 
 // Say a line in the voice, typed or not as the `typing` switch says, in the Text
 // language; a text lang/help.tsv lacks is said in English and noted (Menu_VoiceMissed).

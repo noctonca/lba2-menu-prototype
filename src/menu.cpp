@@ -617,7 +617,7 @@ static S32 BandVoiceWidth(const char **keys, const char **words, int nk);
 static bool VoiceFits(const char *text, const Row *r) {
     S32 W = (S32)Host_LogicalW();
     if (!Wide())
-        return Voice_Lines(text, W - 49) <= 3;
+        return Voice_Lines(text, W - 49) <= 2;  // the legend has the dialogue window's third line
     const char *keys[4], *words[4];
     int nk;
     LegendFor(r, keys, words, &nk);
@@ -1365,16 +1365,57 @@ bool Menu_CursorEnterSteps(bool *isValue) {
 
 S32 Menu_DialogueTop() { return (S32)Host_LogicalH() - 1 - 137; }
 
-void Menu_DrawDialogue() {
+void Menu_DrawDialogue(const char **keys, const char **words, int nk) {
     // MESSAGE.CPP NormalWinDial: 8 in from the sides, 137 tall, 8 off the bottom.
     S32 W = (S32)Host_LogicalW(), H = (S32)Host_LogicalH();
-    Menu_DrawDialogueIn(8, H - 1 - 137, W - 1 - 8, H - 1 - 8);
+    Menu_DrawDialogueIn(8, H - 1 - 137, W - 1 - 8, H - 1 - 8, keys, words, nk);
 }
 
-void Menu_DrawDialogueIn(S32 x0, S32 y0, S32 x1, S32 y1) {
+// In a row: chip, word, then the next, from x; returns the width.
+static S32 DrawLegendRow(S32 x, S32 y, const char **keys, const char **words, int n, S32 scale, bool draw) {
+    if (draw)
+        g_legend[0] = 0;
+    S32 w = 0;
+    for (int i = 0; i < n; i++) {
+        if (i)
+            w += 12 * scale;
+        S32 c = Ui_ChipWidth(keys[i], scale);
+        if (draw) {
+            Ui_Chip(x + w, y, keys[i], scale);
+            Ui_Word(x + w + c + 4 * scale, y + 2 * scale, LegendWord(words[i]), INK_CONFIG_MENU, scale);
+            LegendRecord(i, keys[i], words[i]);
+        }
+        w += c + 4 * scale + Ui_WordWidth(LegendWord(words[i]), scale);
+    }
+    return w;
+}
+
+// The legend's keys as the device used last names them (a pad's buttons after a pad press).
+static void LegendKeys(const char **in, const char **out, int nk) {
+    for (int i = 0; i < nk && i < 8; i++)
+        out[i] = Bindings_LegendKey(in[i]);
+}
+
+void Menu_DrawDialogueIn(S32 x0, S32 y0, S32 x1, S32 y1, const char **keysIn, const char **words, int nk) {
     Ui_Panel(x0, y0, x1, y1, PANEL_SHADE_LVL);
-    g_voiceLines = Voice_Draw(g_voice, x0 + 16, y0 + 12, x1 - x0 - 32, 3, &g_voiceNeeded);
-    g_voiceMax = 3;
+    // The legend takes the window's third line, so the help has two, as in the wide band;
+    // no help at 640x480 needs a third (measured 2026-11-11, six languages).
+    const S32 maxLines = nk ? 2 : 3;
+    g_voiceLines = Voice_Draw(g_voice, x0 + 16, y0 + 12, x1 - x0 - 32, maxLines, &g_voiceNeeded);
+    g_voiceMax = maxLines;
+    if (nk) {
+        const char *keys[8];
+        LegendKeys(keysIn, keys, nk);
+        // The 8x8 font at 2x when the line fits, as the wide band has it; 1x, the 1997 key
+        // screen's size, when it does not.
+        S32 scale = 2;
+        if (DrawLegendRow(0, 0, keys, words, nk, scale, false) > x1 - x0 - 32)
+            scale = 1;
+        S32 w = DrawLegendRow(0, 0, keys, words, nk, scale, false);
+        DrawLegendRow(x1 - 16 - w + 1, y1 - 8 - 12 * scale + 1, keys, words, nk, scale, true);
+    } else {
+        g_legend[0] = 0;
+    }
     DrawPageMark(x1, y1);  // the window's own corner, where MESSAGE.CPP AffFleche puts its arrow
     g_helpBox.shown = true;
     g_helpBox.kind = "dialogue";
@@ -1433,10 +1474,13 @@ static void DrawColumn() {
             Menu_DrawScrollBar(x1 + 9, y - visible * ROW_PITCH, y - visible * ROW_PITCH + stackH - 1, g_scroll, visible,
                           count);
     }
+    const char *keys[4], *words[4];
+    int nk;
+    LegendFor(g_confirm ? NULL : CursorRow(), keys, words, &nk);
     if (framed)
-        Menu_DrawDialogueIn(fr.x0 + 32, fr.y0 + fr.h - 25 - 137, fr.x0 + fr.w - 33, fr.y0 + fr.h - 25);
+        Menu_DrawDialogueIn(fr.x0 + 32, fr.y0 + fr.h - 25 - 137, fr.x0 + fr.w - 33, fr.y0 + fr.h - 25, keys, words, nk);
     else
-        Menu_DrawDialogue();
+        Menu_DrawDialogue(keys, words, nk);
 }
 
 // Wide: one page at a time, centred and as wide as the 1997 canvas: the hub, then a page,

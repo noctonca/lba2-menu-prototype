@@ -973,12 +973,18 @@ static void DrawColumnControls() {
         }
         if (visible < n)
             Menu_DrawScrollBar(x1 + 9, y0, y0 + stackH - 1, scroll, visible, n);
-        Menu_DrawDialogue();
+        const char *keys[4], *words[4];
+        int nk;
+        Legend(keys, words, &nk);
+        Menu_DrawDialogue(keys, words, nk);
         return;
     }
     // The actions page: column heads, the rows, and the voice below (it asks for the key).
     DrawActions(x0, x1, 6, Menu_DialogueTop() - 16, "column");
-    Menu_DrawDialogue();
+    const char *keys[4], *words[4];
+    int nk;
+    Legend(keys, words, &nk);
+    Menu_DrawDialogue(keys, words, nk);
 }
 
 void Bindings_Draw() {
