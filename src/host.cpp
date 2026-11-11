@@ -250,21 +250,67 @@ static const U32 kSizes[][2] = {
     {640, 480}, {768, 480}, {1024, 480}, {1280, 720}, {1280, 800}, {1920, 1080}, {2400, 1080}, {2560, 1440}, {3440, 1440}, {3840, 2160},
 };
 
-int Host_SizeCount() { return (int)(sizeof kSizes / sizeof kSizes[0]); }
+static U32 s_launchW, s_launchH;  // the screen at launch: a headless run's native size
+
+void Host_NativeSize(U32 *w, U32 *h) {
+    U32 nw = s_launchW, nh = s_launchH;
+    if (!s_headless) {
+#ifdef __EMSCRIPTEN__
+        nw = (U32)WebCanvasPx(WebCanvasCssW());
+        nh = (U32)WebCanvasPx(WebCanvasCssH());
+#else
+        uint32_t dw = 0, dh = 0;
+        if (g_platform.window.display_size(&dw, &dh))
+            nw = dw, nh = dh;
+#endif
+    }
+    nw &= ~7u;
+    *w = nw < 640 ? 640 : nw;
+    *h = nh < 480 ? 480 : nh;
+}
+
+// lba2cc's list with the native size put in by area, unless it is one of them.
+static int SizeList(U32 out[][2]) {
+    const int fixed = (int)(sizeof kSizes / sizeof kSizes[0]);
+    U32 nw, nh;
+    Host_NativeSize(&nw, &nh);
+    int n = 0;
+    bool placed = false;
+    for (int i = 0; i < fixed; i++) {
+        if (kSizes[i][0] == nw && kSizes[i][1] == nh)
+            placed = true;
+        if (!placed && kSizes[i][0] * kSizes[i][1] > nw * nh) {
+            out[n][0] = nw, out[n][1] = nh, n++;
+            placed = true;
+        }
+        out[n][0] = kSizes[i][0], out[n][1] = kSizes[i][1], n++;
+    }
+    if (!placed)
+        out[n][0] = nw, out[n][1] = nh, n++;
+    return n;
+}
+
+int Host_SizeCount() {
+    U32 list[16][2];
+    return SizeList(list);
+}
 
 void Host_SizeAt(int i, U32 *w, U32 *h) {
-    *w = kSizes[i][0];
-    *h = kSizes[i][1];
+    U32 list[16][2];
+    SizeList(list);
+    *w = list[i][0];
+    *h = list[i][1];
 }
 
 bool Host_StepScreen(int dir) {
-    const int count = Host_SizeCount();
+    U32 list[16][2];
+    const int count = SizeList(list);
     int below = 0;
     bool exact = false;
     for (int i = 0; i < count; i++) {
-        if (kSizes[i][0] * kSizes[i][1] <= s_physW * s_physH)
+        if (list[i][0] * list[i][1] <= s_physW * s_physH)
             below = i;
-        if (kSizes[i][0] == s_physW && kSizes[i][1] == s_physH) {
+        if (list[i][0] == s_physW && list[i][1] == s_physH) {
             below = i;
             exact = true;
             break;
@@ -273,7 +319,7 @@ bool Host_StepScreen(int dir) {
     // Off the list, the one below counts as the previous.
     int next = dir > 0 ? below + 1 : (exact ? below - 1 : below);
     next = (next + count) % count;
-    return Host_SetScreen(kSizes[next][0], kSizes[next][1], true);
+    return Host_SetScreen(list[next][0], list[next][1], true);
 }
 
 #ifdef __EMSCRIPTEN__
@@ -385,6 +431,8 @@ bool Host_Init(const HostConfig &cfg) {
         s_physH = dh;
         fprintf(stderr, "screen: the display's, %ux%u\n", (unsigned)s_physW, (unsigned)s_physH);
     }
+    s_launchW = s_physW;
+    s_launchH = s_physH;
     U32 scale = Host_Scale(s_physW, s_physH);
     s_logW = s_physW / scale;
     s_logH = s_physH / scale;

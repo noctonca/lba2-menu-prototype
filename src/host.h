@@ -27,7 +27,14 @@ bool Host_SetScreen(U32 physW, U32 physH, bool sizeWindow);
 // The window was resized by hand since the last call: its size in pixels, the
 // screen it would be if the game filled it. Never in a headless run.
 bool Host_WindowResized(U32 *physW, U32 *physH);
-// The screen sizes F2 and the Resolution row step through, smallest first.
+// The native size: what the screen would be if the game filled what it is shown on now, as
+// turning Fullscreen off and on again gives it: a browser's canvas in its pixels, the
+// display's own size on a desktop or a console, the size at launch in a headless run.
+// Rounded as Host_SetScreen rounds.
+void Host_NativeSize(U32 *physW, U32 *physH);
+// The screen sizes F2 and the Resolution row step through, smallest first: lba2cc's list
+// and the native size among them (EPmager, 2026-11-11: no way back to it but Fullscreen
+// twice).
 int Host_SizeCount();
 void Host_SizeAt(int i, U32 *physW, U32 *physH);
 // The next (dir 1) or previous (-1) size in the list, round at the ends, from the

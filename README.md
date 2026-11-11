@@ -107,7 +107,10 @@ note at the bottom right says the new size and its logical canvas.
 
 - F2 steps to the next size in the list, Shift+F2 back to the previous one
   (640x480, 768x480, 1024x480, 1280x720, 1280x800, 1920x1080, 2400x1080,
-  2560x1440, 3440x1440, 3840x2160). 768x480 and 1024x480 are lba2cc's
+  2560x1440, 3440x1440, 3840x2160), with the native size put in by area when it
+  is not one of them. Native is what Fullscreen off and on again would give:
+  the display's size on a desktop or a console, the canvas's pixels in a
+  browser, the launch size in a headless run. 768x480 and 1024x480 are lba2cc's
   widescreen modes: 480 high, they keep the one column on a wider canvas. The window is sized to suit, as at launch.
 - Dragging the window's edge makes its size in pixels the screen: any size in
   between, the layout following as you drag. On a Retina display that is twice
@@ -116,7 +119,8 @@ note at the bottom right says the new size and its logical canvas.
   is at least 640x480.
 - The Resolution row on Display and graphics does it as the game would: Left
   and Right step through the same list, and the row shows the screen in use
-  (a dragged size too, "1512 x 904"). It is the player's screen, not a preset's
+  (a dragged size too, "1512 x 904"), marked "(native)" when it is the native
+  size. It is the player's screen, not a preset's
   choice, so it is never drawn as changed; the prototype's presets and Reset
   settings set it all the same (below).
 - The Fullscreen row turns the window into fullscreen and back, with lba2cc's
@@ -162,7 +166,8 @@ the voice, the shorter help, the More options table at 1x with each row's
 help in its status lines, the 1997 slider, the page mark on paged help, Frame
 rate on Display and graphics. Presets set the look too: Classic the 1997
 picture, the game font, Classic cameras and 640 x 480; Modern Twinsun, Zilla
-Slab, Auto and Follow cameras and the screen the prototype started at. Undo
+Slab, Auto and Follow cameras and the native size as it is when Modern is
+chosen (not the size at launch, which a dragged window can make smaller). Undo
 preset and Undo reset put the screen back too. The plan has presets set the
 rules only; this is the prototype's call, to show the difference. The
 Gameplay category (Dodge, Behavior hints) went with its switch.

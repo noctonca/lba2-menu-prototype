@@ -130,6 +130,7 @@
 {"Confirm settings reset", "Confirmer la r\x82""initialisation", "Zur\x81""cksetzen best\x84""tigen", "Confirmar restablecimiento", "Conferma ripristino", "Confirmar reposi\x87""\xc6""o"},
 {"Confirm Classic preset", "Confirmer le pr\x82""r\x82""glage Classique", "Voreinstellung Klassisch best\x84""tigen", "Confirmar preajuste Cl\xa0""sico", "Conferma preimpostazione Classico", "Confirmar predefini\x87""\xc6""o Cl\xa0""ssico"},
 {"(current)", "(actuel)", "(aktuell)", "(actual)", "(attuale)", "(atual)"},
+{"(native)", "(native)", "(nativ)", "(nativa)", "(nativa)", "(nativa)"},
 {"Defaults", "Par d\x82""faut", "Standard", "Por defecto", "Predefiniti", "Predefini\x87""\xe4""es"},
 {"Confirm keyboard reset", "Confirmer la r\x82""initialisation du clavier", "Tastatur zur\x81""cksetzen best\x84""tigen", "Confirmar restablecer teclado", "Conferma ripristino tastiera", "Confirmar reposi\x87""\xc6""o do teclado"},
 {"Confirm gamepad reset", "Confirmer la r\x82""initialisation de la manette", "Gamepad zur\x81""cksetzen best\x84""tigen", "Confirmar restablecer mando", "Conferma ripristino controller", "Confirmar reposi\x87""\xc6""o do comando"},

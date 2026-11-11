@@ -159,16 +159,20 @@ static int PresetValue(int preset, int s) {
     return l ? l->classic : kSettings[s].classic;
 }
 
-// The screen: Classic's is 640 x 480, Modern's the one the prototype
-// started at.
+// The screen: Classic's is 640 x 480, Modern's the native size as it is when Modern is
+// chosen (EPmager, 2026-11-11: Modern took the launch size, which can be smaller).
 struct ScreenSize {
     U32 w, h;
 };
-static ScreenSize g_modernScreen = {1920, 1080};
 
 static ScreenSize ScreenNow() { return ScreenSize{Host_PhysW(), Host_PhysH()}; }
+static ScreenSize NativeScreen() {
+    ScreenSize n;
+    Host_NativeSize(&n.w, &n.h);
+    return n;
+}
 static bool SameScreen(ScreenSize a, ScreenSize b) { return a.w == b.w && a.h == b.h; }
-static ScreenSize PresetScreen(int preset) { return preset == 1 ? ScreenSize{640, 480} : g_modernScreen; }
+static ScreenSize PresetScreen(int preset) { return preset == 1 ? ScreenSize{640, 480} : NativeScreen(); }
 
 static void SyncView();
 
@@ -298,7 +302,7 @@ static void ResetSettings() {
     bool fresh = g_preset == 0 && !MoreOptions_AnyChanged() && Bindings_AreDefault();
     for (int s = 0; s < S_COUNT; s++)
         fresh = fresh && (IsLanguage(s) || g_val[s] == FreshValue(s));
-    fresh = fresh && SameScreen(ScreenNow(), g_modernScreen);
+    fresh = fresh && SameScreen(ScreenNow(), NativeScreen());
     if (!fresh)  // a second reset with nothing changed keeps the first one's undo
         TakeBackup(g_resetBackup, true);
     for (int s = 0; s < S_COUNT; s++)
@@ -308,7 +312,7 @@ static void ResetSettings() {
     Bindings_PutDefaults();
     g_preset = 0;
     g_presetBackup.have = false;
-    SetScreenTo(g_modernScreen);
+    SetScreenTo(NativeScreen());
     Trace("reset settings");
 }
 
@@ -464,7 +468,8 @@ static const char *PresetRowLabel(char *buf, size_t n) {
 static const char *ValueText(int s, char *buf, size_t n) {
     const Setting &st = kSettings[s];
     if (s == S_RESOLUTION)
-        snprintf(buf, n, "%u x %u", (unsigned)Host_PhysW(), (unsigned)Host_PhysH());
+        snprintf(buf, n, "%u x %u%s", (unsigned)Host_PhysW(), (unsigned)Host_PhysH(),
+                 SameScreen(ScreenNow(), NativeScreen()) ? " (native)" : "");
     else if (s == S_FULLSCREEN)
         snprintf(buf, n, "%s", st.names[Host_Fullscreen() ? 1 : 0]);
     else if (st.kind == K_SLIDER)
@@ -786,7 +791,6 @@ static void Pop() {
 }
 
 void Menu_Init(bool firstLaunch) {
-    g_modernScreen = ScreenNow();  // Modern's screen
     for (int s = 0; s < S_COUNT; s++)
         g_val[s] = FreshValue(s);
     g_preset = 0;

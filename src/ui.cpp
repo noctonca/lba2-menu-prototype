@@ -76,16 +76,20 @@ const char *Ui_Tr(const char *s) {
         return s;
     if (const char *t = Lang_Label(s, s_lang))
         return t;
-    // A chosen option, "Name (current)": the name and the mark each on its own.
-    static const char kMark[] = " (current)";
-    const size_t n = strlen(s), m = sizeof kMark - 1;
-    if (n > m && !strcmp(s + n - m, kMark)) {
-        static char marked[4][128];
-        static int at;
-        char *out = marked[at++ & 3];
-        std::string name(s, n - m);
-        snprintf(out, sizeof marked[0], "%s %s", Ui_Tr(name.c_str()), TrWhole("(current)"));
-        return out;
+    // A marked text, "Name (current)" or "1920 x 1080 (native)": the text and the mark each
+    // on its own.
+    static const char *const kMarks[] = {"(current)", "(native)"};
+    const size_t n = strlen(s);
+    for (const char *mark : kMarks) {
+        const size_t m = strlen(mark);
+        if (n > m + 1 && s[n - m - 1] == ' ' && !strcmp(s + n - m, mark)) {
+            static char marked[4][256];
+            static int at;
+            char *out = marked[at++ & 3];
+            std::string name(s, n - m - 1);
+            snprintf(out, sizeof marked[0], "%s %s", Ui_Tr(name.c_str()), TrWhole(mark));
+            return out;
+        }
     }
     // A one-column row, "Label: Value": each side on its own.
     const char *colon = strstr(s, ": ");
