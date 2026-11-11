@@ -1,6 +1,6 @@
-#include "vfont.h"
+#include "screen_font.h"
 
-#include "engine.h"
+#include "host.h"
 
 #include <SVGA/CLIP.H>
 #include <SVGA/SCREEN.H>
@@ -36,14 +36,14 @@ static int Unicode(U8 c) { return c < 128 ? c : kCp850[c - 128]; }
 
 static stbtt_fontinfo s_font[1];  // bold
 static bool s_ready;
-static int s_face = VFONT_GAME;
+static int s_face = SCREEN_FONT_GAME;
 // Capitals as tall as the game font's (22 logical pixels).
 static const int s_sizePercent = 100;
 static float s_unit[1];  // font units to logical pixels
 
 static void SetSizePercent(int percent);
 
-void VFont_Init() {
+void ScreenFont_Init() {
     if (s_ready)
         return;
     if (!stbtt_InitFont(&s_font[0], g_zillaSlabBoldTtf, stbtt_GetFontOffsetForIndex(g_zillaSlabBoldTtf, 0)))
@@ -62,8 +62,8 @@ static void SetSizePercent(int percent) {
     }
 }
 
-void VFont_Set(int face) { s_face = s_ready ? face : VFONT_GAME; }
-int VFont_Face() { return s_face; }
+void ScreenFont_Set(int face) { s_face = s_ready ? face : SCREEN_FONT_GAME; }
+int ScreenFont_Face() { return s_face; }
 
 static int FaceIndex() { return 0; }
 
@@ -85,9 +85,9 @@ static float WidthF(const char *s) {
     return w;
 }
 
-S32 VFont_Width(const char *s) { return (S32)ceilf(WidthF(s)); }
+S32 ScreenFont_Width(const char *s) { return (S32)ceilf(WidthF(s)); }
 
-S32 VFont_InkWidth(const char *s) {
+S32 ScreenFont_InkWidth(const char *s) {
     size_t n = strlen(s);
     if (!n)
         return 0;
@@ -101,7 +101,7 @@ S32 VFont_InkWidth(const char *s) {
     return (S32)ceilf(w);
 }
 
-S32 VFont_Advance(U8 c) { return (S32)floorf(Advance(FaceIndex(), c, 0) + 0.5f); }
+S32 ScreenFont_Advance(U8 c) { return (S32)floorf(Advance(FaceIndex(), c, 0) + 0.5f); }
 
 // ---------------------------------------------------------------------------
 // The queue.
@@ -120,7 +120,7 @@ struct Item {
 static Item s_items[MAX_ITEMS];
 static int s_count;
 
-void VFont_BeginFrame() { s_count = 0; }
+void ScreenFont_BeginFrame() { s_count = 0; }
 
 static U32 CanvasSum(S32 x0, S32 y0, S32 x1, S32 y1) {
     U32 h = 2166136261u;
@@ -155,10 +155,10 @@ static void Queue(S32 x, S32 y, const char *s, U8 ink, S32 width) {
     s_count++;
 }
 
-void VFont_Text(S32 x, S32 y, const char *s, U8 ink) { Queue(x, y, s, ink, VFont_Width(s)); }
+void ScreenFont_Text(S32 x, S32 y, const char *s, U8 ink) { Queue(x, y, s, ink, ScreenFont_Width(s)); }
 
-S32 VFont_Char(S32 x, S32 y, U8 c, U8 ink) {
-    S32 a = VFont_Advance(c);
+S32 ScreenFont_Char(S32 x, S32 y, U8 c, U8 ink) {
+    S32 a = ScreenFont_Advance(c);
     if (c != ' ') {
         char s[2] = {(char)c, 0};
         Queue(x, y, s, ink, a);
@@ -199,10 +199,10 @@ static const Glyph &GetGlyph(int f, U8 c, U32 k) {
     return g;
 }
 
-void VFont_Paint(U32 *argb, U32 pitch, U32 w, U32 h, const U8 *palette) {
-    if (!VFont_On() || !s_count)
+void ScreenFont_Paint(U32 *argb, U32 pitch, U32 w, U32 h, const U8 *palette) {
+    if (!ScreenFont_On() || !s_count)
         return;
-    const U32 lw = Engine_LogicalW(), lh = Engine_LogicalH();
+    const U32 lw = Host_LogicalW(), lh = Host_LogicalH();
     U32 k = w / lw < h / lh ? w / lw : h / lh;
     if (k < 1)
         k = 1;

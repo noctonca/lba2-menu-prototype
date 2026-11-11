@@ -1,15 +1,15 @@
 #include "menu.h"
 
-#include "cadre.h"
-#include "controls.h"
-#include "engine.h"
-#include "experimental.h"
+#include "game_pieces.h"
+#include "bindings.h"
+#include "host.h"
+#include "more_options.h"
 #include "trace.h"
 #include "menu_parts.h"
 #include "lang.h"
 #include "ui.h"
 #include "twinsun.h"
-#include "vfont.h"
+#include "screen_font.h"
 
 #include <SVGA/BOX.H>
 #include <SVGA/CLIP.H>
@@ -61,12 +61,12 @@ static const Setting kSettings[S_COUNT] = {
     {"background", "Background", K_CHOICE, 3, {"Picture", "Blue", "Twinsun", "Off"}, 0, 0, false,
      "The picture behind the menu."},
     // The menu's letters (asked for 2026-11-11): the game font, or Zilla Slab Bold drawn at
-    // the screen's resolution (src/vfont.cpp), the face lba2cc's parked HD UI overlay chose.
+    // the screen's resolution (src/screen_font.cpp), the face lba2cc's parked HD UI overlay chose.
     // Bold over Medium and the size, decided after play (2026-11-11).
     {"font", "Font", K_CHOICE, 1, {"Game", "Zilla Slab"}, 0, 0, false,
      "The game's letters, or sharp Zilla Slab."},
     // Not a stored value: the row shows the screen in use and steps it through
-    // Engine_SizeAt's list, as F2 does. g_val keeps its fresh value; the screen is the
+    // Host_SizeAt's list, as F2 does. g_val keeps its fresh value; the screen is the
     // engine's, which presets (prototype only, kLook), Reset settings and their undo set.
     {"resolution", "Resolution", K_CHOICE, 9,
      {"640 x 480", "768 x 480", "1024 x 480", "1280 x 720", "1280 x 800", "1920 x 1080", "2400 x 1080", "2560 x 1440", "3440 x 1440", "3840 x 2160"},
@@ -163,7 +163,7 @@ struct ScreenSize {
 };
 static ScreenSize g_modernScreen = {1920, 1080};
 
-static ScreenSize ScreenNow() { return ScreenSize{Engine_PhysW(), Engine_PhysH()}; }
+static ScreenSize ScreenNow() { return ScreenSize{Host_PhysW(), Host_PhysH()}; }
 static bool SameScreen(ScreenSize a, ScreenSize b) { return a.w == b.w && a.h == b.h; }
 static ScreenSize PresetScreen(int preset) { return preset == 1 ? ScreenSize{640, 480} : g_modernScreen; }
 
@@ -174,7 +174,7 @@ static void SyncView();
 static void SetScreenTo(ScreenSize to) {
     if (SameScreen(to, ScreenNow()))
         return;
-    if (Engine_SetScreen(to.w, to.h, true))
+    if (Host_SetScreen(to.w, to.h, true))
         Menu_NoteScreen();
     SyncView();
 }
@@ -186,7 +186,7 @@ static bool PresetChanged() {
     for (int s = 0; s < S_COUNT; s++)
         if (PresetSets(s) && g_val[s] != PresetValue(g_preset, s))
             return true;
-    return Exp_PresetChanged();
+    return MoreOptions_PresetChanged();
 }
 
 // A settings backup, taken before a preset or Reset settings changes anything, which its
@@ -202,8 +202,8 @@ struct Backup {
     bool have;
     bool reset;
     int val[S_COUNT];
-    int exp[EXP_MAX];
-    int binds[CONTROLS_BIND_MAX];
+    int exp[MORE_OPTIONS_MAX];
+    int binds[BINDINGS_MAX];
     int preset;
     ScreenSize screen;
 };
@@ -211,14 +211,14 @@ static Backup g_presetBackup;  // the preset page's Undo preset
 static Backup g_resetBackup;   // the Advanced page's Undo reset
 
 static bool CoversSetting(const Backup &b, int s) { return b.reset ? !IsLanguage(s) : PresetSets(s); }
-static bool CoversExp(const Backup &b, int i) { return b.reset || Exp_PresetsSet(i); }
+static bool CoversExp(const Backup &b, int i) { return b.reset || MoreOptions_PresetsSet(i); }
 
 static void TakeBackup(Backup &b, bool reset) {
     b.have = true;
     b.reset = reset;
     memcpy(b.val, g_val, sizeof g_val);
-    Exp_Get(b.exp);
-    Controls_GetBindings(b.binds);
+    MoreOptions_Get(b.exp);
+    Bindings_Get(b.binds);
     b.preset = g_preset;
     b.screen = ScreenNow();
 }
@@ -228,7 +228,7 @@ static const char *const kPresetBackupNames[2] = {"Modern preset", "Classic pres
 // What the undo would change, in the order its help names it: the preset, the settings
 // (Resolution for the screen), the bindings, the More options rows. Settings in the Text
 // language, More options' rows by their console names. None: the undo row is not offered.
-enum { BACKUP_DIFF_MAX = 1 + S_COUNT + 1 + EXP_MAX };
+enum { BACKUP_DIFF_MAX = 1 + S_COUNT + 1 + MORE_OPTIONS_MAX };
 static int BackupDiffers(const Backup &b, const char **names) {
     if (!b.have)
         return 0;
@@ -242,16 +242,16 @@ static int BackupDiffers(const Backup &b, const char **names) {
             names[n++] = Ui_Tr(kSettings[s].label);
     }
     if (b.reset) {
-        int now[CONTROLS_BIND_MAX];
-        Controls_GetBindings(now);
-        if (memcmp(b.binds, now, sizeof(int) * Controls_BindingCount()) != 0)
+        int now[BINDINGS_MAX];
+        Bindings_Get(now);
+        if (memcmp(b.binds, now, sizeof(int) * Bindings_Count()) != 0)
             names[n++] = Ui_Tr("Keys and buttons");
     }
-    int now[EXP_MAX];
-    Exp_Get(now);
-    for (int i = 0; i < Exp_Count(); i++)
+    int now[MORE_OPTIONS_MAX];
+    MoreOptions_Get(now);
+    for (int i = 0; i < MoreOptions_Count(); i++)
         if (CoversExp(b, i) && b.exp[i] != now[i])
-            names[n++] = Exp_Name(i);
+            names[n++] = MoreOptions_Name(i);
     return n;
 }
 
@@ -264,14 +264,14 @@ static void RestoreBackup(Backup &b) {
     for (int s = 0; s < S_COUNT; s++)
         if (CoversSetting(b, s))
             g_val[s] = b.val[s];
-    int exp[EXP_MAX];
-    Exp_Get(exp);
-    for (int i = 0; i < Exp_Count(); i++)
+    int exp[MORE_OPTIONS_MAX];
+    MoreOptions_Get(exp);
+    for (int i = 0; i < MoreOptions_Count(); i++)
         if (CoversExp(b, i))
             exp[i] = b.exp[i];
-    Exp_Put(exp);
+    MoreOptions_Put(exp);
     if (b.reset)
-        Controls_PutBindings(b.binds);
+        Bindings_Put(b.binds);
     g_preset = b.preset;
     b.have = false;
     SetScreenTo(b.screen);
@@ -284,7 +284,7 @@ static void ApplyPreset(int p) {
     for (int s = 0; s < S_COUNT; s++)
         if (PresetSets(s))
             g_val[s] = PresetValue(p, s);
-    Exp_PresetDefaults();  // the tuning values; the player's rows on More options stay
+    MoreOptions_PresetDefaults();  // the tuning values; the player's rows on More options stay
     SetScreenTo(PresetScreen(p));
     Trace("apply preset=%s", kPresetNames[p]);
 }
@@ -292,7 +292,7 @@ static void ApplyPreset(int p) {
 // Every setting but the languages back as a fresh install has it, every More options row,
 // the bindings and the preset (the menu plan's Reset settings).
 static void ResetSettings() {
-    bool fresh = g_preset == 0 && !Exp_AnyChanged() && Controls_BindingsAreDefault();
+    bool fresh = g_preset == 0 && !MoreOptions_AnyChanged() && Bindings_AreDefault();
     for (int s = 0; s < S_COUNT; s++)
         fresh = fresh && (IsLanguage(s) || g_val[s] == FreshValue(s));
     fresh = fresh && SameScreen(ScreenNow(), g_modernScreen);
@@ -301,8 +301,8 @@ static void ResetSettings() {
     for (int s = 0; s < S_COUNT; s++)
         if (!IsLanguage(s))
             g_val[s] = FreshValue(s);
-    Exp_Defaults();
-    Controls_DefaultBindings();
+    MoreOptions_Defaults();
+    Bindings_PutDefaults();
     g_preset = 0;
     g_presetBackup.have = false;
     SetScreenTo(g_modernScreen);
@@ -468,9 +468,9 @@ static const char *PresetRowLabel(char *buf, size_t n) {
 static const char *ValueText(int s, char *buf, size_t n) {
     const Setting &st = kSettings[s];
     if (s == S_RESOLUTION)
-        snprintf(buf, n, "%u x %u", (unsigned)Engine_PhysW(), (unsigned)Engine_PhysH());
+        snprintf(buf, n, "%u x %u", (unsigned)Host_PhysW(), (unsigned)Host_PhysH());
     else if (s == S_FULLSCREEN)
-        snprintf(buf, n, "%s", st.names[Engine_Fullscreen() ? 1 : 0]);
+        snprintf(buf, n, "%s", st.names[Host_Fullscreen() ? 1 : 0]);
     else if (st.kind == K_SLIDER)
         snprintf(buf, n, "%d", g_val[s]);
     else
@@ -531,11 +531,11 @@ static char g_toast[128];
 static U32 g_toastUntil;
 
 bool Menu_Wide() {
-    return Engine_RuleChoseWide();
+    return Host_RuleChoseWide();
 }
 
 WideFrame Menu_WideFrame() {
-    S32 W = (S32)Engine_LogicalW(), H = (S32)Engine_LogicalH();
+    S32 W = (S32)Host_LogicalW(), H = (S32)Host_LogicalH();
     WideFrame f = {(W - 960) / 2, (H - 540) / 2, 960, 540};
     return f;
 }
@@ -544,15 +544,15 @@ static bool Wide() { return Menu_Wide(); }
 
 static void Toast(const char *fmt, const char *a, int v) {
     snprintf(g_toast, sizeof g_toast, fmt, a, v);
-    g_toastUntil = Engine_TimeMs() + 2000;
+    g_toastUntil = Host_TimeMs() + 2000;
 }
 
 void Menu_Toast(const char *text) { Toast("%s", text, 0); }
 
 void Menu_NoteScreen() {
     char note[64];
-    snprintf(note, sizeof note, "%ux%u (logical %ux%u)%s", (unsigned)Engine_PhysW(), (unsigned)Engine_PhysH(),
-             (unsigned)Engine_LogicalW(), (unsigned)Engine_LogicalH(), Engine_Fullscreen() ? ", fullscreen" : "");
+    snprintf(note, sizeof note, "%ux%u (logical %ux%u)%s", (unsigned)Host_PhysW(), (unsigned)Host_PhysH(),
+             (unsigned)Host_LogicalW(), (unsigned)Host_LogicalH(), Host_Fullscreen() ? ", fullscreen" : "");
     Toast("%s", note, 0);
     Trace("screen %s", note);
 }
@@ -629,7 +629,7 @@ static S32 LegendWidth(const char **keys, const char **words, int n, S32 scale);
 static S32 BandVoiceWidth(const char **keys, const char **words, int nk);
 
 static bool VoiceFits(const char *text, const Row *r) {
-    S32 W = (S32)Engine_LogicalW();
+    S32 W = (S32)Host_LogicalW();
     if (!Wide())
         return Voice_Lines(text, W - 49) <= 3;
     const char *keys[4], *words[4];
@@ -787,17 +787,17 @@ void Menu_Init(bool firstLaunch) {
     g_voice.text[0] = 0;
     g_layoutWide = Wide() ? 1 : 0;
     Trace("init layout=%s logical=%ux%u first=%d", Wide() ? "wide" : "column",
-          (unsigned)Engine_LogicalW(), (unsigned)Engine_LogicalH(), (int)g_first);
+          (unsigned)Host_LogicalW(), (unsigned)Host_LogicalH(), (int)g_first);
 }
 
 static void ChangeSetting(int s, int dir) {
     if (s == S_RESOLUTION) {
-        if (Engine_StepScreen(dir))
+        if (Host_StepScreen(dir))
             Menu_NoteScreen();
         return;
     }
     if (s == S_FULLSCREEN) {
-        if (Engine_SetFullscreen(!Engine_Fullscreen()))
+        if (Host_SetFullscreen(!Host_Fullscreen()))
             Menu_NoteScreen();
         return;
     }
@@ -864,13 +864,13 @@ static void Activate(const Row &r) {
         if (r.arg == A_RESET)
             Ask(Q_RESET);
         else if (r.arg == A_EXP)
-            Exp_Open();
+            MoreOptions_Open();
         else if (r.arg == A_CONSOLE) {
-            g_console = Engine_LastInputWasPad() ? CON_READONLY : CON_FULL;
+            g_console = Host_LastInputWasPad() ? CON_READONLY : CON_FULL;
             Trace("open console mode=%s", g_console == CON_READONLY ? "read-only" : "full");
         }
         else
-            Controls_Open();
+            Bindings_Open();
         break;
     }
 }
@@ -900,45 +900,45 @@ static void PutCursorOn(RowType type, int arg) {
 
 void Menu_Update() {
     SyncView();
-    if (Controls_Active()) {
-        Controls_Update();
+    if (Bindings_Active()) {
+        Bindings_Update();
         return;
     }
-    if (Exp_Active()) {
-        Exp_Update();
+    if (MoreOptions_Active()) {
+        MoreOptions_Update();
         return;
     }
     if (g_console) {
         // Full: Esc closes (F12 in the game; F12 is a prototype switch here). Read-only: anything does.
-        bool any = Engine_RawPressed() != 0;
+        bool any = Host_RawPressed() != 0;
         for (int k = 0; k < KEY_COUNT && !any; k++)
-            any = Engine_Pressed((UiKey)k);
-        if (g_console == CON_READONLY ? any : Engine_Pressed(KEY_ESC)) {
+            any = Host_Pressed((UiKey)k);
+        if (g_console == CON_READONLY ? any : Host_Pressed(KEY_ESC)) {
             g_console = CON_CLOSED;
             Trace("close console");
         }
         return;
     }
     if (g_closed) {
-        if (Engine_Pressed(KEY_ENTER)) {
+        if (Host_Pressed(KEY_ENTER)) {
             g_closed = false;
             Trace("reopen options");
-        } else if (Engine_Pressed(KEY_ESC)) {
+        } else if (Host_Pressed(KEY_ESC)) {
             g_quit = true;
             Trace("quit");
         }
         return;
     }
     if (g_confirm) {
-        if (Engine_Pressed(KEY_UP) || Engine_Pressed(KEY_DOWN)) {
+        if (Host_Pressed(KEY_UP) || Host_Pressed(KEY_DOWN)) {
             g_confirmCursor ^= 1;
             Trace("cursor %s", g_confirmCursor ? "Yes" : "No");
         }
-        if (Engine_Pressed(KEY_ESC)) {
+        if (Host_Pressed(KEY_ESC)) {
             g_confirm = false;
             Trace("answer no (esc)");
         }
-        if (Engine_Pressed(KEY_ENTER)) {
+        if (Host_Pressed(KEY_ENTER)) {
             g_confirm = false;
             Trace("answer %s", g_confirmCursor ? "yes" : "no");
             if (g_confirmCursor) {
@@ -952,32 +952,32 @@ void Menu_Update() {
         return;
     }
 
-    if (Engine_Pressed(KEY_UP))
+    if (Host_Pressed(KEY_UP))
         Move(-1);
-    if (Engine_Pressed(KEY_DOWN))
+    if (Host_Pressed(KEY_DOWN))
         Move(+1);
 
     const Row *r = CursorRow();
     if (r && r->type == R_SETTING && RowActive(*r)) {
-        if (Engine_Pressed(KEY_LEFT))
+        if (Host_Pressed(KEY_LEFT))
             ChangeSetting(r->arg, -1);
-        if (Engine_Pressed(KEY_RIGHT))
+        if (Host_Pressed(KEY_RIGHT))
             ChangeSetting(r->arg, +1);
-    } else if (Wide() && !g_first && g_depth == 1 && Engine_Pressed(KEY_RIGHT) && r) {
+    } else if (Wide() && !g_first && g_depth == 1 && Host_Pressed(KEY_RIGHT) && r) {
         Activate(*r);  // wide, Right opens a hub row as Enter does
     }
     r = CursorRow();
-    if (r && Engine_Pressed(KEY_ENTER) && RowActive(*r))
+    if (r && Host_Pressed(KEY_ENTER) && RowActive(*r))
         Activate(*r);
 
-    if (Engine_Pressed(KEY_ESC)) {
+    if (Host_Pressed(KEY_ESC)) {
         if (g_first)
             Activate(kPages[P_FIRST].rows[0]);  // Escape answers Modern
         else
             Pop();
     }
 
-    if (!Controls_Active() && !Exp_Active())  // a page just opened: its help, not this row's
+    if (!Bindings_Active() && !MoreOptions_Active())  // a page just opened: its help, not this row's
         UpdateVoice();
 }
 
@@ -1039,11 +1039,11 @@ static void DrawColumnRow(const Row &r, S32 x0, S32 y0, S32 x1, S32 y1, bool cur
         // GAMEMENU.CPP: the slider plasma up to the value, fill-selected after it.
         const Setting &st = kSettings[r.arg];
         S32 x2 = x0 + (x1 - x0) * g_val[r.arg] / st.max;
-        Cadre_BackupCorners(x0, y0, x1, y1);
-        Cadre_FireBar(x0, y0, x1, y1, PLASMA_SLIDER);
+        GamePieces_BackupCorners(x0, y0, x1, y1);
+        GamePieces_FireBar(x0, y0, x1, y1, PLASMA_SLIDER);
         if (x2 < x1)
             Box(x2, y0, x1, y1, FILL_SELECTED);
-        Cadre_Frame(x0, y0, x1, y1);
+        GamePieces_Frame(x0, y0, x1, y1);
     } else {
         Ui_RowBackground(x0, y0, x1, y1, fill);
     }
@@ -1079,11 +1079,11 @@ static void DrawWideRow(const char *pane, const Row &r, S32 x0, S32 y0, S32 x1, 
     const bool barRow = r.type == R_SETTING && kSettings[r.arg].kind == K_SLIDER;
     if (barRow && fill == FILL_CURSOR && active) {
         S32 x2 = x0 + (x1 - x0) * g_val[r.arg] / kSettings[r.arg].max;
-        Cadre_BackupCorners(x0, y0, x1, y1);
-        Cadre_FireBar(x0, y0, x1, y1, PLASMA_SLIDER);
+        GamePieces_BackupCorners(x0, y0, x1, y1);
+        GamePieces_FireBar(x0, y0, x1, y1, PLASMA_SLIDER);
         if (x2 < x1)
             Box(x2, y0, x1, y1, FILL_SELECTED);
-        Cadre_Frame(x0, y0, x1, y1);
+        GamePieces_Frame(x0, y0, x1, y1);
     } else {
         Ui_RowBackground(x0, y0, x1, y1, fill);
     }
@@ -1170,7 +1170,7 @@ static void DrawWideRow(const char *pane, const Row &r, S32 x0, S32 y0, S32 x1, 
 void Menu_DrawScrollBar(S32 x0, S32 y0, S32 y1, int first, int visible, int total) {
     // ScrollBarReview: 12 wide, thumb inset 2, in the margin.
     S32 x1 = x0 + 11;
-    Cadre_Shade(x0 + 1, y0 + 1, x1 - 1, y1 - 1, MENU_SHADE_LVL);
+    GamePieces_Shade(x0 + 1, y0 + 1, x1 - 1, y1 - 1, MENU_SHADE_LVL);
     Line(x0, y0, x1, y0, COUL_DOWN_BLUE);
     Line(x0, y0, x0, y1, COUL_DOWN_BLUE);
     Line(x1, y0, x1, y1, COUL_UP_BLUE);
@@ -1304,11 +1304,11 @@ static void DrawPageMark(S32 x1, S32 y1) {
 const char *Menu_PageMark() { return g_pageMark; }
 const char *Menu_Legend() { return g_legend; }
 
-S32 Menu_DialogueTop() { return (S32)Engine_LogicalH() - 1 - 137; }
+S32 Menu_DialogueTop() { return (S32)Host_LogicalH() - 1 - 137; }
 
 void Menu_DrawDialogue() {
     // MESSAGE.CPP NormalWinDial: 8 in from the sides, 137 tall, 8 off the bottom.
-    S32 W = (S32)Engine_LogicalW(), H = (S32)Engine_LogicalH();
+    S32 W = (S32)Host_LogicalW(), H = (S32)Host_LogicalH();
     Menu_DrawDialogueIn(8, H - 1 - 137, W - 1 - 8, H - 1 - 8);
 }
 
@@ -1323,7 +1323,7 @@ void Menu_DrawDialogueIn(S32 x0, S32 y0, S32 x1, S32 y1) {
 }
 
 static void DrawColumn() {
-    S32 W = (S32)Engine_LogicalW(), H = (S32)Engine_LogicalH();
+    S32 W = (S32)Host_LogicalW(), H = (S32)Host_LogicalH();
     const Place &t = Top();
     const Page &p = kPages[t.page];
     int shown[PAGE_ROWS_MAX];
@@ -1451,7 +1451,7 @@ void Menu_DrawFoot(const char **keysIn, const char **words, int nk) {
     // After a pad press the legend names the pad's buttons, not the keyboard's.
     const char *keys[8];
     for (int i = 0; i < nk && i < 8; i++)
-        keys[i] = Controls_LegendKey(keysIn[i]);
+        keys[i] = Bindings_LegendKey(keysIn[i]);
     WideFrame f = Menu_WideFrame();
     S32 W = f.w, H = f.h;
     const S32 side = 32;
@@ -1484,7 +1484,7 @@ static void DrawOverlay() {
     };
     S32 n = (S32)(sizeof lines / sizeof lines[0]);
     S32 w = 8 * 50 + 16, h = n * 12 + 12;
-    S32 x0 = (S32)Engine_LogicalW() - w - 8, y0 = 8;
+    S32 x0 = (S32)Host_LogicalW() - w - 8, y0 = 8;
     Ui_Panel(x0, y0, x0 + w, y0 + h, PANEL_SHADE_LVL);
     for (S32 i = 0; i < n; i++)
         Ui_Small(x0 + 8, y0 + 8 + i * 12, lines[i], i ? INK_CONFIG_MENU : INK_CONFIG_HEAD, 1);
@@ -1506,11 +1506,11 @@ static const char *const kConsoleLines[][2] = {
 static S32 g_consoleBottom;  // the line under it, for `state`
 
 static void DrawConsole() {
-    S32 W = (S32)Engine_LogicalW(), H = (S32)Engine_LogicalH();
+    S32 W = (S32)Host_LogicalW(), H = (S32)Host_LogicalH();
     S32 h = H / 2;
     if (h < 9 * 4)
         h = 9 * 4;
-    Cadre_Shade(0, 0, W - 1, h - 1, 15);
+    GamePieces_Shade(0, 0, W - 1, h - 1, 15);
     Line(0, h - 1, W - 1, h - 1, INK_WHITE);
     g_consoleBottom = h - 1;
     S32 n = (S32)(sizeof kConsoleLines / sizeof kConsoleLines[0]);
@@ -1525,14 +1525,14 @@ static void DrawConsole() {
     if (g_console == CON_READONLY)
         Ui_Small(8, y, "Read only. Any button closes it.", INK_CONFIG_HEAD, 1);
     else
-        Ui_Small(8, y, (Engine_TimeMs() / 500) % 2 ? "]> " : "]> _", INK_WHITE, 1);
+        Ui_Small(8, y, (Host_TimeMs() / 500) % 2 ? "]> " : "]> _", INK_WHITE, 1);
 }
 
 // Frame rate on: the count in the bottom left corner, white, the 8x8 font (OBJECT.CPP
 // AffNbFps). lba2cc draws it only in play; here it shows over the menu so the row can be judged.
 static void DrawFps() {
     static U32 windowStart, frames, shown;
-    U32 now = Engine_TimeMs();
+    U32 now = Host_TimeMs();
     frames++;
     if (now - windowStart >= 1000) {
         shown = frames * 1000 / (now - windowStart ? now - windowStart : 1);
@@ -1541,22 +1541,22 @@ static void DrawFps() {
     }
     char buf[16];
     snprintf(buf, sizeof buf, "%u ", (unsigned)shown);
-    Ui_Small(0, (S32)Engine_LogicalH() - 8, buf, INK_WHITE, 1);
+    Ui_Small(0, (S32)Host_LogicalH() - 8, buf, INK_WHITE, 1);
 }
 
 // The picture at the screen's own resolution, as the Image row says (decided 2026-11-11):
 // Classic the smallest whole step that covers the screen, Smooth the exact cover factor.
 static void SyncBackgroundRes() {
     const int want = 1 + g_val[S_IMAGE];
-    if (want != Engine_BackgroundRes())
-        Engine_SetBackgroundRes(want);
+    if (want != Host_BackgroundRes())
+        Host_SetBackgroundRes(want);
 }
 
 void Menu_Draw() {
     SyncBackgroundRes();
-    VFont_Set(g_val[S_FONT]);  // before the layout: widths follow the font
+    ScreenFont_Set(g_val[S_FONT]);  // before the layout: widths follow the font
     Ui_SetLang(g_val[S_TEXT_LANG]);  // and the language
-    VFont_BeginFrame();
+    ScreenFont_BeginFrame();
     SyncView();
     g_drawnCount = 0;
     g_helpBox.shown = false;
@@ -1564,20 +1564,20 @@ void Menu_Draw() {
     g_voiceLines = g_voiceNeeded = g_voiceMax = g_voiceWidth = 0;
     g_legend[0] = 0;
 
-    Engine_SetBackdrop(g_val[S_BACKGROUND]);
-    Engine_DrawBackground();
-    Cadre_AnimatePlasma();
+    Host_SetBackdrop(g_val[S_BACKGROUND]);
+    Host_DrawBackground();
+    GamePieces_AnimatePlasma();
 
     if (g_closed) {
         // Two lines at the voice's pitch: on one, 784 wide, it would not fit 640.
         const char *lines[2] = {"Options closed.", "<ENTER> opens them again. <ESC> quits."};
         for (int i = 0; i < 2; i++)
-            Ui_TextShadow((S32)Engine_LogicalW() / 2 - Ui_TextWidth(lines[i]) / 2,
-                          (S32)Engine_LogicalH() / 2 - 38 + i * 38, lines[i], DIALOGUE_HERO * 16 + 12);
-    } else if (Controls_Active()) {
-        Controls_Draw();
-    } else if (Exp_Active()) {
-        Exp_Draw();
+            Ui_TextShadow((S32)Host_LogicalW() / 2 - Ui_TextWidth(lines[i]) / 2,
+                          (S32)Host_LogicalH() / 2 - 38 + i * 38, lines[i], DIALOGUE_HERO * 16 + 12);
+    } else if (Bindings_Active()) {
+        Bindings_Draw();
+    } else if (MoreOptions_Active()) {
+        MoreOptions_Draw();
     } else if (Wide() && !g_first) {
         DrawWide();
     } else {
@@ -1590,9 +1590,9 @@ void Menu_Draw() {
         DrawFps();
     if (sw_overlay)
         DrawOverlay();
-    if (g_toast[0] && Engine_TimeMs() < g_toastUntil) {
+    if (g_toast[0] && Host_TimeMs() < g_toastUntil) {
         S32 w = Ui_SmallWidth(g_toast, 1);
-        S32 x = (S32)Engine_LogicalW() - w - 12, yy = (S32)Engine_LogicalH() - 14;
+        S32 x = (S32)Host_LogicalW() - w - 12, yy = (S32)Host_LogicalH() - 14;
         Box(x - 4, yy - 3, x + w + 3, yy + 10, 0);
         Ui_Small(x, yy, g_toast, INK_CONFIG_HEAD, 1);
     }
@@ -1614,7 +1614,7 @@ static const SwitchDef kSwitches[] = {
 
 bool Menu_SetSwitch(const char *name, int v) {
     if (!strcmp(name, "keyboard")) {  // 0: as a console with no keyboard yet
-        Engine_SetKeyboardSeen(v != 0);
+        Host_SetKeyboardSeen(v != 0);
         return true;
     }
     for (size_t i = 0; i < sizeof kSwitches / sizeof kSwitches[0]; i++) {
@@ -1644,24 +1644,24 @@ bool Menu_Open(const char *name) {
     if (!strcmp(name, "Keys and buttons")) {
         Menu_Open("Controls and camera");
         PutCursorOn(R_ACTION, A_KEYS);  // as Enter on it leaves it
-        Controls_Open();
+        Bindings_Open();
         return true;
     }
     if (!strcmp(name, "More options")) {
         Menu_Open("Advanced and reset");
         PutCursorOn(R_ACTION, A_EXP);
-        Exp_Open();
+        MoreOptions_Open();
         return true;
     }
     if (!strcmp(name, "Console")) {
         Menu_Open("Advanced and reset");
         PutCursorOn(R_ACTION, A_CONSOLE);
-        g_console = Engine_LastInputWasPad() ? CON_READONLY : CON_FULL;
+        g_console = Host_LastInputWasPad() ? CON_READONLY : CON_FULL;
         return true;
     }
     g_console = CON_CLOSED;
-    Controls_Close();
-    Exp_Close();
+    Bindings_Close();
+    MoreOptions_Close();
     for (int p = 0; p < P_COUNT; p++) {
         if (strcmp(kPages[p].name, name) != 0)
             continue;
@@ -1695,15 +1695,15 @@ bool Menu_Set(const char *id, int value) {
         Trace("set %s=%d (control)", id, value);
         return true;
     }
-    return Exp_Set(id, value);
+    return MoreOptions_Set(id, value);
 }
 
 void Menu_Reset() {
     for (size_t i = 0; i < sizeof kSwitches / sizeof kSwitches[0]; i++)
         *kSwitches[i].value = kSwitches[i].start;
-    Engine_ResetInput();
-    Controls_Reset();
-    Exp_Reset();
+    Host_ResetInput();
+    Bindings_Reset();
+    MoreOptions_Reset();
     g_confirm = false;
     g_confirmCursor = 0;
     g_closed = false;
@@ -1744,9 +1744,9 @@ bool Menu_WantsQuit() { return g_quit; }
 const char *Menu_Layout() { return g_closed ? "closed" : g_first ? "first-launch" : Wide() ? "wide" : "column"; }
 
 const char *Menu_PageName() {
-    if (Controls_Active())
+    if (Bindings_Active())
         return "Keys and buttons";
-    if (Exp_Active())
+    if (MoreOptions_Active())
         return "More options";
     return kPages[Top().page].name;
 }
@@ -1760,7 +1760,7 @@ static int Depth() {
 
 const char *Menu_CursorLabel() {
     static char buf[160];
-    const Row *r = Controls_Active() || Exp_Active() || g_closed ? NULL : CursorRow();
+    const Row *r = Bindings_Active() || MoreOptions_Active() || g_closed ? NULL : CursorRow();
     if (!r)
         return "";
     return r->type == R_PRESET_ROW ? PresetRowLabel(buf, sizeof buf) : RowLabel(*r);
@@ -1771,15 +1771,15 @@ int Menu_Where(char *buf, size_t n) {
         snprintf(buf, n, "closed");
         return 0;
     }
-    if (Controls_Active()) {
+    if (Bindings_Active()) {
         char inner[200];
-        int d = Controls_Where(inner, sizeof inner);
+        int d = Bindings_Where(inner, sizeof inner);
         snprintf(buf, n, "%s | %s", Menu_PageName(), inner);
         return Depth() + d;
     }
-    if (Exp_Active()) {
+    if (MoreOptions_Active()) {
         char inner[200];
-        int d = Exp_Where(inner, sizeof inner);
+        int d = MoreOptions_Where(inner, sizeof inner);
         snprintf(buf, n, "%s | %s", Menu_PageName(), inner);
         return Depth() + d;
     }
@@ -1795,7 +1795,7 @@ int Menu_Where(char *buf, size_t n) {
 }
 
 bool Menu_CursorSetting(bool *active) {
-    const Row *r = Controls_Active() || Exp_Active() || g_closed ? NULL : CursorRow();
+    const Row *r = Bindings_Active() || MoreOptions_Active() || g_closed ? NULL : CursorRow();
     if (!r || r->type != R_SETTING)
         return false;
     *active = RowActive(*r);
@@ -1874,9 +1874,9 @@ void Menu_WriteState(FILE *f) {
     SyncView();
     char buf[160];
     fprintf(f, "{\"t\":%u,\"physical\":[%u,%u],\"logical\":[%u,%u],\"scale\":%u,\"layout\":",
-            (unsigned)Engine_TimeMs(), (unsigned)Engine_PhysW(), (unsigned)Engine_PhysH(),
-            (unsigned)Engine_LogicalW(), (unsigned)Engine_LogicalH(),
-            (unsigned)Engine_Scale(Engine_PhysW(), Engine_PhysH()));
+            (unsigned)Host_TimeMs(), (unsigned)Host_PhysW(), (unsigned)Host_PhysH(),
+            (unsigned)Host_LogicalW(), (unsigned)Host_LogicalH(),
+            (unsigned)Host_Scale(Host_PhysW(), Host_PhysH()));
     Menu_JsonString(f, Menu_Layout());
     fprintf(f, ",\"page\":");
     Menu_JsonString(f, Menu_PageName());
@@ -1892,7 +1892,7 @@ void Menu_WriteState(FILE *f) {
     }
     fprintf(f, "],\"cursor\":%d,\"scroll\":%d,\"confirm\":%s", Position(top.page, top.row), g_scroll,
             g_confirm ? "true" : "false");
-    const Row *r = Controls_Active() || Exp_Active() ? NULL : CursorRow();
+    const Row *r = Bindings_Active() || MoreOptions_Active() ? NULL : CursorRow();
     fprintf(f, ",\"cursor_row\":");
     Menu_JsonString(f, r ? (r->type == R_PRESET_ROW ? PresetRowLabel(buf, sizeof buf) : RowLabel(*r)) : "");
     fprintf(f, ",\"preset\":\"%s\",\"preset_changed\":%s,\"preset_row\":", kPresetNames[g_preset],
@@ -1913,7 +1913,7 @@ void Menu_WriteState(FILE *f) {
     fprintf(f, "]");
 
     int total = (int)strlen(g_voice.text);
-    int shown = g_voice.typed ? (int)((Engine_TimeMs() - g_voice.start) / 20) : total;
+    int shown = g_voice.typed ? (int)((Host_TimeMs() - g_voice.start) / 20) : total;
     if (shown > total)
         shown = total;
     fprintf(f, ",\"voice\":{\"text\":");
@@ -1936,13 +1936,13 @@ void Menu_WriteState(FILE *f) {
             g_console ? (int)g_consoleBottom : -1);
     Menu_JsonString(f, kVersion);
 
-    if (Controls_Active()) {
+    if (Bindings_Active()) {
         fprintf(f, ",\"controls\":");
-        Controls_WriteState(f);
+        Bindings_WriteState(f);
     }
-    if (Exp_Active()) {
+    if (MoreOptions_Active()) {
         fprintf(f, ",\"experimental\":");
-        Exp_WriteState(f);
+        MoreOptions_WriteState(f);
     }
     fprintf(f, ",\"switches\":{");
     for (size_t i = 0; i < sizeof kSwitches / sizeof kSwitches[0]; i++)

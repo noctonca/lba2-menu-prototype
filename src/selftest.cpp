@@ -4,9 +4,9 @@
 // command line that opens the screen it was found on.
 #include "selftest.h"
 
-#include "controls.h"
-#include "engine.h"
-#include "experimental.h"
+#include "bindings.h"
+#include "host.h"
+#include "more_options.h"
 #include "lang.h"
 #include "menu.h"
 #include "menu_parts.h"
@@ -32,9 +32,9 @@ static const char *kPages[] = {
     "Controls and camera", "Advanced and reset",
 };
 
-// Actions per group on the Controls page (controls.cpp kActions).
+// Actions per group on the Controls page (bindings.cpp kActions).
 static const int kGroupSizes[] = {5, 6, 4, 7, 4, 4, 6};
-// Rows per group on the More options page (experimental.cpp kTuning).
+// Rows per group on the More options page (more_options.cpp kTuning).
 static const int kExpGroups[] = {22, 9, 7, 3, 3};
 static const char *kExpPage = "More options";
 
@@ -123,7 +123,7 @@ static int HeadRow(const HeadView &h, const DrawnRow *rows, int n) {
 }
 
 static void Check(std::vector<std::string> *found) {
-    const S32 W = (S32)Engine_LogicalW(), H = (S32)Engine_LogicalH();
+    const S32 W = (S32)Host_LogicalW(), H = (S32)Host_LogicalH();
     MenuHelp v;
     Menu_Help(&v);
     // Help longer than its window pages on, a window at a time; it is cut off only past
@@ -138,8 +138,8 @@ static void Check(std::vector<std::string> *found) {
     if (v.pages > 1)
         found->push_back(Fmt("help in %d windows: %s", v.pages, Repr(v.text).c_str()));
     // Console help in the table's status lines is never cut off.
-    ExpTable rt;
-    if (Exp_Table(&rt) && rt.rowHelpCut)
+    MoreOptionsTable rt;
+    if (MoreOptions_Table(&rt) && rt.rowHelpCut)
         found->push_back(Fmt("table: row help cut off: %s", Repr(rt.rowHelp).c_str()));
     bool help = strcmp(v.where, "none") != 0;
     const DrawnRow *rows;
@@ -155,14 +155,14 @@ static void Check(std::vector<std::string> *found) {
                 Fmt("text spills %d px: %s %s", r.textRight - r.x1, Repr(r.label).c_str(), Repr(r.value).c_str()));
     }
     ChipView chips[32];
-    int nc = Controls_Active() ? Controls_Chips(chips, 32) : 0;
+    int nc = Bindings_Active() ? Bindings_Chips(chips, 32) : 0;
     for (int i = 0; i < nc; i++)
         if (!chips[i].fits)
             found->push_back(Fmt("key name cut in its chip: %s %s %s", Repr(chips[i].action).c_str(), chips[i].column,
                                  Repr(chips[i].name).c_str()));
 
-    ExpTable et;
-    bool table = Exp_Table(&et);
+    MoreOptionsTable et;
+    bool table = MoreOptions_Table(&et);
     // One cursor: exactly one row, chip or table line wears it.
     if (n || nc || table) {
         int cursors = 0;
@@ -184,9 +184,9 @@ static void Check(std::vector<std::string> *found) {
             found->push_back(Fmt("red key not explained in the help: %s %s %s", Repr(chips[i].action).c_str(),
                                  chips[i].column, Repr(chips[i].name).c_str()));
     // A clash goes both ways: the other action shows one too.
-    if (Controls_Active()) {
+    if (Bindings_Active()) {
         ConflictView cv[128];
-        int ncf = Controls_Conflicts(cv, 128);
+        int ncf = Bindings_Conflicts(cv, 128);
         for (int i = 0; i < ncf; i++) {
             bool back = false;
             for (int j = 0; j < ncf && !back; j++)
@@ -212,7 +212,7 @@ static void Check(std::vector<std::string> *found) {
             found->push_back(Fmt("table: the status line ends at x %d, past %d: %s", et.statusRight, et.x1 - 24,
                                  Repr(et.status).c_str()));
         for (int i = 0; i < et.count; i++) {
-            const ExpLine &l = et.lines[i];
+            const MoreOptionsLine &l = et.lines[i];
             if (l.x0 != et.x0 + 8 || l.x1 != et.x1 - 8)
                 found->push_back(Fmt("edge: %s at x %d..%d, the table's lines at %d..%d", Repr(l.text).c_str(), l.x0, l.x1,
                                      et.x0 + 8, et.x1 - 8));
@@ -266,7 +266,7 @@ static void Check(std::vector<std::string> *found) {
     // The Controls page's first column head (the action names') starts on its rows' label edge,
     // when the heads are a line above the rows.
     HeadView heads[4];
-    int nh = Controls_Active() ? Controls_Heads(heads, 4) : 0;
+    int nh = Bindings_Active() ? Bindings_Heads(heads, 4) : 0;
     for (int i = 0; wide && nh && HeadRow(heads[0], rows, n) < 0 && i < n; i++) {
         if (heads[0].x0 >= rows[i].x0 && heads[0].x0 <= rows[i].x1 && rows[i].y0 > heads[0].y1) {
             if (heads[0].x0 != rows[i].x0 + 16)
@@ -402,17 +402,17 @@ static void Check(std::vector<std::string> *found) {
 // One step is one frame, as a script line followed by `wait 1` would be.
 // draw: false for frames nothing looks at (a long wait); the next frame draws.
 static void Frame(bool draw = true) {
-    Engine_BeginFrame();
-    Trace_SetFrame(Engine_Frame());
+    Host_BeginFrame();
+    Trace_SetFrame(Host_Frame());
     Menu_Update();
     if (draw) {
         Menu_Draw();
-        Engine_Present();
+        Host_Present();
     }
 }
 
 
-// The groups' first actions (controls.cpp kActions), where the binding walk tries keys.
+// The groups' first actions (bindings.cpp kActions), where the binding walk tries keys.
 static const char *kGroupFirst[] = {"Forward", "Behaviour action", "Normal", "Weapon 1", "Penguin", "Recentre", "Game menu"};
 
 static bool EndsWith(const std::string &s, const char *tail) {
@@ -437,10 +437,10 @@ struct Walker {
     // Menu_Reset takes it as Modern's (2026-11-11: from the first walk that chose Classic,
     // every later walk of a --size 1920x1080 run ran at 640x480).
     void Start() {
-        if (Engine_PhysW() != physW || Engine_PhysH() != physH)
-            Engine_SetScreen(physW, physH, false);
-        if (Engine_Fullscreen())
-            Engine_SetFullscreen(false);
+        if (Host_PhysW() != physW || Host_PhysH() != physH)
+            Host_SetScreen(physW, physH, false);
+        if (Host_Fullscreen())
+            Host_SetFullscreen(false);
         Menu_Reset();
         for (size_t s = 0; s < switches.size(); s++)
             Menu_SetSwitch(switches[s].name.c_str(), switches[s].value);
@@ -483,30 +483,30 @@ struct Walker {
     }
     void Key(const char *name, int count = 1) {
         UiKey k;
-        Engine_KeyByName(name, &k);
+        Host_KeyByName(name, &k);
         for (int i = 0; i < count; i++) {
             path.push_back(std::string("key ") + name);
-            Engine_Inject(k);
+            Host_Inject(k);
             Frame();
         }
     }
     void Press(const char *raw) {
         path.push_back(std::string("press ") + raw);
-        Engine_InjectRaw(raw);
+        Host_InjectRaw(raw);
         Frame();
     }
     // A pad button, as a pad-only player presses it: the raw press and its fixed menu key.
     void Pad(const char *name, int count = 1) {
         for (int i = 0; i < count; i++) {
             path.push_back(std::string("pad ") + name);
-            Engine_InjectPad(name);
+            Host_InjectPad(name);
             Frame();
         }
     }
     // A key's name as the voice says it ("<J>").
     static std::string Said(const char *name) {
         char out[48];
-        Controls_SaidKey(name, out, sizeof out);
+        Bindings_SaidKey(name, out, sizeof out);
         return out;
     }
     void Wait(int frames) {
@@ -541,23 +541,23 @@ struct Walker {
             *depth = d;
         return buf;
     }
-    int ControlsDepth() const {
+    int BindingsDepth() const {
         char buf[200];
-        return Controls_Active() ? Controls_Where(buf, sizeof buf) : 0;
+        return Bindings_Active() ? Bindings_Where(buf, sizeof buf) : 0;
     }
-    bool InActions() const { return ControlsDepth() == 2; }
-    std::string ControlsWhere() const {
+    bool InActions() const { return BindingsDepth() == 2; }
+    std::string BindingsWhere() const {
         char buf[200] = "";
-        if (Controls_Active())
-            Controls_Where(buf, sizeof buf);
+        if (Bindings_Active())
+            Bindings_Where(buf, sizeof buf);
         return buf;
     }
-    bool Waiting() const { return ControlsWhere().find("| waiting") != std::string::npos; }
-    bool Asking() const { return ControlsWhere().find("| asking") != std::string::npos; }
+    bool Waiting() const { return BindingsWhere().find("| waiting") != std::string::npos; }
+    bool Asking() const { return BindingsWhere().find("| asking") != std::string::npos; }
     // The chip under the cursor, from the last frame drawn.
     bool CursorChip(ChipView *out) const {
         ChipView c[32];
-        int n = Controls_Active() ? Controls_Chips(c, 32) : 0;
+        int n = Bindings_Active() ? Bindings_Chips(c, 32) : 0;
         for (int i = 0; i < n; i++) {
             if (!strcmp(c[i].fill, "cursor") || !strcmp(c[i].fill, "waiting")) {
                 *out = c[i];
@@ -576,7 +576,7 @@ struct Walker {
     }
     static bool Clashes(const char *action) {
         ConflictView cv[128];
-        int n = Controls_Conflicts(cv, 128);
+        int n = Bindings_Conflicts(cv, 128);
         for (int i = 0; i < n; i++)
             if (!strcmp(cv[i].action, action))
                 return true;
@@ -661,12 +661,12 @@ struct Walker {
     }
 
     // The More options table: every row.
-    void ExperimentalPage() {
+    void MoreOptionsPage() {
         if (!Wanted(kExpPage))
             return;
         Open(kExpPage);
         Check(kExpPage);
-        for (int i = 0; i < Exp_Count(); i++) {
+        for (int i = 0; i < MoreOptions_Count(); i++) {
             Key("down");
             Check();
         }
@@ -712,8 +712,8 @@ struct Walker {
             return true;
         }
         Check();  // the screen Enter opened
-        // The Experimental page has its own walk (experimental:), Down there stops at the ends.
-        bool leaf = EndsWith(opened, "| confirm") || EndsWith(opened, "| waiting") || Exp_Active();
+        // More options has its own walk (experimental:), Down there stops at the ends.
+        bool leaf = EndsWith(opened, "| confirm") || EndsWith(opened, "| waiting") || MoreOptions_Active();
         if (!leaf && depth < 6 && !Explore(depth + 1, reached))
             return false;
         Key("esc");
@@ -952,9 +952,9 @@ struct Walker {
         OpenToo("Keys and buttons");
         Key("enter");
         char bound[32], key1[32];
-        Controls_Binding("Forward", 0, key1, sizeof key1);
+        Bindings_Text("Forward", 0, key1, sizeof key1);
         Key("del");
-        Controls_Binding("Forward", 0, bound, sizeof bound);
+        Bindings_Text("Forward", 0, bound, sizeof bound);
         if (!Expect(key1[0] && !bound[0], Fmt("preset: Del on Forward's Key 1 leaves %s", Repr(bound).c_str())))
             return;
         OpenToo("Advanced and reset");
@@ -990,7 +990,7 @@ struct Walker {
             return;
         Check("Advanced and reset");  // its help names what it puts back, in one window
         Expect(Ui_Lang() == lang, Fmt("preset: Reset settings changes Text from %d to %d", lang, Ui_Lang()));
-        Controls_Binding("Forward", 0, bound, sizeof bound);
+        Bindings_Text("Forward", 0, bound, sizeof bound);
         Expect(!strcmp(bound, key1), Fmt("preset: Reset settings leaves Forward's Key 1 at %s, not %s",
                                          Repr(bound).c_str(), Repr(key1).c_str()));
         OpenToo(page);
@@ -1011,7 +1011,7 @@ struct Walker {
         Expect(Menu_PresetLabel() == pMine, Fmt("preset: Undo reset after a reset leaves the preset row at %s, not %s",
                                                 Repr(Menu_PresetLabel()).c_str(), Repr(pMine.c_str()).c_str()));
         Expect(!RowDrawn("Undo reset"), "preset: Undo reset stays after it put the settings back");
-        Controls_Binding("Forward", 0, bound, sizeof bound);
+        Bindings_Text("Forward", 0, bound, sizeof bound);
         Expect(!bound[0], Fmt("preset: Undo reset leaves Forward's Key 1 at %s, not cleared", Repr(bound).c_str()));
         OpenToo(page);
         if (!MoveTo(setting))
@@ -1031,12 +1031,12 @@ struct Walker {
         return Expect(!strcmp(Menu_PageName(), page), Fmt("experimental: open %s lands on %s", page,
                                                           Repr(Menu_PageName()).c_str()));
     }
-    void ExpRow() {
-        std::string name = Exp_CursorName(), v0 = Exp_CursorValue();
+    void MoreOptionsRow() {
+        std::string name = MoreOptions_CursorName(), v0 = MoreOptions_CursorValue();
         Key("right");
-        std::string v1 = Exp_CursorValue();
+        std::string v1 = MoreOptions_CursorValue();
         Key("left");
-        std::string v2 = Exp_CursorValue();
+        std::string v2 = MoreOptions_CursorValue();
         if (v1 != v0) {
             if (!Expect(v2 == v0, Fmt("experimental: Right then Left leaves %s at %s, not %s", name.c_str(),
                                       Repr(v2.c_str()).c_str(), Repr(v0.c_str()).c_str())))
@@ -1046,26 +1046,26 @@ struct Walker {
             if (!Expect(v2 != v0, Fmt("experimental: neither Left nor Right changes %s", name.c_str())))
                 return;
             Key("right");
-            if (!Expect(Exp_CursorValue() == v0, Fmt("experimental: Left then Right leaves %s at %s, not %s", name.c_str(),
-                                                     Repr(Exp_CursorValue()).c_str(), Repr(v0.c_str()).c_str())))
+            if (!Expect(MoreOptions_CursorValue() == v0, Fmt("experimental: Left then Right leaves %s at %s, not %s", name.c_str(),
+                                                     Repr(MoreOptions_CursorValue()).c_str(), Repr(v0.c_str()).c_str())))
                 return;
             Key("left");
         }
         // Moved off the default now (a fresh page has every value at it): a tuning value marks
         // the preset changed, a player's setting (mouse, pad, filters, From 1997) does not.
         // Del puts it back.
-        const bool marks = Exp_CursorPresetsSet();
+        const bool marks = MoreOptions_CursorPresetsSet();
         const bool changed = std::string(Menu_PresetLabel()).find(", changed") != std::string::npos;
         Expect(changed == marks, marks ? Fmt("experimental: %s changed leaves the preset row at %s", name.c_str(),
                                              Repr(Menu_PresetLabel()).c_str())
                                        : Fmt("experimental: %s, a player's setting, changed makes the preset row %s",
                                              name.c_str(), Repr(Menu_PresetLabel()).c_str()));
         Key("del");
-        Expect(Exp_CursorValue() == v0, Fmt("experimental: Del leaves %s at %s, not its default %s", name.c_str(),
-                                            Repr(Exp_CursorValue()).c_str(), Repr(v0.c_str()).c_str()));
+        Expect(MoreOptions_CursorValue() == v0, Fmt("experimental: Del leaves %s at %s, not its default %s", name.c_str(),
+                                            Repr(MoreOptions_CursorValue()).c_str(), Repr(v0.c_str()).c_str()));
     }
 
-    void Experimental() {
+    void MoreOptions() {
         if (!Wanted(kExpPage))
             return;
         const char *row = "More options";
@@ -1078,7 +1078,7 @@ struct Walker {
         std::string here = Where(&d0);
         Key("enter");
         Where(&d1);
-        if (!Expect(Exp_Active() && d1 == d0 + 1, "experimental: Enter on the row does not open the page"))
+        if (!Expect(MoreOptions_Active() && d1 == d0 + 1, "experimental: Enter on the row does not open the page"))
             return;
         Check(kExpPage);
         Key("esc");
@@ -1088,37 +1088,37 @@ struct Walker {
 
         // Every row.
         Fresh(kExpPage);
-        std::string first = Exp_CursorName();
+        std::string first = MoreOptions_CursorName();
         for (size_t g = 0; g < sizeof kExpGroups / sizeof kExpGroups[0]; g++) {
             for (int r = 0; r < kExpGroups[g]; r++) {
-                ExpRow();
+                MoreOptionsRow();
                 // The table's voice says the help of the row's own group (2026-11-11: it
                 // stayed on the first group's all the way down).
-                Expect(Voice() == Menu_Tr(Exp_CursorGroupHelp()),
-                       Fmt("experimental: on %s the voice says %s", Exp_CursorName(), Repr(Voice().c_str()).c_str()));
+                Expect(Voice() == Menu_Tr(MoreOptions_CursorGroupHelp()),
+                       Fmt("experimental: on %s the voice says %s", MoreOptions_CursorName(), Repr(Voice().c_str()).c_str()));
                 Key("down");
             }
         }
-        if (!Expect(Exp_CursorName() == first, Fmt("experimental: Down does not come back round to %s (on %s)",
-                                                   first.c_str(), Exp_CursorName())))
+        if (!Expect(MoreOptions_CursorName() == first, Fmt("experimental: Down does not come back round to %s (on %s)",
+                                                   first.c_str(), MoreOptions_CursorName())))
             return;
 
         // The ends, a window at a time.
         Key("pgdn");
-        std::string one = Exp_CursorName();
-        Expect(one != first && Where().find(Exp_Name(1)) == std::string::npos,
+        std::string one = MoreOptions_CursorName();
+        Expect(one != first && Where().find(MoreOptions_Name(1)) == std::string::npos,
                Fmt("experimental: Page Down moves to %s, not a window on", one.c_str()));
         Key("pgdn", 10);
-        Expect(!strcmp(Exp_CursorName(), Exp_Name(Exp_Count() - 1)),
-               Fmt("experimental: Page Down stops at %s, not the last row", Exp_CursorName()));
+        Expect(!strcmp(MoreOptions_CursorName(), MoreOptions_Name(MoreOptions_Count() - 1)),
+               Fmt("experimental: Page Down stops at %s, not the last row", MoreOptions_CursorName()));
         Key("pgup", 10);
-        Expect(Exp_CursorName() == first, Fmt("experimental: Page Up stops at %s, not the first row", Exp_CursorName()));
+        Expect(MoreOptions_CursorName() == first, Fmt("experimental: Page Up stops at %s, not the first row", MoreOptions_CursorName()));
 
         // Presets: changed, Modern, Undo preset.
         Fresh(kExpPage);
-        std::string v0 = Exp_CursorValue(), name = Exp_CursorName();
+        std::string v0 = MoreOptions_CursorValue(), name = MoreOptions_CursorName();
         Key("right");
-        std::string v1 = Exp_CursorValue();
+        std::string v1 = MoreOptions_CursorValue();
         LeaveExp();
         if (!OpenAgain("Preset") || !MoveTo("Modern"))
             return;
@@ -1131,8 +1131,8 @@ struct Walker {
                Fmt("experimental: Undo preset does not name %s: %s", name.c_str(), Repr(Voice().c_str()).c_str()));
         if (!OpenAgain(kExpPage))
             return;
-        if (!Expect(Exp_CursorValue() == v0, Fmt("experimental: Modern leaves %s at %s, not %s", name.c_str(),
-                                                 Repr(Exp_CursorValue()).c_str(), Repr(v0.c_str()).c_str())))
+        if (!Expect(MoreOptions_CursorValue() == v0, Fmt("experimental: Modern leaves %s at %s, not %s", name.c_str(),
+                                                 Repr(MoreOptions_CursorValue()).c_str(), Repr(v0.c_str()).c_str())))
             return;
         LeaveExp();
         if (!OpenAgain("Preset") || !MoveTo("Undo preset"))
@@ -1140,8 +1140,8 @@ struct Walker {
         Key("enter");
         if (!OpenAgain(kExpPage))
             return;
-        if (!Expect(Exp_CursorValue() == v1, Fmt("experimental: Undo preset leaves %s at %s, not %s", name.c_str(),
-                                                 Repr(Exp_CursorValue()).c_str(), Repr(v1.c_str()).c_str())))
+        if (!Expect(MoreOptions_CursorValue() == v1, Fmt("experimental: Undo preset leaves %s at %s, not %s", name.c_str(),
+                                                 Repr(MoreOptions_CursorValue()).c_str(), Repr(v1.c_str()).c_str())))
             return;
 
         // Reset settings, and its undo.
@@ -1165,17 +1165,17 @@ struct Walker {
         Key("enter");
         if (!OpenAgain(kExpPage))
             return;
-        Expect(Exp_CursorValue() == v1, Fmt("experimental: Undo reset after a reset leaves %s at %s, not %s",
-                                             name.c_str(), Repr(Exp_CursorValue()).c_str(), Repr(v1.c_str()).c_str()));
+        Expect(MoreOptions_CursorValue() == v1, Fmt("experimental: Undo reset after a reset leaves %s at %s, not %s",
+                                             name.c_str(), Repr(MoreOptions_CursorValue()).c_str(), Repr(v1.c_str()).c_str()));
 
         // A player's setting (the last row, From 1997's Reverse stereo): a preset leaves it.
         Fresh(kExpPage);
         Key("pgdn", 10);
-        std::string mineName = Exp_CursorName();
-        if (!Expect(!Exp_CursorPresetsSet(), Fmt("experimental: %s, the last row, is a tuning value", mineName.c_str())))
+        std::string mineName = MoreOptions_CursorName();
+        if (!Expect(!MoreOptions_CursorPresetsSet(), Fmt("experimental: %s, the last row, is a tuning value", mineName.c_str())))
             return;
         Key("right");
-        std::string mine = Exp_CursorValue();
+        std::string mine = MoreOptions_CursorValue();
         LeaveExp();
         if (!OpenAgain("Preset") || !MoveTo("Classic"))
             return;
@@ -1185,8 +1185,8 @@ struct Walker {
         if (!OpenAgain(kExpPage))
             return;
         Key("pgdn", 10);
-        Expect(Exp_CursorValue() == mine, Fmt("experimental: Classic puts %s, a player's setting, from %s to %s",
-                                              mineName.c_str(), Repr(mine.c_str()).c_str(), Repr(Exp_CursorValue()).c_str()));
+        Expect(MoreOptions_CursorValue() == mine, Fmt("experimental: Classic puts %s, a player's setting, from %s to %s",
+                                              mineName.c_str(), Repr(mine.c_str()).c_str(), Repr(MoreOptions_CursorValue()).c_str()));
     }
 
     // console: the Console row shows the version; Enter opens the full console after a key and
@@ -1249,8 +1249,8 @@ struct Walker {
         ToChip(device, group, column);
         std::string before = ChipText();
         char start[32], said[32];
-        Controls_Binding("Game menu", 2, start, sizeof start);
-        Controls_StartSaid(said, sizeof said);
+        Bindings_Text("Game menu", 2, start, sizeof start);
+        Bindings_StartSaid(said, sizeof said);
         if (pad && !strcmp(kGroupFirst[group], "Game menu")) {
             // Start always opens the game menu: Enter does not wait and Del leaves it, and the
             // voice says why.
@@ -1294,16 +1294,16 @@ struct Walker {
 
         const char *partner = pad ? "Talk and search" : "Jetpack";
         char want[32];
-        Controls_Binding(partner, pad ? 2 : 0, want, sizeof want);
+        Bindings_Text(partner, pad ? 2 : 0, want, sizeof want);
         // A key another action has asks first, as Options' questions do: the voice names
         // the action that has it, the answers take the actions' place, No first, and Esc
         // keeps both as they were.
         std::string kept = ChipText();
         Key("enter");
         Press(pad ? "pad:a" : "J");
-        if (!Expect(Asking() && EndsWith(ControlsWhere(), "| No"),
+        if (!Expect(Asking() && EndsWith(BindingsWhere(), "| No"),
                     Fmt("bind: %s, another action's, did not ask on No first (%s)", Repr(want).c_str(),
-                        Repr(ControlsWhere().c_str()).c_str())))
+                        Repr(BindingsWhere().c_str()).c_str())))
             return;
         Check();
         std::string q = Voice();
@@ -1314,7 +1314,7 @@ struct Walker {
                "bind: the question's answers are not drawn");
         Key("esc");
         char still[32];
-        Controls_Binding(partner, pad ? 2 : 0, still, sizeof still);
+        Bindings_Text(partner, pad ? 2 : 0, still, sizeof still);
         if (!Expect(!Asking() && InActions() && ChipText() == kept && !strcmp(still, want) && !Clashes(partner),
                     Fmt("bind: Esc on the question changed something (chip %s, %s has %s)", Repr(ChipText().c_str()).c_str(),
                         partner, Repr(still).c_str())))
@@ -1337,11 +1337,11 @@ struct Walker {
         // Forward's Key 2 put in Key 1 leaves Key 2 empty, and no clash with itself.
         ToChip(0, 0, 0);
         char key2[32];
-        Controls_Binding("Forward", 1, key2, sizeof key2);
+        Bindings_Text("Forward", 1, key2, sizeof key2);
         std::string k2 = key2;
         Key("enter");
         Press("Keypad 8");
-        Controls_Binding("Forward", 1, key2, sizeof key2);
+        Bindings_Text("Forward", 1, key2, sizeof key2);
         if (Expect(k2 == "Num 8" && ChipText() == "Num 8" && !key2[0],
                    Fmt("bind: Num 8 moved to Forward's Key 1 leaves Key 1 %s, Key 2 %s", Repr(ChipText().c_str()).c_str(),
                        Repr(key2).c_str())))
@@ -1365,7 +1365,7 @@ struct Walker {
         ToChip(0, 0, 0);
         std::string mine = ChipText();
         char theirs[32];
-        Controls_Binding("Jetpack", 0, theirs, sizeof theirs);
+        Bindings_Text("Jetpack", 0, theirs, sizeof theirs);
         std::string j = theirs;
         Key("enter");
         Press("J");
@@ -1379,7 +1379,7 @@ struct Walker {
         Expect(RowDrawn(yes.c_str()), Fmt("swap: no %s answer (Yes reads %s)", Repr(yes.c_str()).c_str(),
                                           Repr(RowStarting("Yes, ").c_str()).c_str()));
         Key("enter");  // on No
-        Controls_Binding("Jetpack", 0, theirs, sizeof theirs);
+        Bindings_Text("Jetpack", 0, theirs, sizeof theirs);
         if (!Expect(!Asking() && ChipText() == mine && theirs == j,
                     Fmt("swap: No left Forward %s and Jetpack %s", Repr(ChipText().c_str()).c_str(), Repr(theirs).c_str())))
             return;
@@ -1387,7 +1387,7 @@ struct Walker {
         Press("J");
         Key("down");
         Key("enter");
-        Controls_Binding("Jetpack", 0, theirs, sizeof theirs);
+        Bindings_Text("Jetpack", 0, theirs, sizeof theirs);
         if (!Expect(!Asking() && ChipText() == j && theirs == mine && !ChipRed() && !Clashes("Jetpack"),
                     Fmt("swap: after Yes Forward has %s and Jetpack %s (want %s and %s)", Repr(ChipText().c_str()).c_str(),
                         Repr(theirs).c_str(), Repr(j.c_str()).c_str(), Repr(mine.c_str()).c_str())))
@@ -1396,7 +1396,7 @@ struct Walker {
         Press(mine == "Num 8" ? "Keypad 8" : "Up");
         Key("down");
         Key("enter");
-        Controls_Binding("Jetpack", 0, theirs, sizeof theirs);
+        Bindings_Text("Jetpack", 0, theirs, sizeof theirs);
         Expect(ChipText() == mine && theirs == j,
                Fmt("swap: swapping back left Forward %s and Jetpack %s", Repr(ChipText().c_str()).c_str(), Repr(theirs).c_str()));
 
@@ -1419,14 +1419,14 @@ struct Walker {
             return;
         Fresh("Keys and buttons");
         char start[32];
-        Controls_Binding("Game menu", 2, start, sizeof start);
+        Bindings_Text("Game menu", 2, start, sizeof start);
         Pad("back");
         const int groups = (int)(sizeof kGroupFirst / sizeof kGroupFirst[0]);
         for (int g = 0; g < groups; g++) {
             Pad("dpad-down", g ? 1 : 0);
             Pad("a");
             for (int r = 0; r < kGroupSizes[g]; r++) {
-                std::string where = ControlsWhere(), before = ChipText();
+                std::string where = BindingsWhere(), before = ChipText();
                 bool fixed = where.find("| Game menu |") != std::string::npos;
                 if (!Expect(where.find("Gamepad") != std::string::npos,
                             Fmt("padonly: Back did not switch to the Gamepad view (%s)", Repr(where.c_str()).c_str())))
@@ -1450,13 +1450,13 @@ struct Walker {
             Pad("b");
         }
         char now[32];
-        Controls_Binding("Game menu", 2, now, sizeof now);
+        Bindings_Text("Game menu", 2, now, sizeof now);
         Expect(!strcmp(now, start), Fmt("padonly: every pad binding cleared leaves Game menu %s, not %s", Repr(now).c_str(), Repr(start).c_str()));
         Pad("b");
-        if (!Expect(!Controls_Active(), "padonly: B does not leave Keys and buttons with every pad binding cleared"))
+        if (!Expect(!Bindings_Active(), "padonly: B does not leave Keys and buttons with every pad binding cleared"))
             return;
         Pad("a");
-        Expect(Controls_Active(), "padonly: A does not reopen Keys and buttons with every pad binding cleared");
+        Expect(Bindings_Active(), "padonly: A does not reopen Keys and buttons with every pad binding cleared");
     }
 
     void Behaviour() {
@@ -1466,7 +1466,7 @@ struct Walker {
         Wake();
         Presets();
         UndoPreset();
-        Experimental();
+        MoreOptions();
         Console();
         Binding();
         PadOnly();
@@ -1529,12 +1529,12 @@ struct Walker {
         if (Wanted("Keys and buttons")) {
             Menu_SetSwitch("keyboard", 0);
             Fresh("Keys and buttons");
-            std::string where = ControlsWhere(), l = Menu_Legend();
+            std::string where = BindingsWhere(), l = Menu_Legend();
             Expect(where.find("Gamepad") == 0, Fmt("device: with no keyboard Keys and buttons opens on %s", Repr(where.c_str()).c_str()));
             Expect(l.find("Tab") == std::string::npos && l.find("Keyboard") == std::string::npos,
                    Fmt("device: with no keyboard the legend reads %s", Repr(l.c_str()).c_str()));
             Key("tab");
-            where = ControlsWhere();
+            where = BindingsWhere();
             Expect(where.find("Gamepad") == 0, Fmt("device: with no keyboard Tab switched to %s", Repr(where.c_str()).c_str()));
             Menu_SetSwitch("keyboard", 1);
         }
@@ -1554,12 +1554,12 @@ int Selftest_Run(const SelftestOptions &opt, const char *self) {
     if (specs.empty())
         specs.assign(kCombos, kCombos + sizeof kCombos / sizeof kCombos[0]);
 
-    Engine_SetPixels(false);
+    Host_SetPixels(false);
     Walker w;
     w.opt = &opt;
-    w.size = Fmt("%ux%u", (unsigned)Engine_PhysW(), (unsigned)Engine_PhysH());
-    w.physW = Engine_PhysW();
-    w.physH = Engine_PhysH();
+    w.size = Fmt("%ux%u", (unsigned)Host_PhysW(), (unsigned)Host_PhysH());
+    w.physW = Host_PhysW();
+    w.physH = Host_PhysH();
     w.checks = 0;
     Ui_ClearMissed();
     // Every walk in every Text language (2026-11-12): the whole menu is drawn in it, so
@@ -1584,7 +1584,7 @@ int Selftest_Run(const SelftestOptions &opt, const char *self) {
         w.Start();
         w.Controls();
         w.Pages();
-        w.ExperimentalPage();
+        w.MoreOptionsPage();
         if (!opt.layoutOnly)
             w.Behaviour();
     }

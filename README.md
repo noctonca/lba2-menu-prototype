@@ -14,7 +14,7 @@ Settings are fakes held in memory. Nothing here writes `lba2.cfg`.
   palette, font, HQR and disc-image reading, polygon fill).
 - `SOURCES/PLASMA.CPP`, `FIRE.CPP` and `ANIMTEX.CPP` are compiled straight from
   the submodule for the menu plasma.
-- `src/cadre.cpp` copies the game-layer drawing helpers this needs
+- `src/game_pieces.cpp` copies the game-layer drawing helpers this needs
   (`DrawCadre`, `BackupAngles`/`RestoreAngles`, `ShadeBoxBlk`, `DrawFireBar`)
   and names where each came from.
 - `assets/fonts/` holds Zilla Slab Bold (SIL Open Font License,
@@ -206,7 +206,7 @@ words in `lang/menu.tsv`, a column per language, looked up by their English.
 legend's Back apart from the walking-backwards action. Key names, numbers and
 More options' tuning rows stay as they are. The translations are stand-ins,
 made to measure lengths, not reviewed by native speakers. After editing either
-file run `tools/lang.py`, which writes `src/lang_table.inc` and
+file run `tools/lang.py`, which writes `src/lang_help.inc` and
 `src/lang_menu.inc` in the game font's code page (CP850). The self test runs
 every walk in every language, checks every voice text in both fonts against
 its window, and reports any drawn text that `lang/menu.tsv` lacks and any
@@ -281,7 +281,7 @@ is the place (the menu, Advanced options, a page), settings are the values
 chosen there (Reset settings).
 
 The settings tables have no field saying which rows are experimental yet; the plan's ring field would give it, and the hand list in
-`experimental.cpp` stands in for it.
+`more_options.cpp` stands in for it.
 
 A fifth group, From 1997, holds three rows the 1997 Options had for the
 machines of the day: Detail level (each step down takes away animated water,

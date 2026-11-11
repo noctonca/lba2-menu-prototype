@@ -1,6 +1,6 @@
 #include "trace.h"
 
-#include "engine.h"
+#include "host.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -26,7 +26,7 @@ void Trace(const char *fmt, ...) {
     va_start(ap, fmt);
     vsnprintf(msg, sizeof msg, fmt, ap);
     va_end(ap);
-    unsigned t = (unsigned)Engine_TimeMs();
+    unsigned t = (unsigned)Host_TimeMs();
     if (!s_quiet)
         fprintf(stderr, "trace t=%u f=%u %s\n", t, s_frame, msg);
     if (s_file) {

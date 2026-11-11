@@ -3,7 +3,7 @@
 #include <string.h>
 
 static const char *const kTable[][LANG_COUNT] = {
-#include "lang_table.inc"
+#include "lang_help.inc"
 };
 static const int kCount = (int)(sizeof kTable / sizeof kTable[0]);
 

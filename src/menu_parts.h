@@ -1,4 +1,4 @@
-// What menu.cpp shares with the pages drawn in their own files (controls.cpp).
+// What menu.cpp shares with the pages drawn in their own files (bindings.cpp).
 #pragma once
 
 #include "ui.h"

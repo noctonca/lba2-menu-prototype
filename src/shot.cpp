@@ -2,7 +2,7 @@
 // Uncompressed deflate blocks, so no zlib.
 #include "shot.h"
 
-#include "engine.h"
+#include "host.h"
 
 #include <SVGA/SCREEN.H>
 
@@ -56,7 +56,7 @@ bool Shot_Write(const char *path, const unsigned char *palette, int scale) {
         CrcInit();
     if (scale < 1)
         scale = 1;
-    const unsigned w = Engine_LogicalW() * scale, h = Engine_LogicalH() * scale;
+    const unsigned w = Host_LogicalW() * scale, h = Host_LogicalH() * scale;
     const size_t rowLen = 1 + (size_t)w * 3;
     const size_t raw = rowLen * h;
     unsigned char *img = (unsigned char *)malloc(raw);

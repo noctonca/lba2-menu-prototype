@@ -1,5 +1,5 @@
 // The menu in the Text language, looked up by its English text: the voice (help,
-// questions, messages) in lang/help.tsv (src/lang_table.inc), and what is drawn in the
+// questions, messages) in lang/help.tsv (src/lang_help.inc), and what is drawn in the
 // game font (labels, values, titles, answers) and the legend's words in lang/menu.tsv
 // (src/lang_menu.inc). More options' tuning rows stay English.
 #pragma once

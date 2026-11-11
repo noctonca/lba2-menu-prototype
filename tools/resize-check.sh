@@ -34,7 +34,7 @@ for page in "${PAGES[@]}"; do
     for start in "${STARTS[@]}"; do
         for target in "${TARGETS[@]}"; do
             # A page's one-column cursor counts its Return row; wide's does not.
-            # Controls and Experimental keep their own cursors, without it.
+            # Keys and buttons and More options keep their own cursors, without it.
             case "$page" in
             "Keys and buttons" | "More options") downs=2 ;;
             *) downs=$((2 - COL[$start] + COL[$target])) ;;

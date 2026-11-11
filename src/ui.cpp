@@ -1,8 +1,8 @@
 #include "ui.h"
 
-#include "cadre.h"
-#include "engine.h"
-#include "vfont.h"
+#include "game_pieces.h"
+#include "host.h"
+#include "screen_font.h"
 
 #include <SVGA/BOX.H>
 #include <SVGA/CLIP.H>
@@ -22,25 +22,25 @@
 extern "C" U8 Font8x8[256 * 8];
 
 void Ui_RowBackground(S32 x0, S32 y0, S32 x1, S32 y1, RowFill fill) {
-    Cadre_BackupCorners(x0, y0, x1, y1);
+    GamePieces_BackupCorners(x0, y0, x1, y1);
     switch (fill) {
     case FILL_CURSOR:
-        Cadre_FireBar(x0, y0, x1, y1, PLASMA_CURSOR);
+        GamePieces_FireBar(x0, y0, x1, y1, PLASMA_CURSOR);
         break;
     case FILL_CURRENT:
-        Cadre_FireBar(x0, y0, x1, y1, PLASMA_CURRENT);
+        GamePieces_FireBar(x0, y0, x1, y1, PLASMA_CURRENT);
         break;
     default:
-        Cadre_Shade(x0, y0, x1, y1, MENU_SHADE_LVL);
+        GamePieces_Shade(x0, y0, x1, y1, MENU_SHADE_LVL);
         break;
     }
-    Cadre_Frame(x0, y0, x1, y1);
+    GamePieces_Frame(x0, y0, x1, y1);
 }
 
 void Ui_Panel(S32 x0, S32 y0, S32 x1, S32 y1, S32 level) {
-    Cadre_BackupCorners(x0, y0, x1, y1);
-    Cadre_Shade(x0, y0, x1, y1, level);
-    Cadre_Frame(x0, y0, x1, y1);
+    GamePieces_BackupCorners(x0, y0, x1, y1);
+    GamePieces_Shade(x0, y0, x1, y1, level);
+    GamePieces_Frame(x0, y0, x1, y1);
 }
 
 // The game-font texts are drawn and measured in the Text language: one place, so every
@@ -91,17 +91,17 @@ const char *Ui_Tr(const char *s) {
 const std::set<std::string> &Ui_Missed() { return s_missed; }
 void Ui_ClearMissed() { s_missed.clear(); }
 
-S32 Ui_TextWidthAsIs(const char *s) { return VFont_On() ? VFont_Width(s) : SizeFont((char *)s); }
+S32 Ui_TextWidthAsIs(const char *s) { return ScreenFont_On() ? ScreenFont_Width(s) : SizeFont((char *)s); }
 
 S32 Ui_TextInkWidthAsIs(const char *s) {
-    if (VFont_On())
-        return VFont_InkWidth(s);
+    if (ScreenFont_On())
+        return ScreenFont_InkWidth(s);
     return s[0] ? SizeFont((char *)s) - InterLeave : 0;
 }
 
 void Ui_TextAsIs(S32 x, S32 y, const char *s, U8 colour) {
-    if (VFont_On()) {
-        VFont_Text(x, y, s, colour);
+    if (ScreenFont_On()) {
+        ScreenFont_Text(x, y, s, colour);
         return;
     }
     ColorFont(colour);
@@ -126,10 +126,10 @@ S32 Ui_TextInRoom(S32 x, S32 right, S32 y, const char *s, U8 colour, bool swing)
     if (swing) {
         if (strcmp(s, s_swingText) != 0) {
             snprintf(s_swingText, sizeof s_swingText, "%s", s);
-            s_swingStart = Engine_TimeMs();
+            s_swingStart = Host_TimeMs();
         }
         S32 travel = w - room;
-        S32 d = (S32)((Engine_TimeMs() - s_swingStart) * SWING_PX_PER_S / 1000) % (2 * travel);
+        S32 d = (S32)((Host_TimeMs() - s_swingStart) * SWING_PX_PER_S / 1000) % (2 * travel);
         off = d <= travel ? -d : -(2 * travel - d);
     }
     MemoClip();
@@ -183,9 +183,9 @@ void Ui_Steps(S32 xRight, S32 yc, S32 count, S32 lit, S32 *outLeft) {
         S32 x0 = x + i * (w + gap), y0 = yc - h / 2;
         S32 x1 = x0 + w - 1, y1 = y0 + h - 1;
         if (i < lit)  // GAMEMENU.CPP: the slider plasma, as the 1997 slider fill
-            Cadre_FireBar(x0 + 1, y0 + 1, x1 - 1, y1 - 1, PLASMA_SLIDER);
+            GamePieces_FireBar(x0 + 1, y0 + 1, x1 - 1, y1 - 1, PLASMA_SLIDER);
         else
-            Cadre_Shade(x0 + 1, y0 + 1, x1 - 1, y1 - 1, 4);
+            GamePieces_Shade(x0 + 1, y0 + 1, x1 - 1, y1 - 1, 4);
         Line(x0, y0, x1, y0, COUL_UP_BLUE);
         Line(x0, y0, x0, y1, COUL_UP_BLUE);
         Line(x1, y0 + 1, x1, y1, COUL_DOWN_BLUE);
@@ -229,9 +229,9 @@ S32 Ui_Chip(S32 x, S32 y, const char *key, S32 scale, bool lit) {
     S32 w = Ui_ChipWidth(key, scale), h = 8 * scale + 4 * scale;
     S32 x1 = x + w - 1, y1 = y + h - 1;
     if (lit)
-        Cadre_FireBar(x + 1, y + 1, x1 - 1, y1 - 1, PLASMA_CURRENT);
+        GamePieces_FireBar(x + 1, y + 1, x1 - 1, y1 - 1, PLASMA_CURRENT);
     else
-        Cadre_Shade(x + 1, y + 1, x1 - 1, y1 - 1, MENU_SHADE_LVL);
+        GamePieces_Shade(x + 1, y + 1, x1 - 1, y1 - 1, MENU_SHADE_LVL);
     Line(x, y, x1, y, COUL_UP_BLUE);
     Line(x, y, x, y1, COUL_UP_BLUE);
     Line(x1, y + 1, x1, y1, COUL_DOWN_BLUE);
@@ -248,11 +248,11 @@ bool Ui_KeyChip(S32 x, S32 y, S32 w, const char *name, S32 scale, ChipFill fill,
     S32 h = Ui_KeyChipHeight(scale);
     S32 x1 = x + w - 1, y1 = y + h - 1;
     if (fill == CHIP_CURSOR)
-        Cadre_FireBar(x + 1, y + 1, x1 - 1, y1 - 1, PLASMA_CURSOR);
+        GamePieces_FireBar(x + 1, y + 1, x1 - 1, y1 - 1, PLASMA_CURSOR);
     else if (fill == CHIP_WAITING)
-        Cadre_FireBar(x + 1, y + 1, x1 - 1, y1 - 1, PLASMA_CURRENT);
+        GamePieces_FireBar(x + 1, y + 1, x1 - 1, y1 - 1, PLASMA_CURRENT);
     else
-        Cadre_Shade(x + 1, y + 1, x1 - 1, y1 - 1, MENU_SHADE_LVL);
+        GamePieces_Shade(x + 1, y + 1, x1 - 1, y1 - 1, MENU_SHADE_LVL);
     U8 up = red ? COUL_UP_RED : COUL_UP_BLUE, down = red ? COUL_DOWN_RED : COUL_DOWN_BLUE;
     Line(x, y, x1, y, up);
     Line(x, y, x, y1, up);
@@ -277,7 +277,7 @@ void Voice_Say(Voice &v, const char *text, bool typed) {
         return;
     strncpy(v.text, text, sizeof v.text - 1);
     v.text[sizeof v.text - 1] = 0;
-    v.start = Engine_TimeMs();
+    v.start = Host_TimeMs();
     v.typed = typed;
 }
 
@@ -353,7 +353,7 @@ S32 Voice_Draw(const Voice &v, S32 x0, S32 y0, S32 width, S32 maxLines, S32 *nee
     // Which window is showing, and since when: each is typed (when the voice types),
     // then held for its words, then the next begins. The last one stays.
     S32 pages = all > 0 ? (all + maxLines - 1) / maxLines : 1;
-    S32 elapsed = (S32)(Engine_TimeMs() - v.start);
+    S32 elapsed = (S32)(Host_TimeMs() - v.start);
     S32 page = 0;
     for (; page + 1 < pages; page++) {
         S32 first = page * maxLines;
@@ -391,10 +391,10 @@ S32 Voice_Draw(const Voice &v, S32 x0, S32 y0, S32 width, S32 maxLines, S32 *nee
             S32 age = shown - 1 - index;
             if (age > RAMP_STEPS - 1)
                 age = RAMP_STEPS - 1;
-            if (VFont_On()) {
+            if (ScreenFont_On()) {
                 if (c != ' ')
-                    VFont_Char(x + 2, y + 4, (U8)c, INK_BLACK);
-                x += VFont_Char(x, y, (U8)c, (U8)(DIALOGUE_HERO * 16 + age));
+                    ScreenFont_Char(x + 2, y + 4, (U8)c, INK_BLACK);
+                x += ScreenFont_Char(x, y, (U8)c, (U8)(DIALOGUE_HERO * 16 + age));
                 continue;
             }
             if (c != ' ') {

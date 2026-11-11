@@ -33,10 +33,10 @@ from concurrent.futures import ThreadPoolExecutor
 PAGES = ["Options", "Preset", "Language and interface", "Display and graphics", "Sound",
          "Controls and camera", "Advanced and reset"]
 
-# Actions per group on the Controls page (controls.cpp kActions).
+# Actions per group on the Controls page (bindings.cpp kActions).
 CONTROL_GROUPS = [5, 6, 4, 7, 4, 4, 6]
 
-# Rows per group on the More options page (experimental.cpp kTuning).
+# Rows per group on the More options page (more_options.cpp kTuning).
 EXP_GROUPS = [22, 9, 7, 3, 3]
 EXP_PAGE = "More options"
 

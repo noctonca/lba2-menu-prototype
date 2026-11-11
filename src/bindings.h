@@ -1,5 +1,6 @@
-// The Controls page (Keys and buttons): ControlsWideReview in the design system,
-// and a one-column form of it for 640x480.
+// The 36 actions with their keys and buttons, and the page that edits them (Keys
+// and buttons, the Controls page): ControlsWideReview in the design system, and a
+// one-column form of it for 640x480.
 #pragma once
 
 #include <stdio.h>
@@ -10,23 +11,23 @@
 //   heads     wide: 1 = the column names inside the first row, above its chips; 0 = a line of heads above the rows
 extern int sw_padnames;
 
-void Controls_Open();   // from the "Keys and buttons" row
-void Controls_Close();  // back to the Options, as they were
-bool Controls_Active();
-void Controls_Update();
-void Controls_Draw();
-void Controls_WriteState(FILE *f);
+void Bindings_Open();   // from the "Keys and buttons" row
+void Bindings_Close();  // back to the Options, as they were
+bool Bindings_Active();
+void Bindings_Update();
+void Bindings_Draw();
+void Bindings_WriteState(FILE *f);
 
 // Bindings back to the defaults and the page closed, as a fresh start has it.
-void Controls_Reset();
+void Bindings_Reset();
 // The bindings as values, for Reset settings and Undo reset (the page stays as it is).
-enum { CONTROLS_BIND_MAX = 256 };
-int Controls_BindingCount();             // values Controls_GetBindings writes
-void Controls_GetBindings(int *out);
-void Controls_PutBindings(const int *in);
-void Controls_DefaultBindings();
-bool Controls_BindingsAreDefault();
-// The chips the last Controls_Draw drew, for the self test.
+enum { BINDINGS_MAX = 256 };
+int Bindings_Count();             // values Bindings_Get writes
+void Bindings_Get(int *out);
+void Bindings_Put(const int *in);
+void Bindings_PutDefaults();
+bool Bindings_AreDefault();
+// The chips the last Bindings_Draw drew, for the self test.
 struct ChipView {
     const char *action;
     const char *column;
@@ -35,27 +36,27 @@ struct ChipView {
     bool fits, conflict;
     int x0, y0, x1, y1;
 };
-int Controls_Chips(ChipView *out, int max);
-// The column heads, above the actions or inside the first row, as the last Controls_Draw drew them.
+int Bindings_Chips(ChipView *out, int max);
+// The column heads, above the actions or inside the first row, as the last Bindings_Draw drew them.
 struct HeadView {
     const char *text;
     int x0, y0, x1, y1;
 };
-int Controls_Heads(HeadView *out, int max);
+int Bindings_Heads(HeadView *out, int max);
 // Every clash in the bindings: action's key in column is also other's.
 struct ConflictView {
     const char *action, *column, *other;
 };
-int Controls_Conflicts(ConflictView *out, int max);
+int Bindings_Conflicts(ConflictView *out, int max);
 // Where the cursor is ("Keyboard | Movement | Forward | Key 1 | Up | waiting"),
 // and how deep within the page: 1 the groups, 2 the actions, 3 waiting for a key
 // or asking whether to swap one another action has ("| asking").
-int Controls_Where(char *buf, size_t n);
+int Bindings_Where(char *buf, size_t n);
 // What an action's chip in a column says (0 Key 1, 1 Key 2, 2 the pad).
-bool Controls_Binding(const char *action, int column, char *out, size_t n);
+bool Bindings_Text(const char *action, int column, char *out, size_t n);
 // The pad's Start as the voice says it (Menu, Options, Plus).
-void Controls_StartSaid(char *out, size_t n);
+void Bindings_StartSaid(char *out, size_t n);
 // A key or button's name as a sentence says it: "Esc" -> "<ESC>", "D-pad \x18" -> "<D-PAD UP>".
-void Controls_SaidKey(const char *name, char *out, size_t n);
+void Bindings_SaidKey(const char *name, char *out, size_t n);
 // A legend key ("Enter", "Esc", "Del", "Tab") as the pad names it after a pad press.
-const char *Controls_LegendKey(const char *key);
+const char *Bindings_LegendKey(const char *key);

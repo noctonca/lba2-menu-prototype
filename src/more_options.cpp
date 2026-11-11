@@ -1,7 +1,7 @@
-#include "experimental.h"
+#include "more_options.h"
 
-#include "cadre.h"
-#include "engine.h"
+#include "game_pieces.h"
+#include "host.h"
 #include "menu.h"
 #include "menu_parts.h"
 #include "trace.h"
@@ -141,7 +141,7 @@ static const Tuning kTuning[] = {
     {4, "Reverse stereo", "ReverseStereo", T_TOGGLE, 0, 0, 1, 1, {0}, "Swaps the left and right speakers."},
 };
 enum { TUNING_COUNT = sizeof kTuning / sizeof kTuning[0] };
-static_assert(TUNING_COUNT <= EXP_MAX, "EXP_MAX holds every tuning row");
+static_assert(TUNING_COUNT <= MORE_OPTIONS_MAX, "MORE_OPTIONS_MAX holds every tuning row");
 
 // The rows lba2cc calls experimental (docs/CAMERA.md marks them so, CHANGELOG "experimental
 // and off by default"). The rest tune finished features. The settings tables have no field
@@ -161,49 +161,49 @@ static bool g_valReady;
 
 static void Ready() {
     if (!g_valReady) {
-        Exp_Defaults();
+        MoreOptions_Defaults();
         g_valReady = true;
     }
 }
 
-int Exp_Count() { return TUNING_COUNT; }
-const char *Exp_Name(int i) { return kTuning[i].name; }
-void Exp_Get(int *out) {
+int MoreOptions_Count() { return TUNING_COUNT; }
+const char *MoreOptions_Name(int i) { return kTuning[i].name; }
+void MoreOptions_Get(int *out) {
     Ready();
     memcpy(out, g_val, sizeof g_val);
 }
-void Exp_Put(const int *in) {
+void MoreOptions_Put(const int *in) {
     memcpy(g_val, in, sizeof g_val);
     g_valReady = true;
 }
-bool Exp_PresetsSet(int i) { return !kGroups[kTuning[i].group].player; }
-void Exp_Defaults() {
+bool MoreOptions_PresetsSet(int i) { return !kGroups[kTuning[i].group].player; }
+void MoreOptions_Defaults() {
     for (int i = 0; i < TUNING_COUNT; i++)
         g_val[i] = kTuning[i].def;
     g_valReady = true;
 }
-void Exp_PresetDefaults() {
+void MoreOptions_PresetDefaults() {
     Ready();
     for (int i = 0; i < TUNING_COUNT; i++)
-        if (Exp_PresetsSet(i))
+        if (MoreOptions_PresetsSet(i))
             g_val[i] = kTuning[i].def;
 }
-bool Exp_AnyChanged() {
+bool MoreOptions_AnyChanged() {
     Ready();
     for (int i = 0; i < TUNING_COUNT; i++)
         if (g_val[i] != kTuning[i].def)
             return true;
     return false;
 }
-bool Exp_PresetChanged() {
+bool MoreOptions_PresetChanged() {
     Ready();
     for (int i = 0; i < TUNING_COUNT; i++)
-        if (Exp_PresetsSet(i) && g_val[i] != kTuning[i].def)
+        if (MoreOptions_PresetsSet(i) && g_val[i] != kTuning[i].def)
             return true;
     return false;
 }
 
-bool Exp_Set(const char *name, int value) {
+bool MoreOptions_Set(const char *name, int value) {
     Ready();
     for (int i = 0; i < TUNING_COUNT; i++) {
         if (strcmp(kTuning[i].name, name) != 0)
@@ -260,7 +260,7 @@ static bool Wide() { return Menu_Wide(); }
 
 static void Say();
 
-void Exp_Open() {
+void MoreOptions_Open() {
     Ready();
     g_active = true;
     g_cursor = g_scroll = 0;
@@ -268,19 +268,19 @@ void Exp_Open() {
     Trace("experimental open");
 }
 
-void Exp_Close() {
+void MoreOptions_Close() {
     if (!g_active)
         return;
     g_active = false;
     Trace("experimental close");
 }
 
-bool Exp_Active() { return g_active; }
+bool MoreOptions_Active() { return g_active; }
 
-void Exp_Reset() {
+void MoreOptions_Reset() {
     g_active = false;
     g_cursor = g_scroll = 0;
-    Exp_Defaults();
+    MoreOptions_Defaults();
 }
 
 // ───────────────────────────── Input ─────────────────────────────
@@ -314,32 +314,32 @@ static void Default(int i) {
 
 // Left, Right, Enter and Del on a row.
 static void RowKeys(int i) {
-    if (Engine_Pressed(KEY_LEFT))
+    if (Host_Pressed(KEY_LEFT))
         Change(i, -1);
-    if (Engine_Pressed(KEY_RIGHT))
+    if (Host_Pressed(KEY_RIGHT))
         Change(i, +1);
-    if (Engine_Pressed(KEY_ENTER) && kTuning[i].kind != T_NUM)
+    if (Host_Pressed(KEY_ENTER) && kTuning[i].kind != T_NUM)
         Change(i, +1);
-    if (Engine_Pressed(KEY_DEL))
+    if (Host_Pressed(KEY_DEL))
         Default(i);
 }
 
 static void UpdateTable() {
     int page = g_visible > 3 ? g_visible - 2 : 1;  // the group heads take lines too
-    if (Engine_Pressed(KEY_UP))
+    if (Host_Pressed(KEY_UP))
         g_cursor = (g_cursor + TUNING_COUNT - 1) % TUNING_COUNT;
-    if (Engine_Pressed(KEY_DOWN))
+    if (Host_Pressed(KEY_DOWN))
         g_cursor = (g_cursor + 1) % TUNING_COUNT;
-    if (Engine_Pressed(KEY_PGUP))
+    if (Host_Pressed(KEY_PGUP))
         g_cursor = g_cursor > page ? g_cursor - page : 0;
-    if (Engine_Pressed(KEY_PGDN))
+    if (Host_Pressed(KEY_PGDN))
         g_cursor = g_cursor + page < TUNING_COUNT ? g_cursor + page : TUNING_COUNT - 1;
     RowKeys(g_cursor);
-    if (Engine_Pressed(KEY_ESC))
-        Exp_Close();
+    if (Host_Pressed(KEY_ESC))
+        MoreOptions_Close();
 }
 
-void Exp_Update() {
+void MoreOptions_Update() {
     UpdateTable();
     if (g_active)
         Say();
@@ -364,7 +364,7 @@ static void Say() { Menu_Say(kGroups[kTuning[g_cursor].group].help); }
 // ───────────────────────────── Drawing ─────────────────────────────
 
 // What was drawn, for `state` and the self test.
-static ExpLine g_lines[64];
+static MoreOptionsLine g_lines[64];
 static int g_lineCount;
 static char g_status[96];
 static char g_helpShown[320];  // the row's help in the status lines, for `state`
@@ -400,7 +400,7 @@ static bool DrawSmallWrapped(S32 x, S32 y, S32 width, int maxLines, const char *
     return true;
 }
 static int g_total;  // the table's lines, heads included
-static ExpTable g_table;
+static MoreOptionsTable g_table;
 static bool g_tableShown;
 
 // The table is drawn at 1x on every canvas, as the 1997 key binding screen (decided
@@ -477,7 +477,7 @@ static void DrawTable(S32 px0, S32 px1, S32 py0, S32 py1) {
     SetClip(px0 + 1, py0 + 1, px1 - 1, py1 - 1);
     for (int k = g_scroll; k < g_scroll + visible; k++) {
         S32 y = bodyTop + (k - g_scroll) * pitch;
-        ExpLine &d = g_lines[g_lineCount < 63 ? g_lineCount++ : 63];
+        MoreOptionsLine &d = g_lines[g_lineCount < 63 ? g_lineCount++ : 63];
         memset(&d, 0, sizeof d);
         d.x0 = px0 + 8, d.x1 = px1 - 8, d.y0 = y - s, d.y1 = y + 9 * s - 1;
         d.textLeft = nameX;
@@ -574,13 +574,13 @@ static void DrawWideExp() {
 }
 
 static void DrawColumnExp() {
-    S32 W = (S32)Engine_LogicalW();
+    S32 W = (S32)Host_LogicalW();
     S32 x0 = W / 2 - 275, x1 = W / 2 + 275;
     DrawTable(x0, x1, 16, Menu_DialogueTop() - 16);
     Menu_DrawDialogue();
 }
 
-void Exp_Draw() {
+void MoreOptions_Draw() {
     g_lineCount = 0;
     g_tableShown = false;
     g_status[0] = 0;
@@ -593,25 +593,25 @@ void Exp_Draw() {
 
 // ───────────────────────────── State ─────────────────────────────
 
-bool Exp_Table(ExpTable *out) {
+bool MoreOptions_Table(MoreOptionsTable *out) {
     if (!g_active || !g_tableShown)
         return false;
     *out = g_table;
     return true;
 }
 
-const char *Exp_CursorGroupHelp() { return kGroups[kTuning[g_cursor].group].help; }
+const char *MoreOptions_CursorGroupHelp() { return kGroups[kTuning[g_cursor].group].help; }
 
-const char *Exp_CursorName() { return kTuning[g_cursor].name; }
+const char *MoreOptions_CursorName() { return kTuning[g_cursor].name; }
 
-bool Exp_CursorPresetsSet() { return Exp_PresetsSet(g_cursor); }
+bool MoreOptions_CursorPresetsSet() { return MoreOptions_PresetsSet(g_cursor); }
 
-const char *Exp_CursorValue() {
+const char *MoreOptions_CursorValue() {
     static char buf[24];
     return ValueText(g_cursor, buf, sizeof buf);
 }
 
-int Exp_Where(char *buf, size_t n) {
+int MoreOptions_Where(char *buf, size_t n) {
     const int i = g_cursor;
     char val[24];
     ValueText(i, val, sizeof val);
@@ -619,7 +619,7 @@ int Exp_Where(char *buf, size_t n) {
     return 1;
 }
 
-void Exp_WriteState(FILE *f) {
+void MoreOptions_WriteState(FILE *f) {
     const int i = g_cursor;
     fprintf(f, "{\"group\":");
     Menu_JsonString(f, kGroups[kTuning[i].group].name);
@@ -631,14 +631,14 @@ void Exp_WriteState(FILE *f) {
     Menu_JsonString(f, g_helpShown);
     fprintf(f, ",\"row_help_cut\":%s", g_helpCut ? "true" : "false");
     if (g_tableShown) {
-        const ExpTable &t = g_table;
+        const MoreOptionsTable &t = g_table;
         fprintf(f, ",\"table\":{\"rect\":[%d,%d,%d,%d],\"scale\":%d,\"status_top\":%d,\"value_edge\":%d,"
                    "\"marks_right\":%d,\"status_left\":%d,\"status_right\":%d}",
                 t.x0, t.y0, t.x1, t.y1, t.scale, t.statusTop, t.valueEdge, t.marksRight, t.statusLeft, t.statusRight);
     }
     fprintf(f, ",\"lines\":[");
     for (int k = 0; k < g_lineCount; k++) {
-        const ExpLine &d = g_lines[k];
+        const MoreOptionsLine &d = g_lines[k];
         fprintf(f, "%s{\"text\":", k ? "," : "");
         Menu_JsonString(f, d.text);
         fprintf(f, ",\"value\":");

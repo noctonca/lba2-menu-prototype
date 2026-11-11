@@ -1,7 +1,7 @@
-#include "cadre.h"
+#include "game_pieces.h"
 
-#include "engine.h"
-#include "screenbg.h"
+#include "host.h"
+#include "screen_picture.h"
 
 #include <POLYGON/POLY.H>
 #include <SVGA/CLIP.H>
@@ -25,17 +25,17 @@ void FixePlasmaPtrMap(void);
 // has no scene, so it owns the texture.
 U8 *SkySeaTexture;
 
-void Cadre_InitPlasma() {
+void GamePieces_InitPlasma() {
     SkySeaTexture = (U8 *)calloc(256 * 256, 1);
     InitPlasmaMenu();
 }
 
-void Cadre_AnimatePlasma() {
+void GamePieces_AnimatePlasma() {
     DoTextureAnimation();
 }
 
 // GAMEMENU.CPP DrawFireBar, with the bank passed in.
-void Cadre_FireBar(S32 xmin, S32 ymin, S32 xmax, S32 ymax, S32 bank) {
+void GamePieces_FireBar(S32 xmin, S32 ymin, S32 xmax, S32 ymax, S32 bank) {
     Struc_Point p[4];
     p[0].Pt_XE = (S16)xmin;
     p[0].Pt_YE = (S16)ymin;
@@ -202,9 +202,9 @@ static void DrawAngles(S32 x0, S32 y0, S32 x1, S32 y1, U8 up, U8 down) {
 
 // The menu row draws its fill, then the frame, then puts the corners back
 // (DrawOneChoice: BackupAngles before the fill, RestoreAngles after the frame).
-// Cadre_Frame does the corner work itself when given the fill as a callback-free
-// sequence: callers back up, fill, then call Cadre_Frame.
-void Cadre_Frame(S32 x0, S32 y0, S32 x1, S32 y1, bool red) {
+// GamePieces_Frame does the corner work itself when given the fill as a callback-free
+// sequence: callers back up, fill, then call GamePieces_Frame.
+void GamePieces_Frame(S32 x0, S32 y0, S32 x1, S32 y1, bool red) {
     U8 up = red ? COUL_UP_RED : COUL_UP_BLUE;
     U8 down = red ? COUL_DOWN_RED : COUL_DOWN_BLUE;
     Line(x0 + 5, y0, x1 - 5, y0, up);
@@ -215,13 +215,13 @@ void Cadre_Frame(S32 x0, S32 y0, S32 x1, S32 y1, bool red) {
     DrawAngles(x0, y0, x1, y1, up, down);
 }
 
-void Cadre_BackupCorners(S32 x0, S32 y0, S32 x1, S32 y1) {
+void GamePieces_BackupCorners(S32 x0, S32 y0, S32 x1, S32 y1) {
     BackupAngles(x0, y0, x1, y1);
 }
 
 // FLOW_A.CPP ShadeBoxBlk.
-void Cadre_Shade(S32 x0, S32 y0, S32 x1, S32 y1, S32 deccoul) {
-    if (!Engine_Pixels())
+void GamePieces_Shade(S32 x0, S32 y0, S32 x1, S32 y1, S32 deccoul) {
+    if (!Host_Pixels())
         return;
     if (x0 > ClipXMax || x1 < ClipXMin || y0 > ClipYMax || y1 < ClipYMin)
         return;
@@ -241,7 +241,7 @@ void Cadre_Shade(S32 x0, S32 y0, S32 x1, S32 y1, S32 deccoul) {
     hi -= (U8)(deccoul & 0xFF);
     clutOffset = (clutOffset & 0xFFFF00FF) | ((U32)hi << 8);
     U8 *clut = PtrCLUTGouraud + clutOffset;
-    ScreenBg_NoteShade(x0, y0, x1, y1, hi);
+    ScreenPicture_NoteShade(x0, y0, x1, y1, hi);
 
     for (S32 y = y0; y <= y1; y++) {
         for (S32 x = 0; x <= x1 - x0; x++)

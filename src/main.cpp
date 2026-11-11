@@ -30,7 +30,7 @@
 //   open <page name>     jump to a page ("Display and graphics", "Keys and buttons", "original", ...)
 //   size <WxH>           another screen size, in place: the page, cursor and values stay
 //   quit
-#include "engine.h"
+#include "host.h"
 #include "menu.h"
 #include "selftest.h"
 #include "shot.h"
@@ -78,13 +78,13 @@ static bool RunCommand(Runner &r, const char *line) {
     Trace("cmd %s", line);
     if (!strcmp(cmd, "key")) {
         UiKey k;
-        if (!Engine_KeyByName(a, &k)) {
+        if (!Host_KeyByName(a, &k)) {
             printf("err unknown key %s\n", a);
             return false;
         }
         int count = n >= 3 ? atoi(b) : 1;
         // One press a frame, so each one is an edge.
-        Engine_Inject(k);
+        Host_Inject(k);
         for (int i = 1; i < count; i++) {
             char again[64];
             snprintf(again, sizeof again, "key %s", a);
@@ -97,7 +97,7 @@ static bool RunCommand(Runner &r, const char *line) {
         const char *name = line + 5;
         while (*name == ' ')
             name++;
-        if (!Engine_InjectRaw(name)) {
+        if (!Host_InjectRaw(name)) {
             printf("err unknown raw key %s\n", name);
             return false;
         }
@@ -131,10 +131,10 @@ static bool RunCommand(Runner &r, const char *line) {
         Menu_WriteState(stdout);
     } else if (!strcmp(cmd, "shot")) {
         int scale = n >= 3 ? atoi(b) : 1;
-        bool ok = Shot_Write(a, Engine_Palette(), scale);
+        bool ok = Shot_Write(a, Host_Palette(), scale);
         printf("%s %s\n", ok ? "shot" : "err shot", a);
     } else if (!strcmp(cmd, "shotscreen")) {
-        bool ok = Engine_ShotScreen(a);
+        bool ok = Host_ShotScreen(a);
         printf("%s %s\n", ok ? "shotscreen" : "err shotscreen", a);
     } else if (!strcmp(cmd, "switch")) {
         if (!Menu_SetSwitch(a, atoi(b)))
@@ -176,7 +176,7 @@ static std::string ExpandHome(const char *p) {
 
 // A new screen size, in place; the toast says what it is.
 static void SwitchScreen(U32 w, U32 h, bool sizeWindow) {
-    if (Engine_SetScreen(w, h, sizeWindow))
+    if (Host_SetScreen(w, h, sizeWindow))
         Menu_NoteScreen();
 }
 
@@ -303,25 +303,25 @@ int Lba2Main(int argc, char *argv[]) {
     Trace_Open(trace);
     Trace_Quiet(selftest);
 
-    EngineConfig cfg;
+    HostConfig cfg;
     cfg.dataDir = data.c_str();
     cfg.physW = w;
     cfg.physH = h;
-    if (!Engine_Init(cfg))
+    if (!Host_Init(cfg))
         return 1;
     // lba2cc turns vsync on with the renderer, and on the dummy driver SDL fakes it by
     // sleeping a refresh per present: 90% of a headless run. The fixed clock keeps runs
     // repeatable without it (lba2cc does the same for --exit runs, CONTROL.CPP).
     if (headless) {
         Window_SetVSync(0);
-        Engine_SetHeadless(true);
+        Host_SetHeadless(true);
     }
     if (fixedDt)
-        Engine_SetFixedDt(fixedDt);
+        Host_SetFixedDt(fixedDt);
     Menu_Init(first);
     if (selftest) {
         int result = Selftest_Run(test, argv[0]);
-        Engine_Shutdown();
+        Host_Shutdown();
         return result;
     }
     for (size_t i = 0; i < switches.size(); i++) {
@@ -372,9 +372,9 @@ int Lba2Main(int argc, char *argv[]) {
     std::string pending;
 
     while (!run.quit) {
-        if (!Engine_BeginFrame())
+        if (!Host_BeginFrame())
             break;
-        Trace_SetFrame(Engine_Frame());
+        Trace_SetFrame(Host_Frame());
 
         // Commands: the script in order (honouring waits), then whatever arrived on stdin.
         if (run.waitFrames > 0) {
@@ -401,22 +401,22 @@ int Lba2Main(int argc, char *argv[]) {
         }
 
         // The prototype's own keys.
-        if (Engine_Pressed(KEY_F1))
+        if (Host_Pressed(KEY_F1))
             Menu_SetSwitch("overlay", !Menu_GetSwitch("overlay"));
-        if (Engine_Pressed(KEY_F11))
+        if (Host_Pressed(KEY_F11))
             Menu_SetSwitch("padnames", Menu_GetSwitch("padnames") + 1);
-        if (Engine_Pressed(KEY_F2))
-            if (Engine_StepScreen(Engine_ShiftHeld() ? -1 : 1))
+        if (Host_Pressed(KEY_F2))
+            if (Host_StepScreen(Host_ShiftHeld() ? -1 : 1))
                 Menu_NoteScreen();
         U32 dragW, dragH;
-        if (Engine_WindowResized(&dragW, &dragH))
+        if (Host_WindowResized(&dragW, &dragH))
             SwitchScreen(dragW, dragH, false);
 
         Menu_Update();
         if (Menu_WantsQuit())
             break;
         Menu_Draw();
-        Engine_Present();
+        Host_Present();
 #ifdef __EMSCRIPTEN__
         if (!headless)
             WaitForBrowserFrame();
@@ -427,6 +427,6 @@ int Lba2Main(int argc, char *argv[]) {
             break;
     }
     Trace("exit");
-    Engine_Shutdown();
+    Host_Shutdown();
     return 0;
 }

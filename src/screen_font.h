@@ -22,27 +22,27 @@
 
 #include <SYSTEM/ADELINE_TYPES.H>
 
-enum { VFONT_GAME = 0, VFONT_ZILLA = 1 };  // Zilla Slab Bold
+enum { SCREEN_FONT_GAME = 0, SCREEN_FONT_ZILLA = 1 };  // Zilla Slab Bold
 
-void VFont_Init();
-void VFont_Set(int face);  // VFONT_GAME draws with the game font as before
-int VFont_Face();
-inline bool VFont_On() { return VFont_Face() != VFONT_GAME; }
+void ScreenFont_Init();
+void ScreenFont_Set(int face);  // SCREEN_FONT_GAME draws with the game font as before
+int ScreenFont_Face();
+inline bool ScreenFont_On() { return ScreenFont_Face() != SCREEN_FONT_GAME; }
 
 // Start of a frame: forget last frame's text.
-void VFont_BeginFrame();
+void ScreenFont_BeginFrame();
 
 // Logical widths, CP850 text, as SizeFont gives them.
-S32 VFont_Width(const char *s);
-S32 VFont_InkWidth(const char *s);
+S32 ScreenFont_Width(const char *s);
+S32 ScreenFont_InkWidth(const char *s);
 // One letter's advance (a space included), for typed text.
-S32 VFont_Advance(U8 c);
+S32 ScreenFont_Advance(U8 c);
 
 // Queue text at logical (x, y), the top of the game font's cell, in palette colour `ink`.
-void VFont_Text(S32 x, S32 y, const char *s, U8 ink);
+void ScreenFont_Text(S32 x, S32 y, const char *s, U8 ink);
 // One letter; returns its advance.
-S32 VFont_Char(S32 x, S32 y, U8 c, U8 ink);
+S32 ScreenFont_Char(S32 x, S32 y, U8 c, U8 ink);
 
 // Paint the queue over a presented frame (w x h, pitch in bytes) through `palette`.
 // The canvas (lw x lh) sits centred at its whole step.
-void VFont_Paint(U32 *argb, U32 pitch, U32 w, U32 h, const U8 *palette);
+void ScreenFont_Paint(U32 *argb, U32 pitch, U32 w, U32 h, const U8 *palette);

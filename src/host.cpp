@@ -1,5 +1,5 @@
-#include "engine.h"
-#include "vfont.h"
+#include "host.h"
+#include "screen_font.h"
 
 #include <PLATFORM/PLATFORM.H>
 #include <SVGA/CLIP.H>
@@ -30,8 +30,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "cadre.h"
-#include "screenbg.h"
+#include "game_pieces.h"
+#include "screen_picture.h"
 #include "shot.h"
 #include "twinsun.h"
 
@@ -83,12 +83,12 @@ static bool WideByRule(U32 w, U32 h, U32 *scale) {
     return true;
 }
 
-bool Engine_RuleChoseWide() {
+bool Host_RuleChoseWide() {
     U32 s;
     return WideByRule(s_physW, s_physH, &s);
 }
 
-U32 Engine_Scale(U32 w, U32 h) {
+U32 Host_Scale(U32 w, U32 h) {
     U32 ws;
     if (WideByRule(w, h, &ws))
         return ws;
@@ -97,10 +97,10 @@ U32 Engine_Scale(U32 w, U32 h) {
     return s < 1 ? 1 : s;
 }
 
-U32 Engine_LogicalW() { return s_logW; }
-U32 Engine_LogicalH() { return s_logH; }
-U32 Engine_PhysW() { return s_physW; }
-U32 Engine_PhysH() { return s_physH; }
+U32 Host_LogicalW() { return s_logW; }
+U32 Host_LogicalH() { return s_logH; }
+U32 Host_PhysW() { return s_physW; }
+U32 Host_PhysH() { return s_physH; }
 
 static void PadRemoved(uint32_t id);
 
@@ -181,7 +181,7 @@ static void SizeWindow() {
         TitleWindow(win);
         return;
     }
-    U32 scale = Engine_Scale(s_physW, s_physH);
+    U32 scale = Host_Scale(s_physW, s_physH);
     SDL_DisplayID display = SDL_GetDisplayForWindow(win);
     SDL_Rect usable;
     if (SDL_GetDisplayUsableBounds(display, &usable)) {
@@ -201,17 +201,17 @@ static void SizeWindow() {
 static void SizeWindow() {}
 #endif
 
-bool Engine_SetScreen(U32 w, U32 h, bool sizeWindow) {
+bool Host_SetScreen(U32 w, U32 h, bool sizeWindow) {
     w &= ~7u;
     if (w < 640)
         w = 640;
     if (h < 480)
         h = 480;
-    U32 scale = Engine_Scale(w, h);
+    U32 scale = Host_Scale(w, h);
     U32 lw = w / scale, lh = h / scale;
     // With the picture at the screen's resolution the presented frame is the
     // screen; the canvas stays logical.
-    U32 sw = ScreenBg_Mode() ? w : lw, sh = ScreenBg_Mode() ? h : lh;
+    U32 sw = ScreenPicture_Mode() ? w : lw, sh = ScreenPicture_Mode() ? h : lh;
     if (lw != s_logW || lh != s_logH || sw != s_surfW || sh != s_surfH) {
         // As RES_SWITCH.CPP: Log, then the texture and Phys, then both clips.
         EndScreen();
@@ -250,15 +250,15 @@ static const U32 kSizes[][2] = {
     {640, 480}, {768, 480}, {1024, 480}, {1280, 720}, {1280, 800}, {1920, 1080}, {2400, 1080}, {2560, 1440}, {3440, 1440}, {3840, 2160},
 };
 
-int Engine_SizeCount() { return (int)(sizeof kSizes / sizeof kSizes[0]); }
+int Host_SizeCount() { return (int)(sizeof kSizes / sizeof kSizes[0]); }
 
-void Engine_SizeAt(int i, U32 *w, U32 *h) {
+void Host_SizeAt(int i, U32 *w, U32 *h) {
     *w = kSizes[i][0];
     *h = kSizes[i][1];
 }
 
-bool Engine_StepScreen(int dir) {
-    const int count = Engine_SizeCount();
+bool Host_StepScreen(int dir) {
+    const int count = Host_SizeCount();
     int below = 0;
     bool exact = false;
     for (int i = 0; i < count; i++) {
@@ -273,7 +273,7 @@ bool Engine_StepScreen(int dir) {
     // Off the list, the one below counts as the previous.
     int next = dir > 0 ? below + 1 : (exact ? below - 1 : below);
     next = (next + count) % count;
-    return Engine_SetScreen(kSizes[next][0], kSizes[next][1], true);
+    return Host_SetScreen(kSizes[next][0], kSizes[next][1], true);
 }
 
 #ifdef __EMSCRIPTEN__
@@ -281,7 +281,7 @@ bool Engine_StepScreen(int dir) {
 EM_JS(int, WebIsFullscreen, (), { return document.fullscreenElement ? 1 : 0; });
 #endif
 
-bool Engine_Fullscreen() {
+bool Host_Fullscreen() {
 #ifdef __EMSCRIPTEN__
     if (!s_headless)
         return WebIsFullscreen() != 0;  // the browser's; Esc leaves it without the menu
@@ -289,7 +289,7 @@ bool Engine_Fullscreen() {
     return s_fullscreen;
 }
 
-bool Engine_SetFullscreen(bool on) {
+bool Host_SetFullscreen(bool on) {
     if (s_headless) {
         s_fullscreen = on;
         return true;
@@ -316,7 +316,7 @@ bool Engine_SetFullscreen(bool on) {
     return s_fullscreen == on;
 }
 
-bool Engine_WindowResized(U32 *w, U32 *h) {
+bool Host_WindowResized(U32 *w, U32 *h) {
 #ifndef LBA2_PROTO_SDL
     (void)w;
     (void)h;
@@ -355,9 +355,9 @@ bool Engine_WindowResized(U32 *w, U32 *h) {
 #endif
 }
 
-bool Engine_ShiftHeld() { return (g_platform.input.modifiers() & PLATFORM_KMOD_SHIFT) != 0; }
+bool Host_ShiftHeld() { return (g_platform.input.modifiers() & PLATFORM_KMOD_SHIFT) != 0; }
 
-bool Engine_Init(const EngineConfig &cfg) {
+bool Host_Init(const HostConfig &cfg) {
     if (!InitEvents()) {
         fprintf(stderr, "events failed\n");
         return false;
@@ -385,7 +385,7 @@ bool Engine_Init(const EngineConfig &cfg) {
         s_physH = dh;
         fprintf(stderr, "screen: the display's, %ux%u\n", (unsigned)s_physW, (unsigned)s_physH);
     }
-    U32 scale = Engine_Scale(s_physW, s_physH);
+    U32 scale = Host_Scale(s_physW, s_physH);
     s_logW = s_physW / scale;
     s_logH = s_physH / scale;
     if (!InitGraphics(s_logW, s_logH, false)) {
@@ -426,19 +426,19 @@ bool Engine_Init(const EngineConfig &cfg) {
     PtrCLUTGouraud = s_xplBoot + ((const XplHeader *)s_xplBoot)->OffsetFog;
 
     SetFont(font, 2, 8);  // as PERSO.CPP sets it
-    VFont_Init();
-    SetOverlayPrePresentCallback(VFont_Paint);  // after the smooth picture's hook
+    ScreenFont_Init();
+    SetOverlayPrePresentCallback(ScreenFont_Paint);  // after the smooth picture's hook
     Rnd_Seed(1997);       // the plasma's start; fixed so captures repeat
-    Cadre_InitPlasma();
-    Engine_UseMenuPalette();
+    GamePieces_InitPlasma();
+    Host_UseMenuPalette();
     return true;
 }
 
-void Engine_Shutdown() {
+void Host_Shutdown() {
     DiscImage_Unmount();
 }
 
-void Engine_UseMenuPalette() {
+void Host_UseMenuPalette() {
     s_palCurrent = s_palMenu;
     PtrCLUTGouraud = s_xplBoot + ((const XplHeader *)s_xplBoot)->OffsetFog;
     SetVideoPaletteSync(s_palMenu);
@@ -449,7 +449,7 @@ void Engine_UseMenuPalette() {
 // wall clock at that moment.
 static U32 s_timeOrigin;
 
-U32 Engine_TimeMs() {
+U32 Host_TimeMs() {
     ManageTime();
     return TimerSystemHR - s_timeOrigin;
 }
@@ -465,9 +465,9 @@ static const char *kKeyNames[KEY_COUNT] = {
     "0", "pgup", "pgdn",
 };
 
-void Engine_Inject(UiKey k) { s_injected[k] = true; }
+void Host_Inject(UiKey k) { s_injected[k] = true; }
 
-bool Engine_KeyByName(const char *name, UiKey *out) {
+bool Host_KeyByName(const char *name, UiKey *out) {
     for (int k = 0; k < KEY_COUNT; k++) {
         if (strcmp(kKeyNames[k], name) == 0) {
             *out = (UiKey)k;
@@ -477,9 +477,9 @@ bool Engine_KeyByName(const char *name, UiKey *out) {
     return false;
 }
 
-const char *Engine_KeyName(UiKey k) { return kKeyNames[k]; }
+const char *Host_KeyName(UiKey k) { return kKeyNames[k]; }
 
-void Engine_SetFixedDt(U32 dtMs) {
+void Host_SetFixedDt(U32 dtMs) {
     s_fixedDt = dtMs;
     if (dtMs) {
         Timer_EnableFixedDt(dtMs);
@@ -487,9 +487,9 @@ void Engine_SetFixedDt(U32 dtMs) {
     }
 }
 
-U32 Engine_Frame() { return s_frame; }
+U32 Host_Frame() { return s_frame; }
 
-const U8 *Engine_Palette() { return s_palCurrent; }
+const U8 *Host_Palette() { return s_palCurrent; }
 
 // The menu's pad buttons are fixed, as the arrows, Enter and Esc are on the keyboard:
 // no binding moves them, so a pad-only player can always use the menu. By pad input,
@@ -597,12 +597,12 @@ static void ScanRaw() {
     }
 }
 
-S32 Engine_RawPressed() { return s_rawPressed; }
+S32 Host_RawPressed() { return s_rawPressed; }
 
-bool Engine_KeyboardSeen() { return s_keyboardSeen; }
-void Engine_SetKeyboardSeen(bool seen) { s_keyboardSeen = seen; }
+bool Host_KeyboardSeen() { return s_keyboardSeen; }
+void Host_SetKeyboardSeen(bool seen) { s_keyboardSeen = seen; }
 
-bool Engine_LastInputWasPad() { return s_lastPad; }
+bool Host_LastInputWasPad() { return s_lastPad; }
 
 static const char *kPadCodeNames[PAD_CODE_COUNT] = {
     "a", "b", "x", "y", "back", "guide", "start", "ls", "rs", "lb", "rb",
@@ -630,7 +630,7 @@ static bool NameHas(const char *name, const char *part) {
     return false;
 }
 
-bool Engine_InjectRaw(const char *name) {
+bool Host_InjectRaw(const char *name) {
     if (!strncmp(name, "pad:", 4)) {
         for (int n = 0; n < PAD_CODE_COUNT; n++) {
             if (!strcmp(name + 4, kPadCodeNames[n])) {
@@ -651,7 +651,7 @@ bool Engine_InjectRaw(const char *name) {
     return false;
 }
 
-bool Engine_InjectPad(const char *name) {
+bool Host_InjectPad(const char *name) {
     for (int n = 0; n < PAD_CODE_COUNT; n++) {
         if (!strcmp(name, kPadCodeNames[n])) {
             s_rawInjected = PAD_CODE_BASE + n;
@@ -664,14 +664,14 @@ bool Engine_InjectPad(const char *name) {
     return false;
 }
 
-const char *Engine_ScancodeName(S32 code) {
+const char *Host_ScancodeName(S32 code) {
     const char *name = g_platform.input.scancode_name(code);
     return name ? name : "";
 }
 
 // The pad's family from its name: the platform layer has no pad type.
 // 1 Xbox (and anything else), 2 PlayStation, 3 Nintendo.
-S32 Engine_PadFamily() {
+S32 Host_PadFamily() {
     if (!s_pad)
         return 0;
     const char *name = g_platform.input.gamepad_name(s_pad);
@@ -686,14 +686,14 @@ S32 Engine_PadFamily() {
     return 1;
 }
 
-bool Engine_BeginFrame() {
+bool Host_BeginFrame() {
     ManageEvents();
     ManageKeyboard();
     ScanRaw();
     if (s_fixedDt)
         Timer_FixedDtAdvance();
     s_frame++;
-    U32 now = Engine_TimeMs();
+    U32 now = Host_TimeMs();
     for (int k = 0; k < KEY_COUNT; k++) {
         bool down = CheckKey(kScancode[k]) != 0 || PadDown(k);
         if (k == KEY_DEL)  // a Mac keyboard's delete key is Backspace
@@ -712,43 +712,43 @@ bool Engine_BeginFrame() {
     return !s_quit;
 }
 
-bool Engine_Pressed(UiKey k) { return s_pressed[k]; }
+bool Host_Pressed(UiKey k) { return s_pressed[k]; }
 
-void Engine_SetHeadless(bool on) { s_headless = on; }
+void Host_SetHeadless(bool on) { s_headless = on; }
 
 static bool s_pixels = true;
-void Engine_SetPixels(bool on) { s_pixels = on; }
-bool Engine_Pixels() { return s_pixels; }
+void Host_SetPixels(bool on) { s_pixels = on; }
+bool Host_Pixels() { return s_pixels; }
 
 static void PaintSmooth(U32 *argb, U32 pitch, U32 w, U32 h, const U8 *palette) {
-    ScreenBg_PaintSmooth(argb, pitch, w, h, palette, s_menuImage);
+    ScreenPicture_PaintSmooth(argb, pitch, w, h, palette, s_menuImage);
 }
 
-void Engine_SetBackgroundRes(int mode) {
-    ScreenBg_SetMode(mode);
+void Host_SetBackgroundRes(int mode) {
+    ScreenPicture_SetMode(mode);
     SetPrePresentCallback(mode == 2 ? PaintSmooth : NULL);
-    Engine_SetScreen(s_physW, s_physH, false);
+    Host_SetScreen(s_physW, s_physH, false);
 }
 
-int Engine_BackgroundRes() { return ScreenBg_Mode(); }
+int Host_BackgroundRes() { return ScreenPicture_Mode(); }
 
-void Engine_Present() {
+void Host_Present() {
     if (s_headless)
         return;
-    if (!ScreenBg_Mode()) {
+    if (!ScreenPicture_Mode()) {
         BoxStaticFullflip();
         return;
     }
     // The screen's frame straight into Phys; an empty copy marks it for the present.
-    ScreenBg_Compose((U8 *)Phys, VideoSurfacePitch(), s_surfW, s_surfH, s_logW, s_logH,
-                     Engine_Scale(s_physW, s_physH), s_menuImage);
+    ScreenPicture_Compose((U8 *)Phys, VideoSurfacePitch(), s_surfW, s_surfH, s_logW, s_logH,
+                     Host_Scale(s_physW, s_physH), s_menuImage);
     T_BOX none = {0, 0, 0, 0, NULL};
     LockVideoSurface();
     CopyVideoArea(Phys, Log, TabOffPhysLine, &none);
     UnlockVideoSurface();
 }
 
-bool Engine_ShotScreen(const char *path) {
+bool Host_ShotScreen(const char *path) {
     const U32 w = s_physW, h = s_physH;
     U8 *idx = (U8 *)malloc((size_t)w * h);
     U32 *argb = (U32 *)malloc((size_t)w * h * 4);
@@ -757,20 +757,20 @@ bool Engine_ShotScreen(const char *path) {
         free(argb);
         return false;
     }
-    ScreenBg_Compose(idx, w, w, h, s_logW, s_logH, Engine_Scale(w, h), s_menuImage);
+    ScreenPicture_Compose(idx, w, w, h, s_logW, s_logH, Host_Scale(w, h), s_menuImage);
     for (size_t i = 0; i < (size_t)w * h; i++) {
         const U8 *rgb = s_palCurrent + idx[i] * 3;
         argb[i] = 0xff000000u | (U32)rgb[0] << 16 | (U32)rgb[1] << 8 | rgb[2];
     }
-    ScreenBg_PaintSmooth(argb, w * 4, w, h, s_palCurrent, s_menuImage);
-    VFont_Paint(argb, w * 4, w, h, s_palCurrent);
+    ScreenPicture_PaintSmooth(argb, w * 4, w, h, s_palCurrent, s_menuImage);
+    ScreenFont_Paint(argb, w * 4, w, h, s_palCurrent);
     bool ok = Shot_WriteArgb(path, w, h, argb);
     free(idx);
     free(argb);
     return ok;
 }
 
-void Engine_ResetInput() {
+void Host_ResetInput() {
     memset(s_down, 0, sizeof s_down);
     memset(s_pressed, 0, sizeof s_pressed);
     memset(s_injected, 0, sizeof s_injected);
@@ -780,22 +780,22 @@ void Engine_ResetInput() {
 }
 
 static int s_backdrop;
-void Engine_SetBackdrop(int backdrop) { s_backdrop = backdrop; }
+void Host_SetBackdrop(int backdrop) { s_backdrop = backdrop; }
 
-void Engine_DrawBackground() {
+void Host_DrawBackground() {
     if (!s_pixels)
         return;
     U8 *dst = (U8 *)Log;
     if (s_backdrop == 2) {  // Twinsun turning on stars; the screen outside the canvas black
-        Twinsun_Draw(s_logW, s_logH, Engine_TimeMs());
-        ScreenBg_NoPicture(0);
+        Twinsun_Draw(s_logW, s_logH, Host_TimeMs());
+        ScreenPicture_NoPicture(0);
         return;
     }
     if (s_backdrop) {
         const U8 fill = s_backdrop == 1 ? 181 : 0;  // a blue from the picture; black
         for (U32 y = 0; y < s_logH; y++)
             memset(dst + TabOffLine[y], fill, s_logW);
-        ScreenBg_NoPicture(fill);
+        ScreenPicture_NoPicture(fill);
         return;
     }
     // Cover: one factor for both axes, the larger of W/640 and H/480 (as a
@@ -819,5 +819,5 @@ void Engine_DrawBackground() {
             out[x] = row[sx < 640 ? sx : 639];
         }
     }
-    ScreenBg_BeginFrame(s_logW, s_logH);
+    ScreenPicture_BeginFrame(s_logW, s_logH);
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Writes src/lang_table.inc from lang/help.tsv (the voice texts) and src/lang_menu.inc
+"""Writes src/lang_help.inc from lang/help.tsv (the voice texts) and src/lang_menu.inc
 from lang/menu.tsv (labels, values, titles, answers, legend words), each text in every
 Text language as CP850 bytes (the game font's code page). Run it after editing either."""
 import pathlib
@@ -43,5 +43,5 @@ def write(name, out):
     print(f"lang/{name}: {len(rows)} texts")
 
 
-write("help.tsv", "lang_table.inc")
+write("help.tsv", "lang_help.inc")
 write("menu.tsv", "lang_menu.inc")

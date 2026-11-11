@@ -8,17 +8,17 @@
 // Plasma banks (GAMEMENU.CPP): 12 the cursor, 4 the slider, 8 the current value.
 enum { PLASMA_CURSOR = 12, PLASMA_SLIDER = 4, PLASMA_CURRENT = 8 };
 
-void Cadre_InitPlasma();
+void GamePieces_InitPlasma();
 // Animate the plasma (call once a frame) and fill a rectangle with a bank.
-void Cadre_AnimatePlasma();
-void Cadre_FireBar(S32 x0, S32 y0, S32 x1, S32 y1, S32 bank);
+void GamePieces_AnimatePlasma();
+void GamePieces_FireBar(S32 x0, S32 y0, S32 x1, S32 y1, S32 bank);
 
 // INVENT.CPP DrawCadre with ALL_ANGLES: the 1px two-tone frame with chamfers.
-// Call Cadre_BackupCorners before filling, Cadre_Frame after (DrawOneChoice).
-void Cadre_BackupCorners(S32 x0, S32 y0, S32 x1, S32 y1);
-void Cadre_Frame(S32 x0, S32 y0, S32 x1, S32 y1, bool red = false);
+// Call GamePieces_BackupCorners before filling, GamePieces_Frame after (DrawOneChoice).
+void GamePieces_BackupCorners(S32 x0, S32 y0, S32 x1, S32 y1);
+void GamePieces_Frame(S32 x0, S32 y0, S32 x1, S32 y1, bool red = false);
 // Darken, do not blend (FLOW_A.CPP ShadeBoxBlk).
-void Cadre_Shade(S32 x0, S32 y0, S32 x1, S32 y1, S32 level);
+void GamePieces_Shade(S32 x0, S32 y0, S32 x1, S32 y1, S32 level);
 
 // Frame colours (INVENT.CPP) and shade levels (DEFINES.H).
 #define COUL_DOWN_BLUE ((10 * 16) + 9)

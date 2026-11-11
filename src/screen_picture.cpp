@@ -1,4 +1,4 @@
-#include "screenbg.h"
+#include "screen_picture.h"
 
 #include <POLYGON/POLY.H>
 #include <SVGA/SCREEN.H>
@@ -9,8 +9,8 @@
 
 static int s_mode;
 
-void ScreenBg_SetMode(int mode) { s_mode = mode; }
-int ScreenBg_Mode() { return s_mode; }
+void ScreenPicture_SetMode(int mode) { s_mode = mode; }
+int ScreenPicture_Mode() { return s_mode; }
 
 // The canvas as the picture left it, and per canvas pixel the darkening it has
 // had since: a chain of fog rows, 0 for none, NONE when there were too many.
@@ -69,7 +69,7 @@ static void UpdateMaps() {
     s_mapCount = s_chainCount;
 }
 
-void ScreenBg_BeginFrame(U32 lw, U32 lh) {
+void ScreenPicture_BeginFrame(U32 lw, U32 lh) {
     if (!s_mode)
         return;
     if (lw * lh > s_cap) {
@@ -85,12 +85,12 @@ void ScreenBg_BeginFrame(U32 lw, U32 lh) {
     memset(s_mask, 0, lw * lh);
 }
 
-void ScreenBg_NoPicture(U8 fill) {
+void ScreenPicture_NoPicture(U8 fill) {
     s_have = false;
     s_fill = fill;
 }
 
-void ScreenBg_NoteShade(S32 x0, S32 y0, S32 x1, S32 y1, U32 row) {
+void ScreenPicture_NoteShade(S32 x0, S32 y0, S32 x1, S32 y1, U32 row) {
     if (!s_mode || !s_have || !s_mask)
         return;
     for (S32 y = y0; y <= y1; y++) {
@@ -104,7 +104,7 @@ void ScreenBg_NoteShade(S32 x0, S32 y0, S32 x1, S32 y1, U32 row) {
 static U8 *s_chainAt;
 static U32 s_chainAtCap;
 
-void ScreenBg_Compose(U8 *out, U32 pitch, U32 pw, U32 ph, U32 lw, U32 lh, U32 k, const U8 *picture) {
+void ScreenPicture_Compose(U8 *out, U32 pitch, U32 pw, U32 ph, U32 lw, U32 lh, U32 k, const U8 *picture) {
     if (pw * ph > s_chainAtCap) {
         s_chainAtCap = pw * ph;
         s_chainAt = (U8 *)realloc(s_chainAt, s_chainAtCap);
@@ -244,7 +244,7 @@ static void BuildSmooth(Smooth &s, int chain, U32 pw, U32 ph, const U8 *palette,
     s.clut = PtrCLUTGouraud;
 }
 
-void ScreenBg_PaintSmooth(U32 *argb, U32 pitchBytes, U32 pw, U32 ph, const U8 *palette, const U8 *picture) {
+void ScreenPicture_PaintSmooth(U32 *argb, U32 pitchBytes, U32 pw, U32 ph, const U8 *palette, const U8 *picture) {
     if (s_mode != 2 || !s_chainAt || pw * ph > s_chainAtCap)
         return;
     UpdateMaps();

@@ -1,6 +1,6 @@
-#include "controls.h"
+#include "bindings.h"
 
-#include "engine.h"
+#include "host.h"
 #include "menu.h"
 #include "menu_parts.h"
 #include "trace.h"
@@ -122,7 +122,7 @@ static void KeyName(int code, char *out, size_t n) {
         out[0] = 0;
         return;
     }
-    const char *sdl = Engine_ScancodeName(code);
+    const char *sdl = Host_ScancodeName(code);
     static const struct {
         const char *from, *to;
     } kShort[] = {
@@ -152,7 +152,7 @@ static void KeyName(int code, char *out, size_t n) {
 static int PadFamily() {
     if (sw_padnames)
         return sw_padnames;
-    int f = Engine_PadFamily();
+    int f = Host_PadFamily();
     return f ? f : 1;
 }
 
@@ -190,7 +190,7 @@ static void PadName(int code, char *out, size_t n) {
 // Select a key", "press <SHIFT> or simply press <TAB>"): in capitals inside angle
 // brackets. A chip keeps the name as 1997's key list writes it ("Enter", "Left shift").
 // The game font has no arrows or +, so they are said: "<D-PAD UP>", "<PLUS>".
-void Controls_SaidKey(const char *name, char *out, size_t n) {
+void Bindings_SaidKey(const char *name, char *out, size_t n) {
     static const struct {
         char c;
         const char *word;
@@ -216,10 +216,10 @@ void Controls_SaidKey(const char *name, char *out, size_t n) {
 }
 
 // Start as the voice says it: "<MENU>" on an Xbox pad, "<PLUS>" on a Nintendo one.
-void Controls_StartSaid(char *out, size_t n) {
+void Bindings_StartSaid(char *out, size_t n) {
     char name[16];
     PadName(PAD_START, name, sizeof name);
-    Controls_SaidKey(name, out, n);
+    Bindings_SaidKey(name, out, n);
 }
 
 // A binding as a sentence names it.
@@ -371,9 +371,9 @@ static const char *DeviceName(int d) { return d ? "Gamepad" : "Keyboard"; }
 
 static void Say();
 
-void Controls_Open() {
+void Bindings_Open() {
     g_active = true;
-    g_device = Engine_LastInputWasPad() || !Engine_KeyboardSeen() ? 1 : 0;
+    g_device = Host_LastInputWasPad() || !Host_KeyboardSeen() ? 1 : 0;
     g_focusRight = false;
     g_group = 0;
     g_colCursor = 1;
@@ -391,7 +391,7 @@ void Controls_Open() {
     Trace("controls open device=%s", DeviceName(g_device));
 }
 
-void Controls_Close() {
+void Bindings_Close() {
     if (!g_active)
         return;
     g_active = false;
@@ -399,9 +399,9 @@ void Controls_Close() {
     Trace("controls close");
 }
 
-bool Controls_Active() { return g_active; }
+bool Bindings_Active() { return g_active; }
 
-void Controls_Reset() {
+void Bindings_Reset() {
     g_active = g_waiting = g_focusRight = false;
     g_device = g_group = g_colCursor = g_row = g_column = g_scroll = 0;
     g_lastBound[0] = 0;
@@ -409,7 +409,7 @@ void Controls_Reset() {
     g_bindingsReady = false;
 }
 
-static_assert(ACTION_COUNT * 4 <= CONTROLS_BIND_MAX, "CONTROLS_BIND_MAX holds every binding");
+static_assert(ACTION_COUNT * 4 <= BINDINGS_MAX, "BINDINGS_MAX holds every binding");
 
 static void BindingsReady() {
     if (!g_bindingsReady) {
@@ -418,24 +418,24 @@ static void BindingsReady() {
     }
 }
 
-int Controls_BindingCount() { return ACTION_COUNT * 4; }
+int Bindings_Count() { return ACTION_COUNT * 4; }
 
-void Controls_GetBindings(int *out) {
+void Bindings_Get(int *out) {
     BindingsReady();
     memcpy(out, g_bind, sizeof g_bind);
 }
 
-void Controls_PutBindings(const int *in) {
+void Bindings_Put(const int *in) {
     memcpy(g_bind, in, sizeof g_bind);
     g_bindingsReady = true;
 }
 
-void Controls_DefaultBindings() {
+void Bindings_PutDefaults() {
     ResetBindings();
     g_bindingsReady = true;
 }
 
-bool Controls_BindingsAreDefault() {
+bool Bindings_AreDefault() {
     if (!g_bindingsReady)
         return true;
     for (int a = 0; a < ACTION_COUNT; a++)
@@ -458,7 +458,7 @@ static void SaidCode(int column, int code, char *out, size_t n) {
     char name[32];
     CodeName(column, code, name, sizeof name);
     if (name[0])
-        Controls_SaidKey(name, out, n);
+        Bindings_SaidKey(name, out, n);
     else
         out[0] = 0;
 }
@@ -545,18 +545,18 @@ static void SwapAnswer(int i, char *out, size_t n, bool shown = false) {
 static void StartWaiting() {
     g_swap.action = -1;
     g_waiting = true;
-    g_waitStart = Engine_TimeMs();
-    g_waitFrame = Engine_Frame();
+    g_waitStart = Host_TimeMs();
+    g_waitFrame = Host_Frame();
     Trace("controls wait action=\"%s\" column=\"%s\"", kActions[CursorAction()].name, ColumnHead(CursorColumn()));
 }
 
 static void UpdateWaiting() {
     int column = CursorColumn();
-    S32 raw = Engine_RawPressed();
-    if (Engine_Frame() == g_waitFrame)
+    S32 raw = Host_RawPressed();
+    if (Host_Frame() == g_waitFrame)
         return;  // the press that started the wait
     // Esc on the keyboard view, Start on the pad view: the button no binding can take.
-    bool cancel = raw == K_ESC || (raw == 0 && Engine_Pressed(KEY_ESC)) || (column >= 2 && raw == PAD_START);
+    bool cancel = raw == K_ESC || (raw == 0 && Host_Pressed(KEY_ESC)) || (column >= 2 && raw == PAD_START);
     if (cancel) {
         g_waiting = false;
         Trace("controls wait cancelled");
@@ -567,21 +567,21 @@ static void UpdateWaiting() {
         g_waiting = false;
         return;
     }
-    if (Engine_TimeMs() - g_waitStart > 5000) {
+    if (Host_TimeMs() - g_waitStart > 5000) {
         g_waiting = false;
         Trace("controls wait timed out");
     }
 }
 
 static void SwitchDevice() {
-    if (!Engine_KeyboardSeen())  // no keyboard, no Keyboard view
+    if (!Host_KeyboardSeen())  // no keyboard, no Keyboard view
         return;
     g_device ^= 1;
     g_column = 0;
     Trace("controls device=%s", DeviceName(g_device));
 }
 
-void Controls_Update() {
+void Bindings_Update() {
     SyncLayout();
     if (g_waiting) {
         UpdateWaiting();
@@ -589,14 +589,14 @@ void Controls_Update() {
         return;
     }
     if (g_swap.action >= 0) {
-        if (Engine_Pressed(KEY_UP) || Engine_Pressed(KEY_DOWN)) {
+        if (Host_Pressed(KEY_UP) || Host_Pressed(KEY_DOWN)) {
             g_swap.answer ^= 1;
             Trace("cursor %s", g_swap.answer ? "Yes" : "No");
         }
-        if (Engine_Pressed(KEY_ENTER) && g_swap.answer) {
+        if (Host_Pressed(KEY_ENTER) && g_swap.answer) {
             Trace("answer yes");
             Swap();
-        } else if (Engine_Pressed(KEY_ENTER) || Engine_Pressed(KEY_ESC)) {
+        } else if (Host_Pressed(KEY_ENTER) || Host_Pressed(KEY_ESC)) {
             g_swap.action = -1;
             Trace("answer no");
         }
@@ -609,27 +609,27 @@ void Controls_Update() {
     bool onGroups = !g_focusRight;
     bool column = !Wide();
 
-    if (Engine_Pressed(KEY_TAB))
+    if (Host_Pressed(KEY_TAB))
         SwitchDevice();
 
     if (onGroups) {
         if (column) {
             int n = GROUP_COUNT + 1;
-            if (Engine_Pressed(KEY_UP))
+            if (Host_Pressed(KEY_UP))
                 g_colCursor = (g_colCursor + n - 1) % n;
-            if (Engine_Pressed(KEY_DOWN))
+            if (Host_Pressed(KEY_DOWN))
                 g_colCursor = (g_colCursor + 1) % n;
             if (g_colCursor > 0)
                 g_group = g_colCursor - 1;
         } else {
-            if (Engine_Pressed(KEY_UP))
+            if (Host_Pressed(KEY_UP))
                 g_group = (g_group + GROUP_COUNT - 1) % GROUP_COUNT;
-            if (Engine_Pressed(KEY_DOWN))
+            if (Host_Pressed(KEY_DOWN))
                 g_group = (g_group + 1) % GROUP_COUNT;
         }
-        bool open = Engine_Pressed(KEY_ENTER) || (!column && Engine_Pressed(KEY_RIGHT));
+        bool open = Host_Pressed(KEY_ENTER) || (!column && Host_Pressed(KEY_RIGHT));
         if (open && column && g_colCursor == 0) {
-            Controls_Close();
+            Bindings_Close();
             return;
         }
         if (open) {
@@ -638,36 +638,36 @@ void Controls_Update() {
             g_column = 0;
             g_scroll = 0;
             Trace("controls group=%s", kGroups[g_group].name);
-        } else if (Engine_Pressed(KEY_ESC)) {
-            Controls_Close();
+        } else if (Host_Pressed(KEY_ESC)) {
+            Bindings_Close();
             return;
         }
     } else {
-        if (Engine_Pressed(KEY_UP))
+        if (Host_Pressed(KEY_UP))
             g_row = (g_row + nrows - 1) % nrows;
-        if (Engine_Pressed(KEY_DOWN))
+        if (Host_Pressed(KEY_DOWN))
             g_row = (g_row + 1) % nrows;
-        if (Engine_Pressed(KEY_RIGHT) && g_column + 1 < ncols)
+        if (Host_Pressed(KEY_RIGHT) && g_column + 1 < ncols)
             g_column++;
-        if (Engine_Pressed(KEY_LEFT)) {
+        if (Host_Pressed(KEY_LEFT)) {
             if (g_column > 0)
                 g_column--;
             else if (!column)
                 g_focusRight = false;
         }
         bool fixed = FixedChip(CursorAction(), CursorColumn());
-        if (g_focusRight && fixed && (Engine_Pressed(KEY_ENTER) || Engine_Pressed(KEY_DEL))) {
+        if (g_focusRight && fixed && (Host_Pressed(KEY_ENTER) || Host_Pressed(KEY_DEL))) {
             Trace("fixed action=\"%s\"", kActions[CursorAction()].name);
-        } else if (g_focusRight && Engine_Pressed(KEY_ENTER)) {
+        } else if (g_focusRight && Host_Pressed(KEY_ENTER)) {
             StartWaiting();
-        } else if (g_focusRight && Engine_Pressed(KEY_DEL)) {
+        } else if (g_focusRight && Host_Pressed(KEY_DEL)) {
             int a = CursorAction(), c = CursorColumn();
             if (c < 2)
                 g_bind[a][c] = 0;
             else
                 g_bind[a][2] = g_bind[a][3] = 0;
             Trace("clear action=\"%s\" column=\"%s\"", kActions[a].name, ColumnHead(c));
-        } else if (Engine_Pressed(KEY_ESC)) {
+        } else if (Host_Pressed(KEY_ESC)) {
             g_focusRight = false;
             Trace("controls back to groups");
         }
@@ -686,7 +686,7 @@ static void Say() {
             text = "Press a key, or <ESC> to keep it.";  // 1997: "Press a key or <ESC> to cancel"
         } else {
             char start[16];
-            Controls_StartSaid(start, sizeof start);
+            Bindings_StartSaid(start, sizeof start);
             snprintf(buf, sizeof buf, Menu_Tr("Press a button, or %s to keep it."), start);
             text = buf;
         }
@@ -700,7 +700,7 @@ static void Say() {
             g_swap.action = -1;  // the cursor moved on
         if (g_swap.action < 0 && FixedChip(a, c)) {
             char start[16];
-            Controls_StartSaid(start, sizeof start);
+            Bindings_StartSaid(start, sizeof start);
             snprintf(buf, sizeof buf, Menu_Tr("%s always opens the game menu, so it can't be changed."), start);
             text = buf;
         } else if (g_swap.action >= 0) {
@@ -875,7 +875,7 @@ static void Legend(const char **keys, const char **words, int *n) {
     } else if (!g_focusRight) {
         keys[*n] = "Enter", words[(*n)++] = "Open";
     }
-    if (Engine_KeyboardSeen()) {
+    if (Host_KeyboardSeen()) {
         snprintf(other, sizeof other, "%s", DeviceName(!g_device));
         keys[*n] = "Tab", words[(*n)++] = other;
     }
@@ -984,7 +984,7 @@ static void DrawWideControls() {
 }
 
 static void DrawColumnControls() {
-    S32 W = (S32)Engine_LogicalW(), H = (S32)Engine_LogicalH();
+    S32 W = (S32)Host_LogicalW(), H = (S32)Host_LogicalH();
     S32 x0 = W / 2 - 275, x1 = W / 2 + 275;
     if (!g_focusRight) {
         // The groups, as a 1997 sub-menu: a Return row, then one row each.
@@ -1020,7 +1020,7 @@ static void DrawColumnControls() {
     Menu_DrawDialogue();
 }
 
-void Controls_Draw() {
+void Bindings_Draw() {
     SyncLayout();
     g_chipCount = g_headCount = 0;
     if (Wide())
@@ -1031,7 +1031,7 @@ void Controls_Draw() {
 
 // ───────────────────────────── State ─────────────────────────────
 
-int Controls_Chips(ChipView *out, int max) {
+int Bindings_Chips(ChipView *out, int max) {
     int n = g_chipCount < max ? g_chipCount : max;
     for (int i = 0; i < n; i++) {
         out[i].action = kActions[g_chips[i].action].name;
@@ -1045,7 +1045,7 @@ int Controls_Chips(ChipView *out, int max) {
     return n;
 }
 
-int Controls_Heads(HeadView *out, int max) {
+int Bindings_Heads(HeadView *out, int max) {
     int n = g_headCount < max ? g_headCount : max;
     for (int i = 0; i < n; i++) {
         out[i].text = g_heads[i].text;
@@ -1054,7 +1054,7 @@ int Controls_Heads(HeadView *out, int max) {
     return n;
 }
 
-int Controls_Conflicts(ConflictView *out, int max) {
+int Bindings_Conflicts(ConflictView *out, int max) {
     int n = 0;
     for (int a = 0; a < ACTION_COUNT; a++) {
         for (int c = 0; c < 3; c++) {
@@ -1070,7 +1070,7 @@ int Controls_Conflicts(ConflictView *out, int max) {
     return n;
 }
 
-int Controls_Where(char *buf, size_t n) {
+int Bindings_Where(char *buf, size_t n) {
     if (!g_focusRight) {
         const char *row = !Wide() && g_colCursor == 0 ? "Return to previous menu" : kGroups[g_group].name;
         snprintf(buf, n, "%s | %s", DeviceName(g_device), row);
@@ -1084,7 +1084,7 @@ int Controls_Where(char *buf, size_t n) {
     return g_waiting || g_swap.action >= 0 ? 3 : 2;  // Esc takes either back to the chip
 }
 
-bool Controls_Binding(const char *action, int column, char *out, size_t n) {
+bool Bindings_Text(const char *action, int column, char *out, size_t n) {
     for (int a = 0; a < ACTION_COUNT; a++) {
         if (!strcmp(kActions[a].name, action)) {
             if (!g_bindingsReady) {
@@ -1099,7 +1099,7 @@ bool Controls_Binding(const char *action, int column, char *out, size_t n) {
     return false;
 }
 
-void Controls_WriteState(FILE *f) {
+void Bindings_WriteState(FILE *f) {
     SyncLayout();
     char buf[32];
     int a = CursorAction(), c = CursorColumn();
@@ -1161,16 +1161,16 @@ void Controls_WriteState(FILE *f) {
 }
 
 // A legend's key as the player's device names it: after a pad press, the pad's
-// button for the menu's fixed keys (engine.cpp kPadMenuKeys: A Enter, B Esc,
+// button for the menu's fixed keys (host.cpp kPadMenuKeys: A Enter, B Esc,
 // X Del, View Tab). The wait for a key keeps its own names: there B is not Esc.
-const char *Controls_LegendKey(const char *key) {
+const char *Bindings_LegendKey(const char *key) {
     static char names[4][16];
     static const struct {
         const char *key;
         int pad;
     } kFixed[] = {{"Enter", 0}, {"Esc", 1}, {"Del", 2}, {"Tab", 4}};
     // With no keyboard (a console before any key is typed) the pad's names from the start.
-    if ((!Engine_LastInputWasPad() && Engine_KeyboardSeen()) || g_waiting)
+    if ((!Host_LastInputWasPad() && Host_KeyboardSeen()) || g_waiting)
         return key;
     for (int i = 0; i < 4; i++) {
         if (!strcmp(key, kFixed[i].key)) {
