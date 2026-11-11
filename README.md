@@ -154,9 +154,10 @@ memory like the other settings.
 - Tab (the pad's View button) switches Keyboard and Gamepad; the page opens on
   the one touched last.
 - Enter waits for a key: the chip takes the current-value plasma and the voice
-  asks for it and says the way out: "Press a key, or Esc to keep it." on the
-  keyboard view, "Press a button, or Menu to keep it." on the pad view (Start,
-  by the pad's own name; decided 2026-11-11, replacing "or wait to keep it").
+  asks for it and says the way out: "Press a key, or <ESC> to keep it." on the
+  keyboard view, "Press a button, or <MENU> to keep it." on the pad view (Start,
+  by the pad's own name, in capitals inside angle brackets as the 1997 text
+  writes "<ESC>" and "<TAB>"; decided 2026-11-11, replacing "or wait to keep it").
   Esc or Start cancels, and so does waiting 5 seconds. A pad view only takes
   pad input, a keyboard view only keys.
 - Start always opens the game menu, as Esc does on the keyboard: Game menu's

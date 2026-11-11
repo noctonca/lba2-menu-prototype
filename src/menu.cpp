@@ -1647,7 +1647,7 @@ void Menu_Draw() {
 
     if (g_closed) {
         // Two lines at the voice's pitch: on one, 784 wide, it would not fit 640.
-        const char *lines[2] = {"Options closed.", "Enter opens them again. Esc quits."};
+        const char *lines[2] = {"Options closed.", "<ENTER> opens them again. <ESC> quits."};
         for (int i = 0; i < 2; i++)
             Ui_TextShadow((S32)Engine_LogicalW() / 2 - Ui_TextWidth(lines[i]) / 2,
                           (S32)Engine_LogicalH() / 2 - 38 + i * 38, lines[i], DIALOGUE_HERO * 16 + 12);

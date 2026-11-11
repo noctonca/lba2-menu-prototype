@@ -214,7 +214,11 @@ voice. A setting exists only if players really disagree about it.
 **Postel's Law** (be liberal in what you accept).
 - Keys and pad both work everywhere, except while a binding waits: then only
   the device the view shows. Esc, Start on the pad, or 5 s, gives up the
-  wait, and the voice says so: "Press a button, or Menu to keep it."
+  wait, and the voice says so: "Press a button, or <MENU> to keep it."
+  In the voice a key or button is written in capitals inside angle brackets,
+  as the 1997 text does ("<ESC> exit, <ENTER> Select a key"); chips, rows and
+  the legend keep the key list's case (decided 2026-11-11). The game font
+  draws < and > as small raised marks, so it reads ˚MENU˚ on screen.
   (decided 2026-11-11, replacing 2026-11-03's "no pad button is kept back").
 - **No binding locks a pad-only player out** (decided 2026-11-11). Start
   always opens the game menu and can't be bound elsewhere, as Esc on the
@@ -224,7 +228,7 @@ voice. A setting exists only if players really disagree about it.
   Xbox, Switch, Vita or Android TV player no way back to Options (measured
   2026-11-11 on main, Vita and default layouts). **[self test: padonly]**
 - A key already in use asks first, as choosing Classic and Reset settings do:
-  the voice says who has it ("J is on Jetpack, in Magic and items."), and two
+  the voice says who has it ("<J> is on Jetpack, in Magic and items."), and two
   answers take the actions' place, the safe one first: "No, keep it on
   Jetpack" and "Yes, Jetpack gets Up" (or "keeps Num 5", or "has no key").
   Esc answers No (decided 2026-11-11, replacing the refusal of 2026-11-03:

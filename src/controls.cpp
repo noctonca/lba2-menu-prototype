@@ -9,6 +9,7 @@
 #include <SVGA/CLIP.H>
 #include <SYSTEM/KEYBOARD_KEYS.H>
 
+#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -185,12 +186,44 @@ static void PadName(int code, char *out, size_t n) {
         snprintf(out, n, "%s", kTriggers[f][i - 23]);
 }
 
-// Start as the voice says it: the game font has no +, so Nintendo's is said Plus.
-void Controls_StartSaid(char *out, size_t n) {
-    PadName(PAD_START, out, n);
-    if (!strcmp(out, "+"))
-        snprintf(out, n, "Plus");
+// A key or button as a sentence names it, as the 1997 text does ("<ESC> exit, <ENTER>
+// Select a key", "press <SHIFT> or simply press <TAB>"): in capitals inside angle
+// brackets. A chip keeps the name as 1997's key list writes it ("Enter", "Left shift").
+// The game font has no arrows or +, so they are said: "<D-PAD UP>", "<PLUS>".
+void Controls_SaidKey(const char *name, char *out, size_t n) {
+    static const struct {
+        char c;
+        const char *word;
+    } kSaid[] = {{'\x18', "UP"}, {'\x19', "DOWN"}, {'\x1b', "LEFT"}, {'\x1a', "RIGHT"}, {'+', "PLUS"}};
+    size_t o = 0;
+    if (o + 1 < n)
+        out[o++] = '<';
+    for (const char *p = name; *p && o + 1 < n; p++) {
+        const char *word = NULL;
+        for (size_t i = 0; i < sizeof kSaid / sizeof kSaid[0]; i++)
+            if (*p == kSaid[i].c)
+                word = kSaid[i].word;
+        if (word) {
+            for (; *word && o + 1 < n; word++)
+                out[o++] = *word;
+        } else {
+            out[o++] = (char)toupper((unsigned char)*p);
+        }
+    }
+    if (o + 1 < n)
+        out[o++] = '>';
+    out[o] = 0;
 }
+
+// Start as the voice says it: "<MENU>" on an Xbox pad, "<PLUS>" on a Nintendo one.
+void Controls_StartSaid(char *out, size_t n) {
+    char name[16];
+    PadName(PAD_START, name, sizeof name);
+    Controls_SaidKey(name, out, n);
+}
+
+// A binding as a sentence names it.
+static void SaidCode(int column, int code, char *out, size_t n);
 
 // What one chip says. The pad's column shows both of its bindings when it has two.
 static void ChipText(int action, int column, char *out, size_t n) {
@@ -391,6 +424,15 @@ static void CodeName(int column, int code, char *out, size_t n) {
         PadName(code, out, n);
 }
 
+static void SaidCode(int column, int code, char *out, size_t n) {
+    char name[32];
+    CodeName(column, code, name, sizeof name);
+    if (name[0])
+        Controls_SaidKey(name, out, n);
+    else
+        out[0] = 0;
+}
+
 static void Bind(int action, int column, int code) {
     char name[32], was[32];
     if (FixedChip(action, column) || (column >= 2 && code == PAD_START))
@@ -455,6 +497,7 @@ static void SwapAnswer(int i, char *out, size_t n) {
     }
     char old[32], kept[32];
     int c = g_swap.column;
+    // Answers are rows, which name keys as the chips do; only the voice brackets them.
     CodeName(c, OldCode(g_swap.action, c), old, sizeof old);
     CodeName(c, g_bind[g_swap.holder][g_swap.slot ^ 1], kept, sizeof kept);
     if (old[0])
@@ -609,7 +652,7 @@ static void Say() {
         // binding can take (decided 2026-11-11, replacing "or wait to keep it" of
         // 2026-11-03). The action is the row under the cursor, so the prompt fits one line.
         if (CursorColumn() < 2) {
-            text = "Press a key, or Esc to keep it.";
+            text = "Press a key, or <ESC> to keep it.";  // 1997: "Press a key or <ESC> to cancel"
         } else {
             char start[16];
             Controls_StartSaid(start, sizeof start);
@@ -632,7 +675,7 @@ static void Say() {
         } else if (g_swap.action >= 0) {
             const Action &h = kActions[g_swap.holder];
             char key[32], where[64] = "";
-            CodeName(c, g_swap.code, key, sizeof key);
+            SaidCode(c, g_swap.code, key, sizeof key);
             // One pane at a time shows one group: name the other action's when it is not this
             // one. What each answer leaves it with is on the answer rows.
             if (h.group != g_group)

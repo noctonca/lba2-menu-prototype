@@ -489,6 +489,12 @@ struct Walker {
             Frame();
         }
     }
+    // A key's name as the voice says it ("<J>").
+    static std::string Said(const char *name) {
+        char out[48];
+        Controls_SaidKey(name, out, sizeof out);
+        return out;
+    }
     void Wait(int frames) {
         path.push_back(Fmt("wait %d", frames));
         for (int i = 0; i < frames; i++)
@@ -1190,7 +1196,7 @@ struct Walker {
         Key("enter");
         if (!Expect(Waiting(), "bind: Enter does not wait for a key"))
             return;
-        std::string ask = pad ? std::string("Press a button, or ") + said + " to keep it." : "Press a key, or Esc to keep it.";
+        std::string ask = pad ? std::string("Press a button, or ") + said + " to keep it." : "Press a key, or <ESC> to keep it.";
         Expect(Voice() == ask, Fmt("bind: the voice does not ask for the key and say the way out: %s", Repr(Voice().c_str()).c_str()));
         Check();
         Key("esc");
@@ -1232,7 +1238,7 @@ struct Walker {
                 return;
             Check();
             std::string q = Voice();
-            Expect(q.find(std::string(want) + " is on " + partner) == 0,
+            Expect(q.find(Said(want) + " is on " + partner) == 0,
                    Fmt("bind: the question does not say %s has %s: %s", partner, Repr(want).c_str(), Repr(q.c_str()).c_str()));
             Expect(RowDrawn((std::string("No, keep it on ") + partner).c_str()) && !RowStarting("Yes, ").empty(),
                    "bind: the question's answers are not drawn");
@@ -1316,7 +1322,7 @@ struct Walker {
         if (!Expect(Asking(), "swap: J, Jetpack's, did not ask"))
             return;
         std::string q = Voice();
-        Expect(q == "J is on Jetpack, in Magic and items.", Fmt("swap: the question reads %s", Repr(q.c_str()).c_str()));
+        Expect(q == "<J> is on Jetpack, in Magic and items.", Fmt("swap: the question reads %s", Repr(q.c_str()).c_str()));
         std::string yes = "Yes, Jetpack gets " + mine;
         Expect(RowDrawn(yes.c_str()), Fmt("swap: no %s answer (Yes reads %s)", Repr(yes.c_str()).c_str(),
                                           Repr(RowStarting("Yes, ").c_str()).c_str()));
