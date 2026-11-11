@@ -33,6 +33,7 @@
 #include "cadre.h"
 #include "screenbg.h"
 #include "shot.h"
+#include "twinsun.h"
 
 // Resource numbers, from lba2cc SOURCES/COMMON.H.
 #define RESS_PAL 0
@@ -370,6 +371,9 @@ bool Engine_Init(const EngineConfig &cfg) {
     U8 *font = (U8 *)LoadMalloc_HQR(s_ress, RESS_FONT_GPM);
     s_xplBoot = (U8 *)LoadMalloc_HQR(s_ress, RESS_XPL00);
     s_xplIsland = (U8 *)LoadMalloc_HQR(s_ress, RESS_XPL0);
+    char holomap[1024];
+    JoinPath(holomap, sizeof holomap, dir, "holomap.hqr");
+    Twinsun_Init(holomap);  // the Background row's Twinsun; black without it
     s_menuImage = (U8 *)malloc(640 * 480 + 4096);
     if (!s_palMenu || !font || !s_xplBoot || !s_xplIsland || !Load_HQR(s_screen, s_menuImage, PCR_MENU)) {
         fprintf(stderr, "could not read the game data in %s\n", dir);
@@ -755,6 +759,11 @@ void Engine_DrawBackground() {
     if (!s_pixels)
         return;
     U8 *dst = (U8 *)Log;
+    if (s_backdrop == 2) {  // Twinsun turning on stars; the screen outside the canvas black
+        Twinsun_Draw(s_logW, s_logH, Engine_TimeMs());
+        ScreenBg_NoPicture(0);
+        return;
+    }
     if (s_backdrop) {
         const U8 fill = s_backdrop == 1 ? 181 : 0;  // a blue from the picture; black
         for (U32 y = 0; y < s_logH; y++)

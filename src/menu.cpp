@@ -7,6 +7,7 @@
 #include "trace.h"
 #include "menu_parts.h"
 #include "ui.h"
+#include "twinsun.h"
 #include "vfont.h"
 
 #include <SVGA/BOX.H>
@@ -54,9 +55,10 @@ static const Setting kSettings[S_COUNT] = {
      "Shows what is said while the voices play."},
     // What the menu is drawn over (asked for 2026-11-11). Blue is menu palette 181, the
     // picture's second most common colour (picked over 196); rows and the band darken it
-    // as they darken the picture. Off is black.
-    {"background", "Background", K_CHOICE, 2, {"Picture", "Blue", "Off"}, 0, 0, false,
-     "What is behind the menu: the 1997 picture, plain blue, or nothing."},
+    // as they darken the picture. Twinsun is the holomap's planet turning once in two minutes on
+    // stars (src/twinsun.cpp; asked for 2026-11-11). Off is black.
+    {"background", "Background", K_CHOICE, 3, {"Picture", "Blue", "Twinsun", "Off"}, 0, 0, false,
+     "What is behind the menu: the 1997 picture, plain blue, Twinsun turning, or nothing."},
     // The menu's letters (asked for 2026-11-11): the game font, or Zilla Slab Bold drawn at
     // the screen's resolution (src/vfont.cpp), the face lba2cc's parked HD UI overlay chose.
     // Bold over Medium and the size, decided after play (2026-11-11).
@@ -222,6 +224,7 @@ static Page g_pages[P_COUNT];
 static int sw_band = 1, sw_typing = 0, sw_chip = 2, sw_tablefont = 1, sw_keyrule = 0, sw_word = 2, sw_island = 0, sw_help640 = 1,
            sw_gameplay = 0, sw_overlay = 0;
 // Composition (2026-11-03 design pass): sheet, legend, bg, scale (scale remakes the canvas).
+static int sw_tstilt = 3328, sw_tssize = 140;  // the Twinsun background's tilt and size
 static int sw_vfsize = 100;  // Zilla Slab's size, percent of the game font's capitals
 static int sw_bgres = 3;  // the picture at the screen's resolution: 0 off, 1 whole step, 2 smooth,
                           // 3 as the Image row says (Classic whole step, Smooth smooth; decided 2026-11-11)
@@ -1720,6 +1723,7 @@ static const SwitchDef kSwitches[] = {
     {"clash", &sw_clash, 0, 1, 1},       {"short", &sw_short, 0, 1, 1},
     {"narrow", &sw_narrow, 0, 1, 1},     {"exptable", &sw_exptable, 0, 1, 1},
     {"fpsrow", &sw_fpsrow, 0, 1, 0},     {"slider", &sw_slider, 0, 1, 1},     {"pace", &sw_pace, 1, 9, 3},
+    {"tstilt", &sw_tstilt, 0, 4095, 3328}, {"tssize", &sw_tssize, 50, 200, 140},
 };
 
 bool Menu_SetSwitch(const char *name, int v) {
@@ -1738,6 +1742,10 @@ bool Menu_SetSwitch(const char *name, int v) {
             Engine_SetBackgroundFit(v);
         if (!strcmp(name, "vfsize"))
             VFont_SetSizePercent(v);
+        if (!strcmp(name, "tstilt"))
+            Twinsun_SetTilt(v);
+        if (!strcmp(name, "tssize"))
+            Twinsun_SetSizePercent(v);
         if (!strcmp(name, "scale") && v != Engine_ScaleRule()) {
             Engine_SetScaleRule(v);
             if (!Engine_SetScreen(Engine_PhysW(), Engine_PhysH(), true)) {

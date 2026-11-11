@@ -72,6 +72,7 @@ add_executable(lba2menu
     src/shot.cpp
     src/screenbg.cpp
     src/vfont.cpp
+    src/twinsun.cpp
     ${EMBEDDED_FONTS_CPP}
     src/selftest.cpp
     ${LBA2CC_GAME_SOURCES}

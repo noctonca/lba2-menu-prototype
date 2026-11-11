@@ -441,10 +441,24 @@ int Lba2Main(int argc, char *argv[]) {
             Menu_SetSwitch("panes", !Menu_GetSwitch("panes"));
         if (Engine_Pressed(KEY_6))
             Menu_SetSwitch("bandshade", Menu_GetSwitch("bandshade") ? 0 : 15);
-        if (Engine_Pressed(KEY_7))
-            Menu_SetSwitch("clash", !Menu_GetSwitch("clash"));
-        if (Engine_Pressed(KEY_8))
-            Menu_SetSwitch("short", !Menu_GetSwitch("short"));
+        // Shift+7 and Shift+8: the Twinsun background's tilt and size (the Background row picks it).
+        if (Engine_Pressed(KEY_7)) {
+            if (Engine_ShiftHeld()) {
+                static const int tilts[] = {3840, 3584, 3328, 0, 256, 512};
+                int i = 0;
+                while (i < 6 && tilts[i] != Menu_GetSwitch("tstilt"))
+                    i++;
+                Menu_SetSwitch("tstilt", tilts[(i + 1) % 6]);
+            } else
+                Menu_SetSwitch("clash", !Menu_GetSwitch("clash"));
+        }
+        if (Engine_Pressed(KEY_8)) {
+            if (Engine_ShiftHeld()) {
+                const int s = Menu_GetSwitch("tssize");
+                Menu_SetSwitch("tssize", s >= 140 ? 80 : s + 20);
+            } else
+                Menu_SetSwitch("short", !Menu_GetSwitch("short"));
+        }
         // Shift+9 and Shift+0: Zilla Slab 5% smaller or larger (the Font row picks it).
         if (Engine_Pressed(KEY_9)) {
             if (Engine_ShiftHeld())

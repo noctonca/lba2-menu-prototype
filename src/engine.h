@@ -111,7 +111,7 @@ const U8 *Engine_Palette();
 // and centred.
 void Engine_SetBackgroundFit(int fit);
 void Engine_DrawBackground();
-// What Engine_DrawBackground draws: 0 the picture, 1 plain blue, 2 black.
+// What Engine_DrawBackground draws: 0 the picture, 1 plain blue, 2 Twinsun, 3 black.
 void Engine_SetBackdrop(int backdrop);
 // The picture at the screen's resolution (screenbg.h): 0 off, 1 whole step, 2 smooth.
 void Engine_SetBackgroundRes(int mode);
