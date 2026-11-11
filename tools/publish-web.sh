@@ -8,7 +8,7 @@ commit=$(git rev-parse --short HEAD)
 remote=$(git remote get-url origin)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-cp out/web/index.html out/web/lba2menu.js out/web/lba2menu.wasm "$tmp"/
+cp -R out/web/. "$tmp"/
 touch "$tmp/.nojekyll"
 git -C "$tmp" init -q -b gh-pages
 git -C "$tmp" add -A

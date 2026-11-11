@@ -3,81 +3,168 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
 <title>LBA2 menu prototype</title>
 <style>
-  :root { --bg: #10161c; --fg: #e8e4da; --dim: #9aa3ab; --accent: #f0c060; --panel: #1b242d; --bar: 40px; }
+  /* The LBA Classic UI design system, theme lba2: its tokens by name, palette colours resolved.
+     The game font (RESS.HQR) is game data and is not served here; the display face is Zilla Slab
+     Bold, the menu's Modern font. The 8x8 face is lba2cc's (LIB386/SVGA/AFFSTR.CPP). */
+  @font-face { font-family: "Zilla Slab"; src: url("fonts/ZillaSlab-Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
+  @font-face { font-family: "LBA System 8x8"; src: url("fonts/LBASystem8x8.ttf") format("truetype"); font-display: swap; }
+  :root {
+    --ink-white: #ffffff;            /* pal-015: what the player chooses */
+    --ink-black: #000000;            /* pal-000 */
+    --frame-light: #abffff;          /* pal-175: frame top and left */
+    --frame-dark: #136b77;           /* pal-169: frame right and bottom */
+    --frame-alert-light: #ffb3af;    /* pal-079 */
+    --frame-alert-dark: #b32b27;     /* pal-073 */
+    --fill-cell: #000000;
+    --fill-selected: #074753;        /* pal-166 */
+    --plasma-lo: #071327;            /* pal-192 */
+    --plasma-mid: #1b4b67;           /* pal-197 */
+    --plasma-hi: #3b8fb3;            /* pal-202 */
+    --text-dialogue-12: #67a7cb;     /* pal-204: the voice */
+    --ink-config-head: #efe3b7;      /* pal-045 */
+    --ink-config-menu: #83e3e3;      /* pal-174 */
+    --shade-menu: rgba(0, 0, 0, 0.56);
+    --shade-panel: rgba(0, 0, 0, 0.36);
+    --radius-frame: 5px;
+    --frame-line: 1px;
+    --menu-gap: 6px;
+    --pad-text: 8px;
+    /* shadow-text (2px 4px) and shadow-title (4px 4px) at the game's 38px line, kept in proportion. */
+    --shadow-text: 0.053em 0.105em 0 #000000;
+    --shadow-title: 0.105em 0.105em 0 #000000;
+    --font-display: "Zilla Slab", Rockwell, "Roboto Slab", serif;
+    --font-system: "LBA System 8x8", "Courier New", monospace;
+    --bar: 44px;
+  }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
-  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; overflow: hidden; }
+  body { margin: 0; background: var(--ink-black); color: var(--ink-white); overflow: hidden;
+    font: 700 22px/1.3 var(--font-display); }
+  [hidden], input[type=file] { display: none !important; }
+  a { color: var(--ink-config-menu); }
+
+  /* Frame: the 1px two-tone bevel with chamfered corners. */
+  .frame { border: var(--frame-line) solid; border-color: var(--frame-light) var(--frame-dark) var(--frame-dark) var(--frame-light);
+    border-radius: var(--radius-frame); }
+  .frame--alert { border-color: var(--frame-alert-light) var(--frame-alert-dark) var(--frame-alert-dark) var(--frame-alert-light); }
+
+  /* Registers, set by colour: the player's choices white, the game's voice, the 8x8 font for keys. */
+  .title { color: var(--ink-white); text-shadow: var(--shadow-title); text-align: center; margin: 0 0 12px; font-size: 1em; font-weight: 700; }
+  .voice { color: var(--text-dialogue-12); text-shadow: var(--shadow-text); margin: 0 0 12px; }
+  .alert { color: var(--frame-alert-light); text-shadow: var(--shadow-text); }
+  .system { font-family: var(--font-system); font-weight: 400; font-size: 16px; line-height: 20px;
+    -webkit-font-smoothing: none; font-smooth: never; text-shadow: none; }
+  .chip { display: inline-flex; align-items: center; justify-content: center; min-width: 40px; height: 24px; padding: 2px 6px 0;
+    font-family: var(--font-system); font-weight: 400; font-size: 16px; line-height: 16px; -webkit-font-smoothing: none;
+    color: var(--ink-white); background: var(--fill-cell); white-space: nowrap; vertical-align: middle;
+    border: var(--frame-line) solid; border-color: var(--frame-light) var(--frame-dark) var(--frame-dark) var(--frame-light);
+    border-radius: var(--radius-frame); text-shadow: none; font-style: normal; }
+
+  /* Plasma: the cursor row's moving texture (a CSS rendition, as in the design system). */
+  .plasma { background:
+      radial-gradient(ellipse 22% 60% at 18% 45%, var(--plasma-lo), transparent 72%),
+      radial-gradient(ellipse 26% 70% at 58% 60%, var(--plasma-lo), transparent 72%),
+      radial-gradient(ellipse 18% 55% at 86% 40%, var(--plasma-lo), transparent 72%),
+      linear-gradient(180deg, var(--plasma-hi), var(--plasma-mid) 45%, var(--plasma-mid) 60%, var(--plasma-hi));
+    background-size: 200% 100%, 200% 100%, 200% 100%, 100% 100%; animation: plasma 9s linear infinite; }
+  @keyframes plasma { from { background-position: 0 0, 40% 0, 90% 0, 0 0; } to { background-position: 200% 0, -160% 0, 290% 0, 0 0; } }
+  @media (prefers-reduced-motion: reduce) { .plasma, .row:hover, .row:focus-visible { animation: none !important; } }
+
+  /* Menu rows: framed, darkened; the one under the pointer or the keyboard takes the plasma. */
+  .rows { display: flex; flex-direction: column; gap: calc(var(--menu-gap) - 1px); margin: 4px 0 14px; }
+  .row { display: block; width: 100%; min-height: 48px; padding: 8px 16px 6px; cursor: pointer; text-align: center;
+    font: inherit; color: var(--ink-white); text-shadow: var(--shadow-text); background: var(--shade-menu);
+    border: var(--frame-line) solid; border-color: var(--frame-light) var(--frame-dark) var(--frame-dark) var(--frame-light);
+    border-radius: var(--radius-frame); outline: none; }
+  .row:hover, .row:focus-visible { background:
+      radial-gradient(ellipse 22% 60% at 18% 45%, var(--plasma-lo), transparent 72%),
+      radial-gradient(ellipse 26% 70% at 58% 60%, var(--plasma-lo), transparent 72%),
+      radial-gradient(ellipse 18% 55% at 86% 40%, var(--plasma-lo), transparent 72%),
+      linear-gradient(180deg, var(--plasma-hi), var(--plasma-mid) 45%, var(--plasma-mid) 60%, var(--plasma-hi));
+    background-size: 200% 100%, 200% 100%, 200% 100%, 100% 100%; animation: plasma 9s linear infinite; }
+  .row:disabled { cursor: default; color: var(--ink-config-menu); background: var(--shade-menu); animation: none; }
+
+  /* The bar: a framed strip over the top of the page. */
   #bar { position: fixed; top: 0; left: 0; right: 0; height: var(--bar); display: flex; align-items: center; gap: 8px;
-    padding: 0 12px; background: var(--panel); border-bottom: 1px solid #2a3540; white-space: nowrap; }
-  #bar h1 { font-size: 1rem; margin: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+    padding: 0 10px 0 14px; background: var(--ink-black); border-bottom: var(--frame-line) solid var(--frame-dark); white-space: nowrap; }
+  #bar h1 { margin: 0; font-size: 20px; text-shadow: var(--shadow-title); overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   #bar .spacer { flex: 1; }
+  #bar .chip { cursor: pointer; }
+  #bar .chip:hover, #bar .chip:focus-visible { color: var(--ink-white); outline: none;
+    background: linear-gradient(180deg, var(--plasma-hi), var(--plasma-mid) 45%, var(--plasma-mid) 60%, var(--plasma-hi)); }
+
   /* The stage fills the window under the bar; the menu's screen is its size in device pixels. */
-  #stage { position: fixed; top: var(--bar); left: 0; right: 0; bottom: 0; background: #000; }
+  #stage { position: fixed; top: var(--bar); left: 0; right: 0; bottom: 0; background: var(--ink-black); }
   /* !important: SDL writes an inline size on the canvas at some pixel ratios; the page's layout wins. */
   canvas { display: block; width: 100% !important; height: 100% !important; outline: none; }
-  .panel { position: absolute; inset: 0; overflow: auto; background: var(--bg); padding: 16px; }
-  .panel > div { max-width: 760px; margin: 0 auto; }
-  #about { background: rgba(16, 22, 28, 0.96); }
-  h2 { font-size: 1.2rem; margin: 0.4em 0; }
-  p { margin: 0.5em 0; }
-  .dim { color: var(--dim); }
-  button, label.button { display: inline-block; background: var(--accent); color: #1a1408; border: 0; border-radius: 6px;
-    padding: 8px 14px; font: inherit; font-weight: 600; cursor: pointer; margin: 6px 6px 0 0; }
-  #bar button { padding: 3px 10px; margin: 0; font-size: 0.9rem; }
-  button.quiet { background: transparent; color: var(--dim); border: 1px solid #3a4652; font-weight: 400; }
-  input[type=file], [hidden] { display: none !important; }
-  #status { min-height: 1.5em; }
-  .error { color: #ff8a7a; }
-  kbd { background: #2a3540; border-radius: 4px; padding: 0 5px; font-size: 0.9em; }
-  a { color: var(--accent); }
-  ul { padding-left: 1.2em; margin: 0.3em 0; }
+
+  /* Pages over the stage: the scene behind, one framed panel in front. */
+  .page { position: absolute; inset: 0; overflow: auto; padding: 24px 16px;
+    background: linear-gradient(165deg, var(--plasma-mid), var(--plasma-lo) 60%, var(--fill-selected)); }
+  #about { background: var(--ink-black); }
+  .panel { max-width: 720px; margin: 0 auto; padding: 18px calc(var(--pad-text) + 12px) 16px; background: var(--shade-panel); }
+  .files { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 14px; }
+  .legend { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; margin: 0 0 14px; }
+  .legend > span:nth-child(odd) { justify-self: end; display: flex; gap: 4px; }
+  .legend > span:nth-child(even) { color: var(--ink-config-menu); }
+  #status { min-height: 0; padding: 8px 12px 4px; margin: 0 0 14px; }
+  #status:empty { display: none; }
+  .foot { color: var(--ink-config-head); margin: 18px 0 0; }
+  @media (max-width: 520px) { body { font-size: 19px; } #bar h1 { font-size: 17px; } .panel { padding: 14px 12px; } }
 </style>
 </head>
 <body>
 <header id="bar">
   <h1>LBA2 Options menu prototype</h1>
   <span class="spacer"></span>
-  <button id="fullscreen" class="quiet" hidden>Fullscreen</button>
-  <button id="aboutBtn" class="quiet">About</button>
+  <button id="fullscreen" class="chip" hidden>Fullscreen</button>
+  <button id="aboutBtn" class="chip">About</button>
 </header>
 
 <main id="stage">
   <canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
 
-  <section id="pick" class="panel"><div>
-    <h2>Your game files</h2>
-    <p>The menu draws with the game's own font, picture and palette, so it needs files from your copy of
-      Little Big Adventure 2: <b>RESS.HQR</b>, <b>SCREEN.HQR</b> and <b>SPRITES.HQR</b> (<b>HOLOMAP.HQR</b> too for
-      the Twinsun background). Any copy with loose .HQR files works, the free 1997 demo included.</p>
-    <p>Choose the game's folder. The files stay in this browser (kept for your next visit); nothing is uploaded.</p>
-    <label class="button" for="folder">Choose game folder</label>
-    <label class="button" for="files">Or choose the files</label>
+  <section id="pick" class="page"><div class="panel frame">
+    <h2 class="title">Your game files</h2>
+    <p class="voice">The menu draws with the game's own font, picture and palette, so it needs four files from your
+      copy of Little Big Adventure 2:</p>
+    <p class="files"><span class="chip">RESS.HQR</span><span class="chip">SCREEN.HQR</span><span class="chip">SPRITES.HQR</span><span class="chip">HOLOMAP.HQR</span></p>
+    <p class="voice">Any copy with loose .HQR files works, the free 1997 demo too. They stay in this browser for
+      your next visit. Nothing is uploaded.</p>
+    <div class="rows">
+      <button class="row" id="pickFolder">Choose the game folder</button>
+      <button class="row" id="pickFiles">Choose the files</button>
+    </div>
     <input id="folder" type="file" webkitdirectory multiple>
     <input id="files" type="file" multiple accept=".hqr,.HQR">
-    <p id="status"></p>
-    <p class="dim">See <a href="#" id="aboutLink">About</a> for what this is and its keys.</p>
+    <p id="status" class="voice"></p>
+    <p class="voice">What this is, and its keys: <a href="#" id="aboutLink">About</a>.</p>
   </div></section>
 
-  <section id="about" class="panel" hidden><div>
-    <h2>About</h2>
-    <p>A fan-made prototype of a new Options menu for LBA2 Classic Community. It is not the game, and not
-      affiliated with the game's owners. Settings are pretend: nothing is saved.</p>
-    <p><kbd>Esc</kbd> goes back, arrows move, <kbd>Enter</kbd> picks. A gamepad works too. The menu's screen is
-      the size of this window; resize the window to try other sizes.</p>
-    <h2>The prototype's own keys</h2>
-    <ul>
-      <li><kbd>F2</kbd> / <kbd>Shift+F2</kbd>: a pretend screen size from lba2cc's list (shown with black bars);
-        resizing the window goes back to the window's size</li>
-      <li><kbd>F1</kbd> overlay, <kbd>F3</kbd> band, <kbd>F4</kbd> typing, <kbd>F8</kbd> help at 640x480 &mdash; switches being tried</li>
-      <li><kbd>1</kbd>&ndash;<kbd>0</kbd> and <kbd>Shift</kbd>+them: more switches being tried (see the README)</li>
-    </ul>
-    <p class="dim">Some browsers keep keys such as F5 (reload), F11 and F12 for themselves.</p>
-    <p class="dim">Source (GPL-2.0, built on <a href="https://github.com/LBALab/lba2-classic-community">LBA2 Classic Community</a>):
-      <a href="https://github.com/noctonca/lba2-menu-prototype">github.com/noctonca/lba2-menu-prototype</a>, build @COMMIT@.</p>
-    <button id="forget" class="quiet" hidden>Forget saved game files</button>
-    <button id="aboutClose">Back to the menu</button>
+  <section id="about" class="page" hidden><div class="panel frame">
+    <h2 class="title">About</h2>
+    <p class="voice">A fan-made prototype of a new Options menu for LBA2 Classic Community. It is not the game, and
+      not affiliated with the game's owners. The settings are pretend: nothing is saved.</p>
+    <p class="voice">The menu's screen is the size of this window: resize the window to try other sizes, or step
+      through lba2cc's list with F2, shown with black bars. The switches are described in the README.</p>
+    <div class="legend system">
+      <span><i class="chip">Up</i><i class="chip">Down</i></span><span>Move</span>
+      <span><i class="chip">Enter</i></span><span>Choose</span>
+      <span><i class="chip">Esc</i></span><span>Back</span>
+      <span><i class="chip">F2</i></span><span>Screen size</span>
+      <span><i class="chip">F1</i><i class="chip">F3</i><i class="chip">F4</i><i class="chip">F8</i></span><span>Switches being tried</span>
+      <span><i class="chip">1</i>&ndash;<i class="chip">0</i></span><span>More switches</span>
+    </div>
+    <p class="voice">A gamepad works too. Some browsers keep F5, F11 and F12 for themselves.</p>
+    <div class="rows">
+      <button class="row" id="aboutClose">Back to the menu</button>
+      <button class="row" id="forget" hidden>Forget the saved game files</button>
+    </div>
+    <p class="foot system">Source, GPL-2.0, built on <a href="https://github.com/LBALab/lba2-classic-community">LBA2 Classic Community</a>:
+      <a href="https://github.com/noctonca/lba2-menu-prototype">noctonca/lba2-menu-prototype</a>, build @COMMIT@.</p>
   </div></section>
 </main>
 
@@ -106,7 +193,9 @@
     else document.getElementById('stage').requestFullscreen().catch(function () {});
   });
 
-  function say(text, isError) { statusEl.textContent = text; statusEl.className = isError ? 'error' : ''; }
+  function say(text, isError) { statusEl.textContent = text; statusEl.className = isError ? 'alert frame frame--alert' : 'voice'; }
+  onClick('pickFolder', function () { document.getElementById('folder').click(); });
+  onClick('pickFiles', function () { document.getElementById('files').click(); });
 
   function openDb() {
     return new Promise(function (resolve, reject) {
@@ -201,7 +290,7 @@
   document.getElementById('folder').addEventListener('change', chosen);
   document.getElementById('files').addEventListener('change', chosen);
   forgetBtn.addEventListener('click', function () {
-    dbClear().then(function () { forgetBtn.textContent = 'Forgotten: this browser asks for the files next time'; forgetBtn.disabled = true; });
+    dbClear().then(function () { forgetBtn.textContent = 'Forgotten: asked for next time'; forgetBtn.disabled = true; });
   });
 
   window.lba2menuStart = start;  // for a test page that hands over the files itself
@@ -219,7 +308,7 @@
     onRuntimeInitialized: function () { Module.ready = true; },
     onExit: function () {
       var pick = document.getElementById('pick');
-      pick.querySelector('div').innerHTML = '<h2>The menu was closed</h2><p>Reload the page to open it again.</p>';
+      pick.querySelector('div').innerHTML = '<h2 class="title">The menu was closed</h2><p class="voice">Reload the page to open it again.</p>';
       pick.hidden = false;
     }
   };

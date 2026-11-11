@@ -70,6 +70,14 @@ browser's fullscreen; the row's request waits for the release of Enter, as a
 browser allows fullscreen only inside a key or click handler.
 `tools/publish-web.sh` builds and puts `out/web` on the `gh-pages` branch.
 
+The page around the menu (the bar, the file picker, About) follows the LBA
+Classic UI design system, theme lba2: its colour tokens, the bevelled frame,
+menu rows that take the plasma under the cursor, the voice colour for what the
+page tells the player, and key chips in lba2cc's 8x8 font
+(`web/fonts/LBASystem8x8.ttf`, drawn from `LIB386/SVGA/AFFSTR.CPP`). The game
+font is game data (`RESS.HQR`) and is not served; the page's display face is
+Zilla Slab Bold, the menu's Modern font.
+
 ## Play
 
     ./play.sh                      # 640x480, one column
