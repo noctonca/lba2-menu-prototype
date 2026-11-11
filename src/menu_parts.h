@@ -40,7 +40,6 @@ struct WideFrame {
 WideFrame Menu_WideFrame();
 // The `panes` switch: 1 (decided 2026-11-03) one pane at a time, centred, DRILL_W
 // wide: the hub, then a page, as the 1997 menu goes; 0 two panes side by side.
-int Menu_Panes();
 enum { DRILL_W = 640 };
 
 // The foot of a wide page: the band (voice + legend) or the help line and the
@@ -61,7 +60,6 @@ void Menu_SayAsIs(const char *text);
 const std::set<std::string> &Menu_VoiceMissed();
 // A voice text or format in the Text language (lang/help.tsv); English when it has none.
 const char *Menu_Tr(const char *english);
-void Menu_PageEntered();
 
 void Menu_JsonString(FILE *f, const char *s);
 
@@ -85,6 +83,5 @@ bool Menu_CursorSetting(bool *active);  // the cursor row is a setting; active: 
 const char *Menu_CursorValue();  // the value drawn on the cursor row last frame
 const char *Menu_PresetLabel();
 const char *Menu_Legend();  // the footer's legend as the last draw had it: "[A] Open  [B] Back"
-const char *Menu_PageMark();  // "1/2" while paged help shows (switch pagemark), else empty
-bool Menu_MoreArrow();      // the last draw showed the dialogue's arrow: more help to come
+const char *Menu_PageMark();  // "1/2" while paged help shows, else empty
 const char *Menu_ConsoleMode();  // closed, full or read-only  // the preset row as it reads ("Modern settings, changed")

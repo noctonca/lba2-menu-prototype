@@ -56,8 +56,8 @@ available there; a `LocalState\args.txt` gives it other arguments, one a line.
 builds with Emscripten (Homebrew `emscripten`; its SDL3 port, through
 `cmake/emscripten-sdl3/`) into `out/web/`: `index.html`, `lba2menu.js` and
 `lba2menu.wasm`, a static site for any web server. The page (`web/shell.html`)
-asks for the player's game folder and keeps `RESS.HQR`, `SCREEN.HQR`,
-`SPRITES.HQR` and `HOLOMAP.HQR` in the browser (IndexedDB); no game data is
+asks for the player's game folder and keeps `RESS.HQR`, `SCREEN.HQR` and
+`HOLOMAP.HQR` in the browser (IndexedDB); no game data is
 served. Any copy works, the 1997 demo included. The menu loop runs as it does
 on a desktop and hands each frame back to the browser (ASYNCIFY).
 
@@ -95,7 +95,7 @@ the engine does).
 ### Screen sizes
 
 The screen size changes in place, as lba2cc's own resolution switch does it:
-the page, the cursor, the settings and every switch stay as they were, and a
+the page, the cursor and the settings stay as they were, and a
 note at the bottom right says the new size and its logical canvas.
 
 - F2 steps to the next size in the list, Shift+F2 back to the previous one
@@ -130,58 +130,34 @@ To quit, Esc out of the Options, then Esc again on "Options closed" (Enter
 opens them again); in fullscreen there is no close box. Cmd+Q works too.
 
 Keys: arrows, Enter, Esc; a pad's d-pad or left stick, A and B. The prototype's
-own switches are on F1 to F12 and 0 to 9.
+own keys:
 
-| Key | Switch | What it changes |
-| --- | --- | --- |
-| F1 | `overlay` | this list on screen |
-| F2 | | the next screen size; Shift+F2 the previous (see Screen sizes) |
-| F3 | `band` | one band (help + legend) / a help line and a prompt bar |
-| F4 | `typing` | help typed on every cursor move (decided) / on entering a page only / not typed |
-| F5 | `chip` | the 8x8 key font at 2x (decided) / 1x |
-| Shift+F5 | `tablefont` | the Experimental table's 8x8 font at 1x (decided) / 2x |
-| F6 | `word` | the preset row: Preset: Modern, wide "Preset" with Modern where a value goes (2026-11-11) / Modern settings (decided 2026-11-03) / Settings: Modern / Rules: Modern |
-| F7 | `island` | Citadel's palette, as Options opened in play would have |
-| F8 | `help640` | help in the dialogue window on every one-column page (decided) / only where it must show |
-| F9 | `gameplay` | the Gameplay category |
-| F10 | `devices` | Controls: one device per view, Tab switches / Key 1, Key 2 and Gamepad side by side |
-| F11 | `padnames` | the pad's names: the connected pad's / Xbox / PlayStation / Nintendo |
-| F12 | `heads` | Controls, wide: the column names inside the first row, above its chips / a line of heads above the rows |
-| 1 | `sheet` | wide: one 960x540 composition, centred on any larger screen / stretched to the screen's margins |
-| Shift+1 | `presetlook` | presets set the rules only, as the plan has it / presets set the look too (the start; prototype only): Classic the 1997 picture, the game font, Classic cameras and 640 x 480; Modern Twinsun, Zilla Slab, Auto and Follow cameras and the screen the prototype started at. Undo preset and Undo reset put the screen back too. Turning it puts the look rows at the chosen preset's values; the self test and `tools/sweep.py` run with it off |
-| 2 | `legend` | the band's legend stacked at its right / in a row beside the voice |
-| 3 | `bg` | the background scaled evenly and cropped / stretched, as lba2cc does |
-| Shift+3 | `bgres` | the menu picture at the screen's own resolution: off, part of the canvas (as before) / whole step: the smallest whole factor that covers the screen, cropped / smooth: the exact cover factor, Catmull-Rom / as the Image row says (the start): Classic whole step, Smooth smooth. The menu stays on the canvas at its whole step; darkened rows and the band darken the screen-size picture through the same fog rows (src/screenbg.cpp) |
-| Shift+9 / Shift+0 | `vfsize` | Zilla Slab's size when the Font row picks it, in percent: 100 makes its capitals as tall as the game font's (22 logical pixels); `switch vfsize 110` from a script |
-| 4 | `scale` | screens 3:2 or wider take the 960x540 composition at the largest whole step it fits, others the one column / the plan's rule |
-| 5 | `panes` | wide: one pane at a time, centred, the page's name as a title / two panes side by side |
-| 6 | `bandshade` | the band darkened to level 15 / 11 |
-| Shift+7 / Shift+8 | `tstilt` / `tssize` | the Twinsun background (Background row): the view's tilt, 3840 (a little below the equator) / 3584 / 3328 (up at the south pole, the start) / 0 (edge on) / 256 / 512 (from above, the north pole); its size 80 / 100 (the holomap's) / 120 / 140 (the start) percent. One turn in three minutes |
-| 7 | `clash` | a key clash's note alone in the voice / added after the action's help |
-| 8 | `short` | the shorter help, for translation, and a dimmed row saying why it is dimmed / the help as first written |
-| | `keyrule` | a key another action has asks first, No (keep) or Yes (swap), as Options' questions (decided 2026-11-11) / taken, both chips red |
-| 9 | `narrow` | 640 wide: key chips 116 wide, so "Behaviour action" clears them / 120 |
-| 0 | `exptable` | More options: one dense table in the 8x8 font (decided) / the game-font list, a page per group |
-| | `fpsrow` | the Frame rate row on Display and graphics, under Vsync (decided) / on Advanced and reset (no key: `--switch fpsrow=1`) |
-| | `slider` | wide sliders: the 1997 way, the cursor row is the red plasma up to the value (2026-11-11) / a small slider at the value edge on every row |
-| | `keyboard` | 1 a keyboard is there (a desktop) / 0 as a console before a key is typed: no Keyboard view or Tab, the legend names the pad |
-| | `exphelp` | More options' table: the row's help in two status lines in the 8x8 font, never paged (2026-11-12) / said in the voice |
-| | `pagemark` | paged help: "1/2" in the window's corner, kept on the last window (2026-11-12) / the dialogue's arrow while more is to come |
-| | `pace` | how long a window of long help is held before the next, in tenths of a second a word: 3 (decided) / 1 to 9 (no key: `--switch pace=5`) |
+| Key | What it does |
+| --- | --- |
+| F1 | this list on screen (switch `overlay`) |
+| F2 | the next screen size; Shift+F2 the previous (see Screen sizes) |
+| F11 | the pad's names: the connected pad's / Xbox / PlayStation / Nintendo (switch `padnames`) |
 
-Keys 1 to 6 are the composition review of 2026-11-03 (wide and large screens).
-All six are decided and on by default; each key turns its part off to compare.
-F2 keeps every switch as it steps through the sizes. `./play-composition.sh`
-plays the wide layout as it was before the review, then as decided, on the
-same steps, with a trace per round.
+Two more switches have no key: `keyboard` 0 plays as a console before a key is
+typed (no Keyboard view or Tab, the legend names the pad), and `whole` 1 shows
+help whole instead of typing it, as the self test runs.
 
-Key 9 (decided 2026-11-03, on by default) narrows the one-column key chips.
-Keys 7 and 8 are the help review of 2026-11-03, decided and on by default: one
-message at a time in the voice, and help short enough that a translation half
-as long again still fits two lines (the 1997 game's own translations of its
-sentences run 1.1x English typically, up to 1.5x in German). Each key turns
-its part off to compare. `./play-help.sh` plays the help as first written,
-then as decided.
+Every review switch was pruned on 2026-11-12, keeping what was decided: the
+band (help and legend), help typed on every cursor move and shown in the
+dialogue window on every one-column page, key chips at 2x (58 wide in the one
+column), the preset row "Preset: Modern", one pane at a time with the page's
+name as a title, the 960x540 composition centred at the largest whole step,
+the picture scaled evenly and cropped at the screen's own resolution as the
+Image row says, one device per view on Keys and buttons with the column names
+inside the first row, a key in use offered as a swap, a clash's note alone in
+the voice, the shorter help, the More options table at 1x with each row's
+help in its status lines, the 1997 slider, the page mark on paged help, Frame
+rate on Display and graphics. Presets set the look too: Classic the 1997
+picture, the game font, Classic cameras and 640 x 480; Modern Twinsun, Zilla
+Slab, Auto and Follow cameras and the screen the prototype started at. Undo
+preset and Undo reset put the screen back too. The plan has presets set the
+rules only; this is the prototype's call, to show the difference. The
+Gameplay category (Dodge, Behaviour hints) went with its switch.
 
 ## The Controls page
 
@@ -194,8 +170,8 @@ memory like the other settings.
   chips. Right or Enter opens a group; Left from the first chip goes back.
 - 640x480: the groups as a 1997 sub-menu, then a page of actions with the voice
   below.
-- Tab (the pad's View button) switches Keyboard and Gamepad; the page opens on
-  the one touched last.
+- One device per view: Tab (the pad's View button) switches Keyboard and
+  Gamepad; the page opens on the one touched last.
 - Enter waits for a key: the chip takes the current-value plasma and the voice
   asks for it and says the way out: "Press a key, or <ESC> to keep it." on the
   keyboard view, "Press a button, or <MENU> to keep it." on the pad view (Start,
@@ -250,8 +226,6 @@ widest value and its help, and of the hub's rows, for sizing panes.
 `tag<TAB>text` in CP850 (as TEXT.HQR holds it), and it prints the tag, the
 width and the voice lines the text needs (620 wide unless given). It is how
 the 1997 game's six languages were compared for the help review.
-`--switch scale=N` is read before the window opens (the canvas depends on it);
-`switch scale` at run time changes nothing.
 
 - `state` prints one JSON line: layout, sizes, page, focus, cursor, every row
   drawn (label, value, fill, rectangle, dimmed, changed, change marks, whether
@@ -264,11 +238,12 @@ the 1997 game's six languages were compared for the help review.
 - On the Controls page `state` adds `controls`: the device, group, action and
   column under the cursor, whether it waits for a key, every chip drawn
   (name, rectangle, fill, conflict, whether the name fits), the column heads
-  above the actions or inside their first row (`heads`: text and rectangle),
+  (`heads`: text and rectangle; inside the first row wide, above the actions
+  in the one column),
   every binding and every conflict.
 - `shot` writes exactly what is in the frame buffer through the current palette.
 - `shotscreen` writes the screen as presented, at the screen's size: the canvas at its
-  whole step and the picture as `bgres` draws it.
+  whole step and the picture at the screen's resolution.
 - Every key and every change is a trace line (`trace t=<ms> f=<frame> ...`) on
   stderr and in `--trace FILE`.
 - Headless runs use a fixed clock and a fixed plasma seed, so a script gives
@@ -309,38 +284,29 @@ camera (1997's scenario cameras: off skips the outdoor shots that cut once) is
 camera behaviour, not a machine's limit, so it went to Controls and camera
 instead.
 
-- Switch `exptable` (key 0): 1, the default and decided (2026-11-03), is the
-  plan's dense table in the 8x8 font, as the 1997 key binding screen: a line per value under its group's
-  head, the cursor a plasma strip, a status line with the default, the range and
-  the lba2.cfg key when it fits. 0 is the game-font list: the groups, then a
-  page of rows per group. The table's font is 1x (31 lines in view on a wide
-  screen; decided 2026-11-03, as the 1997 key binding screen); Shift+F5 draws
-  it at 2x (14) to compare.
+- One dense table in the 8x8 font at 1x, as the 1997 key binding screen
+  (decided 2026-11-03): a line per value under its group's head, the cursor a
+  plasma strip, and at the foot the row's help on two lines with a status line
+  under it (the default, the range and the lba2.cfg key when it fits). 31 lines
+  are in view on a wide screen.
 - Left and Right change a value, Enter turns a switch, Del puts the default
   back, Page Up and Page Down (the pad's LB and RB) move a window at a time.
   A changed value takes the count colour.
 - A changed value marks the preset changed. Choosing a preset, and Reset
   settings, put every value back to its default; Undo preset (after a
   preset) and Undo reset (after a reset) put them back and name them.
-- The help is the console help, said in the voice. The game font has no `=`,
-  `~` or `+`, so the voice says them as `:`, "about" and "and". Eleven console
-  helps need three or four lines of the voice; they page on a window at a time
-  (see the help in [docs/UX.md](docs/UX.md)) and are said as written.
-
-`./play-experimental.sh` plays both forms at 1920x1080 and 640x480 on the
-same steps, with a trace per round. The self test visits every row of it (see
-Testing).
+- The row's help is the console help, whole, in the table's status lines
+  (decided 2026-11-12); the voice says the help of the row's group. The self
+  test visits every row (see Testing).
 
 ## Frame rate, the console and the version
 
-- **Frame rate** (Display and graphics, under Vsync, decided 2026-11-03;
-  `fpsrow=1` puts it on Advanced and reset to compare) shows the frame count in the bottom left corner, white,
+- **Frame rate** (Display and graphics, under Vsync, decided 2026-11-03) shows the frame count in the bottom left corner, white,
   in the 8x8 font, as lba2cc's console `fps` and the 1997 SPEED code do. It is
   not kept in lba2.cfg: off at every start. Presets leave it alone. lba2cc
   draws it only in play; here it shows over the menu so the row can be judged.
   On Display it makes seven rows, so at 960x540 the page scrolls (Image is
-  below); on Advanced it makes seven only with More options and Back
-  to my settings both showing.
+  below).
 - **Console** (Advanced and reset, above Reset settings) is issue #679's row.
   Its value is the version, `0.13.3-dev 011394f` (lba2cc's version string and
   the commit's first 7; a release shows its number alone; an example here), in
@@ -348,16 +314,14 @@ Testing).
   lba2cc draws it: the top half, darkened, the 8x8 font, the messages of the
   launch (examples) with the version and the full commit in the first two
   lines. After a key it is the full console with the prompt, and Esc closes it
-  (F12 in the game; F12 is a prototype switch here). After a pad button it is
+  (F12 in the game). After a pad button it is
   read-only, says so on its last line, and any button closes it.
 
-`./play-console.sh` plays both places of Frame rate at 1920x1080 and 640x480 on
-the same steps, with a trace per round.
 
 ## Testing
 
 `lba2menu --selftest` visits every row of every page, every chip of the
-Controls page and every row of More options at one screen size, for each of seven switch combinations, and
+Controls page and every row of More options at one screen size, for the pad's names of each family, and
 lists what does not fit: help cut off, rows running into the help or off the
 screen, labels running into their values or their key chips, key names cut in
 their chips. On every screen it also checks that exactly one row or chip has
@@ -390,14 +354,14 @@ walk finds starts with the walk's name:
   questions, and the wait for a key too).
 - `reach:` Enter opens every page from the hub.
 - `setting:` Left or Right changes the value shown and the other key puts it
-  back; a dimmed row ignores Left, Right and Enter; Invert camera is dimmed
-  with the Classic camera and wakes with Auto.
-- `preset:` Classic asks first, starting on No, and Esc answers No; Back to my
-  settings puts the preset row back; changing Fix retail bugs marks the preset
+  back; a dimmed row ignores Left, Right and Enter; Invert camera is live
+  with the Auto camera (a fresh start's) and dimmed with the Classic camera.
+- `preset:` Classic asks first, starting on No, and Esc answers No; Undo
+  preset puts the preset row back; changing Fix retail bugs marks the preset
   changed. With Classic chosen and Vsync (a player's setting) changed, Reset
   settings asks first, starting on No; Esc and No change nothing; Yes puts the
-  setting and the preset back as a fresh install has them, and a Back to my
-  settings row comes right after Reset settings; Enter on it puts back the
+  setting and the preset back as a fresh install has them, and an Undo reset
+  row comes right after Reset settings; Enter on it puts back the
   setting and Classic, and the row goes.
 - `experimental:` Advanced and reset has the More options row; Enter opens the page and Esc comes back to the row;
   on every row Right and Left change the value and the other key puts it back,
@@ -414,9 +378,7 @@ walk finds starts with the walk's name:
   the voice asks for the key; Esc cancels; the other device's input is ignored;
   a key another action has asks first, on No (the voice says "J is on
   Jetpack, ...", the answers take the actions' place), and Esc keeps both as
-  they were; with
-  `keyrule=1` it goes in, both chips go red and the help names the other
-  action; Del clears it. On the pad, Start leaves the wait as Esc does, and
+  they were; Del clears it. On the pad, Start leaves the wait as Esc does, and
   Game menu's chip neither waits nor clears. Also: Forward's Key 2 put in
   Key 1 leaves Key 2 empty, and the wait gives up after 5 s.
 - `padonly:` with pad buttons only, every pad binding is offered Start (which
@@ -431,21 +393,19 @@ background and row shading, which the checks never read), and exits 1 when it
 finds a problem. Under each problem it prints a command line that opens the
 screen it was found on:
 
-    $ build/lba2menu --selftest --size 1920x1080 --combo band=1,gameplay=0 --only Sound
-    1920x1080 {"band": 1, "gameplay": 0} [Sound] text spills 15 px: 'Master volume' '100'
-        again: build/lba2menu --size 1920x1080 --switch band=1 --switch gameplay=0 --switch typing=2 --do "open Sound"
+    $ build/lba2menu --selftest --size 1920x1080 --combo padnames=2 --only Sound
+    1920x1080 {"padnames": 2} [Sound] text spills 15 px: 'Master volume' '100'
+        again: build/lba2menu --size 1920x1080 --switch padnames=2 --switch whole=1 --do "open Sound"
 
 - `--combo name=v,name=v` (repeatable) tests those switch settings instead of
-  the seven; any switch of `state` can go in. The seven are the chosen
-  layouts and their variants; the help line and prompt bar (`band=0`) and all
-  key columns side by side (`devices=0`) were not chosen and are left out.
+  `padnames` 0, 2 and 3; any switch of `state` can go in.
 - `--only PAGE` keeps one page (`"Keys and buttons"` for the Controls page,
-  `"More options"`). `--combo exptable=0` tests the list form.
+  `"More options"`).
   The `esc:` and `reach:` walk needs every page, so it runs only without it.
 - `--layout-only` leaves out the walks by keys.
 - Add `--headless` and `; shot x.png` to an `again` line for a picture.
 
-`tools/sweep.py` runs the self test for seven screen sizes and the seven
+`tools/sweep.py` runs the self test for seven screen sizes and the three
 combinations, one process each, in parallel (about 3 seconds on the Mac), and
 takes `--sizes`, `--combo`, `--only`, `--again` and `--layout-only` the same way.
 
@@ -459,11 +419,9 @@ takes `--sizes`, `--combo`, `--only`, `--again` and `--layout-only` the same way
   page the problem names.
 
 `tools/resize-check.sh` checks that a size changed in place shows what a fresh
-start at that size shows on the same row: seven pages (Controls and
-Experimental among them, and Experimental's list form) from four sizes to
-nine, compared through `state`, and F2 round the list and back (289 runs,
-about 50 seconds). With the layout hand-over turned off it finds 120 of them
-differ.
+start at that size shows on the same row: seven pages (Keys and buttons and
+More options among them) from four sizes to nine, compared through `state`,
+and F2 round the list and back (253 runs).
 
 ## Checked against the game
 

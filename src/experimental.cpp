@@ -13,9 +13,6 @@
 #include <stdio.h>
 #include <string.h>
 
-int sw_exptable = 1;
-int sw_exphelp = 1;  // the row's help in the table's status lines, not the voice
-
 // ───────────────────────────── The tuning rows ─────────────────────────────
 
 // lba2cc's settings tables at e3a3f847: every row with a console name and no row
@@ -236,76 +233,34 @@ static void StatusText(int i, char *buf, size_t n, S32 width, S32 s) {
 // ───────────────────────────── Page state ─────────────────────────────
 
 static bool g_active;
-static int g_cursor;      // the table: the row under the cursor, 0..TUNING_COUNT-1
-static int g_scroll;      // the table: the first line shown; the list: the first row shown
-static int g_visible;     // the table: lines in its window at the last draw
-static bool g_inGroup;    // the list: a group's rows are open
-static int g_group;       // the list: the group under the cursor (or open)
-static int g_colCursor;   // the list, one column: the groups page cursor, 0 is the Return row
-static int g_row;         // the list: the row within the open group
+static int g_cursor;      // the row under the cursor, 0..TUNING_COUNT-1
+static int g_scroll;      // the first line shown
+static int g_visible;     // lines in the table's window at the last draw
 
-static bool Table() { return sw_exptable != 0; }
 static bool Wide() { return Menu_Wide(); }
-
-// The screen can change under the page. Wide keeps the group as g_group alone;
-// the one column's groups page counts its Return row, so put its cursor back on
-// the same group when the layout turns to one column.
-static int g_layoutWide = -1;
-static void SyncLayout() {
-    const int wide = Wide() ? 1 : 0;
-    if (g_layoutWide == 1 && !wide)
-        g_colCursor = g_group + 1;
-    g_layoutWide = wide;
-}
-
-static int GroupFirst(int g) {
-    for (int i = 0; i < TUNING_COUNT; i++)
-        if (kTuning[i].group == g)
-            return i;
-    return 0;
-}
-static int GroupCount(int g) {
-    int n = 0;
-    for (int i = 0; i < TUNING_COUNT; i++)
-        n += kTuning[i].group == g;
-    return n;
-}
-
-// The row the cursor is on, or -1 on the list's groups page.
-static int CursorTuning() {
-    if (Table())
-        return g_cursor;
-    return g_inGroup ? GroupFirst(g_group) + g_row : -1;
-}
 
 static void Say();
 
 void Exp_Open() {
     Ready();
     g_active = true;
-    g_cursor = g_scroll = g_row = 0;
-    g_group = 0;
-    g_colCursor = 1;
-    g_inGroup = false;
-    Menu_PageEntered();
+    g_cursor = g_scroll = 0;
     Say();
-    Trace("experimental open form=%s", Table() ? "table" : "list");
+    Trace("experimental open");
 }
 
 void Exp_Close() {
     if (!g_active)
         return;
     g_active = false;
-    Menu_PageEntered();
     Trace("experimental close");
 }
 
 bool Exp_Active() { return g_active; }
 
 void Exp_Reset() {
-    g_active = g_inGroup = false;
-    g_cursor = g_scroll = g_group = g_row = 0;
-    g_colCursor = 1;
+    g_active = false;
+    g_cursor = g_scroll = 0;
     Exp_Defaults();
 }
 
@@ -365,55 +320,8 @@ static void UpdateTable() {
         Exp_Close();
 }
 
-static void UpdateList() {
-    bool column = !Wide();
-    if (!g_inGroup) {
-        if (column) {
-            int n = GROUP_COUNT + 1;
-            if (Engine_Pressed(KEY_UP))
-                g_colCursor = (g_colCursor + n - 1) % n;
-            if (Engine_Pressed(KEY_DOWN))
-                g_colCursor = (g_colCursor + 1) % n;
-            if (g_colCursor > 0)
-                g_group = g_colCursor - 1;
-        } else {
-            if (Engine_Pressed(KEY_UP))
-                g_group = (g_group + GROUP_COUNT - 1) % GROUP_COUNT, Menu_PageEntered();
-            if (Engine_Pressed(KEY_DOWN))
-                g_group = (g_group + 1) % GROUP_COUNT, Menu_PageEntered();
-        }
-        bool open = Engine_Pressed(KEY_ENTER) || (!column && Engine_Pressed(KEY_RIGHT));
-        if (open && column && g_colCursor == 0) {
-            Exp_Close();
-        } else if (open) {
-            g_inGroup = true;
-            g_row = g_scroll = 0;
-            Menu_PageEntered();
-            Trace("experimental group=%s", kGroups[g_group].name);
-        } else if (Engine_Pressed(KEY_ESC)) {
-            Exp_Close();
-        }
-        return;
-    }
-    int n = GroupCount(g_group);
-    if (Engine_Pressed(KEY_UP))
-        g_row = (g_row + n - 1) % n;
-    if (Engine_Pressed(KEY_DOWN))
-        g_row = (g_row + 1) % n;
-    RowKeys(GroupFirst(g_group) + g_row);
-    if (Engine_Pressed(KEY_ESC)) {
-        g_inGroup = false;
-        Menu_PageEntered();
-        Trace("experimental back to groups");
-    }
-}
-
 void Exp_Update() {
-    SyncLayout();
-    if (Table())
-        UpdateTable();
-    else
-        UpdateList();
+    UpdateTable();
     if (g_active)
         Say();
 }
@@ -430,32 +338,9 @@ static const char *RowHelp(int i, char *buf, size_t n) {
     return buf;
 }
 
-static void Say() {
-    int i = CursorTuning();
-    if (Table() && sw_exphelp) {
-        // The row's help is in the table's own status lines, in the 8x8 font (decided
-        // 2026-11-12): the console's English, whole, never paged. The voice keeps the group's.
-        // The table's cursor walks every group's rows; g_group is the list's.
-        if (i >= 0)
-            Menu_Say(kGroups[kTuning[i].group].help);
-        else
-            Menu_Say(Wide() || g_colCursor > 0 ? kGroups[g_group].help : "");
-        return;
-    }
-    if (i >= 0 && IsExperimental(i)) {
-        char buf[320];
-        const char *help = kTuning[i].help;
-        if (!strncmp(help, "Prototype: ", 11))
-            help += 11;  // the console's word for the same thing
-        snprintf(buf, sizeof buf, "Experimental: %s", help);
-        Menu_SayAsIs(buf);  // the console's help, English by design
-    } else if (i >= 0)
-        Menu_SayAsIs(kTuning[i].help);
-    else if (Wide() || g_colCursor > 0)
-        Menu_Say(kGroups[g_group].help);
-    else
-        Menu_Say("");
-}
+// The row's help is in the table's own status lines, in the 8x8 font (decided 2026-11-12):
+// the console's English, whole, never paged. The voice says the row's group.
+static void Say() { Menu_Say(kGroups[kTuning[g_cursor].group].help); }
 
 // ───────────────────────────── Drawing ─────────────────────────────
 
@@ -500,13 +385,8 @@ static ExpTable g_table;
 static bool g_tableShown;
 
 // The table is drawn at 1x on every canvas, as the 1997 key binding screen (decided
-// 2026-11-03); switch tablefont 2 draws it at 2x to compare.
-static S32 Scale() { return Menu_GetSwitch("tablefont"); }
-
-static S32 PanelShade() {
-    int b = Menu_GetSwitch("bandshade");
-    return b ? b : BAND_SHADE_LVL;
-}
+// 2026-11-03).
+static const S32 kScale = 1;
 
 // The table's lines in order: a head per group, then its rows. Returns the line
 // count; line[k] is -1 - group for a head, else the row.
@@ -526,13 +406,13 @@ static int TableLines(int *line) {
 // plasma in a frame as the rows have it. Inside one panel from y0 to y1, with a
 // status line at its foot and the scroll bar beside it.
 static void DrawTable(S32 px0, S32 px1, S32 py0, S32 py1) {
-    S32 s = Scale(), pitch = 10 * s;
-    Ui_Panel(px0, py0, px1, py1, PanelShade());
+    const S32 s = kScale, pitch = 10 * s;
+    Ui_Panel(px0, py0, px1, py1, 15);  // as the band (decided 2026-11-03)
 
     S32 nameX = px0 + 16;
     S32 valueRight = px1 - 24 - 12 * s;  // the marks after it end 24 in
-    // The status line at the foot, and above it the row's help on two lines when shown there.
-    const int helpLines = sw_exphelp ? 2 * s : 0;  // the 8x8 font at 2x (tablefont 2) holds half a line
+    // The status line at the foot, and above it the row's help on two lines.
+    const int helpLines = 2;
     S32 statusTop = py1 - 16 * s - helpLines * 10 * s;
     S32 bodyTop = py0 + 5 * s;
     int visible = (statusTop - 1 - 9 * s - bodyTop) / pitch + 1;
@@ -630,7 +510,7 @@ static void DrawTable(S32 px0, S32 px1, S32 py0, S32 py1) {
     Line(px0 + 8, statusTop + 1, px1 - 8, statusTop + 1, COUL_UP_BLUE);
     g_helpCut = false;
     g_helpShown[0] = 0;
-    if (helpLines && g_cursor >= 0 && g_cursor < TUNING_COUNT) {
+    if (g_cursor >= 0 && g_cursor < TUNING_COUNT) {
         char hb[320];
         const char *help = RowHelp(g_cursor, hb, sizeof hb);
         snprintf(g_helpShown, sizeof g_helpShown, "%s", help);
@@ -652,102 +532,22 @@ static void DrawTable(S32 px0, S32 px1, S32 py0, S32 py1) {
         Menu_DrawScrollBar(px1 + 9, py0, py1, g_scroll, visible, total);
 }
 
-// The list: rows of the game font, the label on the pane's label edge, the value
-// on its value edge, as every other page.
-static void DrawListRow(const char *pane, const char *label, int i, S32 x0, S32 y0, S32 x1, RowFill fill,
-                        bool centred) {
-    S32 y1 = y0 + ROW_H, yc = (y0 + y1) / 2;
-    Ui_RowBackground(x0, y0, x1, y1, fill);
-    char val[24] = "", text[96];
-    if (i >= 0)
-        ValueText(i, val, sizeof val);
-    bool changed = i >= 0 && g_val[i] != kTuning[i].def;
-    DrawnRow &d = Menu_Record(pane, label, val, fill, x0, y0, x1, y1);
-    d.setting = i >= 0;
-    d.changed = changed;
-    if (centred) {
-        // One column: "Label: Value" in one string, as 1997.
-        if (i >= 0)
-            snprintf(text, sizeof text, "%s: %s", label, val);
-        else
-            snprintf(text, sizeof text, "%s", label);
-        Menu_RowLabelCentred(x0, x1, yc, text, INK_WHITE, true, fill == FILL_CURSOR);  // tuning rows stay English
-        d.textLeft = (x0 + x1) / 2 - Ui_TextWidthAsIs(text) / 2;
-        d.textRight = (x0 + x1) / 2 + Ui_TextWidthAsIs(text) / 2 + 8;
-        return;
-    }
-    d.textLeft = x0 + 16;
-    d.textRight = x0 + 16 + Ui_TextWidthAsIs(label);
-    S32 valueRight = x1 - 24;
-    S32 left = i < 0 ? 0 : valueRight + 1 - Ui_TextInkWidthAsIs(val);
-    MemoClip();
-    SetClip(x0 + 1, y0, x1 - 1, y1);
-    Ui_TextInRoom(x0 + 16, left ? left - 17 - 8 - 1 : x1 - 16, yc - 18, label, INK_WHITE,
-                  fill == FILL_CURSOR);  // tuning rows stay English
-    RestoreClip();
-    if (i < 0)
-        return;
-    if (d.textRight + 8 > left - 17)
-        d.textRight = x1 + (d.textRight + 8 - (left - 17));  // the label runs into the value
-    Ui_TextAsIs(left, yc - 18, val, changed ? INK_COUNT : INK_WHITE);
-    d.valueRight = valueRight;
-    if (fill == FILL_CURSOR) {
-        Ui_ChangeMarks(left - 17, valueRight + 17, yc);
-        d.marks = true;
-    }
-}
-
 static void Legend(const char **keys, const char **words, int *n) {
     *n = 0;
-    if (Table() || g_inGroup) {
-        keys[*n] = "\x11\x10", words[(*n)++] = "Change";
-        keys[*n] = "Del", words[(*n)++] = "Default";
-    } else {
-        keys[*n] = "Enter", words[(*n)++] = "Open";
-    }
+    keys[*n] = "\x11\x10", words[(*n)++] = "Change";
+    keys[*n] = "Del", words[(*n)++] = "Default";
     keys[*n] = "Esc", words[(*n)++] = "Back";
-}
-
-// Rows of one group from top to limit, scrolled to keep the cursor in view.
-static void DrawGroupRows(S32 x0, S32 x1, S32 top, S32 limit, const char *pane, bool centred) {
-    int n = GroupCount(g_group), first = GroupFirst(g_group);
-    int visible = (limit - top + ROW_GAP) / ROW_PITCH;
-    if (visible > n)
-        visible = n;
-    if (g_row < g_scroll)
-        g_scroll = g_row;
-    if (g_row >= g_scroll + visible)
-        g_scroll = g_row - visible + 1;
-    S32 y = top;
-    for (int r = g_scroll; r < g_scroll + visible; r++) {
-        DrawListRow(pane, kTuning[first + r].name, first + r, x0, y, x1, r == g_row ? FILL_CURSOR : FILL_SHADE,
-                    centred);
-        y += ROW_PITCH;
-    }
-    if (visible < n)
-        Menu_DrawScrollBar(x1 + 9, top, top + visible * ROW_PITCH - ROW_GAP - 1, g_scroll, visible, n);
 }
 
 static void DrawWideExp() {
     WideFrame f = Menu_WideFrame();
     S32 x0 = f.x0 + (f.w - DRILL_W) / 2, x1 = x0 + DRILL_W - 1;
     S32 top = f.y0 + 24, limit = Menu_WideRowsLimit();
-    const char *title = Table() || !g_inGroup ? "More options" : kGroups[g_group].name;
-    const bool group = !(Table() || !g_inGroup);  // a group's name stays English, as its rows
-    S32 rtop = Ui_Title(x0, x1, top, title, group);
+    const char *title = "More options";
+    S32 rtop = Ui_Title(x0, x1, top, title, false);
     Menu_Record("title", title, "", FILL_SHADE, x0, top, x1, top + 38).textLeft =
-        (x0 + x1 + 1) / 2 - (group ? Ui_TextWidthAsIs(title) : Ui_TextWidth(title)) / 2;
-    if (Table()) {
-        DrawTable(x0, x1, rtop, limit);
-    } else if (!g_inGroup) {
-        S32 y = rtop;
-        for (int g = 0; g < GROUP_COUNT; g++) {
-            DrawListRow("exp", kGroups[g].name, -1, x0, y, x1, g == g_group ? FILL_CURSOR : FILL_SHADE, false);
-            y += ROW_PITCH;
-        }
-    } else {
-        DrawGroupRows(x0, x1, rtop, limit, "exp", false);
-    }
+        (x0 + x1 + 1) / 2 - Ui_TextWidth(title) / 2;
+    DrawTable(x0, x1, rtop, limit);
     const char *keys[4], *words[4];
     int nk;
     Legend(keys, words, &nk);
@@ -755,35 +555,13 @@ static void DrawWideExp() {
 }
 
 static void DrawColumnExp() {
-    S32 W = (S32)Engine_LogicalW(), H = (S32)Engine_LogicalH();
+    S32 W = (S32)Engine_LogicalW();
     S32 x0 = W / 2 - 275, x1 = W / 2 + 275;
-    if (Table()) {
-        DrawTable(x0, x1, 16, Menu_DialogueTop() - 16);
-        Menu_DrawDialogue();
-        return;
-    }
-    if (!g_inGroup) {
-        // The groups, as a 1997 sub-menu: a Return row, then one row each.
-        bool help = Menu_GetSwitch("help640") != 0;
-        S32 top = 16, bottom = help ? Menu_DialogueTop() - 16 : H - 16;
-        int n = GROUP_COUNT + 1;
-        S32 stackH = n * ROW_PITCH - ROW_GAP;
-        S32 y = top + (bottom - top - stackH) / 2;
-        for (int r = 0; r < n; r++) {
-            const char *label = r == 0 ? "Return to previous menu" : kGroups[r - 1].name;
-            DrawListRow("column", label, -1, x0, y, x1, r == g_colCursor ? FILL_CURSOR : FILL_SHADE, true);
-            y += ROW_PITCH;
-        }
-        if (help)
-            Menu_DrawDialogue();
-        return;
-    }
-    DrawGroupRows(x0, x1, 16, Menu_DialogueTop() - 16, "column", true);
+    DrawTable(x0, x1, 16, Menu_DialogueTop() - 16);
     Menu_DrawDialogue();
 }
 
 void Exp_Draw() {
-    SyncLayout();
     g_lineCount = 0;
     g_tableShown = false;
     g_status[0] = 0;
@@ -803,48 +581,29 @@ bool Exp_Table(ExpTable *out) {
     return true;
 }
 
-const char *Exp_CursorGroupHelp() {
-    int i = CursorTuning();
-    return kGroups[i >= 0 ? kTuning[i].group : g_group].help;
-}
+const char *Exp_CursorGroupHelp() { return kGroups[kTuning[g_cursor].group].help; }
 
-const char *Exp_CursorName() {
-    int i = CursorTuning();
-    return i >= 0 ? kTuning[i].name : "";
-}
+const char *Exp_CursorName() { return kTuning[g_cursor].name; }
 
 const char *Exp_CursorValue() {
     static char buf[24];
-    int i = CursorTuning();
-    if (i < 0)
-        return "";
-    return ValueText(i, buf, sizeof buf);
+    return ValueText(g_cursor, buf, sizeof buf);
 }
 
 int Exp_Where(char *buf, size_t n) {
-    int i = CursorTuning();
-    char val[24] = "";
-    if (i >= 0)
-        ValueText(i, val, sizeof val);
-    if (Table()) {
-        snprintf(buf, n, "%s | %s | %s", kGroups[kTuning[i].group].name, kTuning[i].name, val);
-        return 1;
-    }
-    if (!g_inGroup) {
-        snprintf(buf, n, "%s", !Wide() && g_colCursor == 0 ? "Return to previous menu" : kGroups[g_group].name);
-        return 1;
-    }
-    snprintf(buf, n, "%s | %s | %s", kGroups[g_group].name, kTuning[i].name, val);
-    return 2;
+    const int i = g_cursor;
+    char val[24];
+    ValueText(i, val, sizeof val);
+    snprintf(buf, n, "%s | %s | %s", kGroups[kTuning[i].group].name, kTuning[i].name, val);
+    return 1;
 }
 
 void Exp_WriteState(FILE *f) {
-    SyncLayout();
-    int i = CursorTuning();
-    fprintf(f, "{\"form\":\"%s\",\"group\":", Table() ? "table" : "list");
-    Menu_JsonString(f, kGroups[i >= 0 ? kTuning[i].group : g_group].name);
-    fprintf(f, ",\"in_group\":%s,\"row\":", g_inGroup ? "true" : "false");
-    Menu_JsonString(f, i >= 0 ? kTuning[i].name : "");
+    const int i = g_cursor;
+    fprintf(f, "{\"group\":");
+    Menu_JsonString(f, kGroups[kTuning[i].group].name);
+    fprintf(f, ",\"row\":");
+    Menu_JsonString(f, kTuning[i].name);
     fprintf(f, ",\"scroll\":%d,\"visible\":%d,\"total\":%d,\"status\":", g_scroll, g_visible, g_total);
     Menu_JsonString(f, g_status);
     fprintf(f, ",\"row_help\":");

@@ -37,8 +37,11 @@ static int Unicode(U8 c) { return c < 128 ? c : kCp850[c - 128]; }
 static stbtt_fontinfo s_font[1];  // bold
 static bool s_ready;
 static int s_face = VFONT_GAME;
-static int s_sizePercent = 100;
+// Capitals as tall as the game font's (22 logical pixels).
+static const int s_sizePercent = 100;
 static float s_unit[1];  // font units to logical pixels
+
+static void SetSizePercent(int percent);
 
 void VFont_Init() {
     if (s_ready)
@@ -46,11 +49,10 @@ void VFont_Init() {
     if (!stbtt_InitFont(&s_font[0], g_zillaSlabBoldTtf, stbtt_GetFontOffsetForIndex(g_zillaSlabBoldTtf, 0)))
         return;
     s_ready = true;
-    VFont_SetSizePercent(s_sizePercent);
+    SetSizePercent(s_sizePercent);
 }
 
-void VFont_SetSizePercent(int percent) {
-    s_sizePercent = percent;
+static void SetSizePercent(int percent) {
     if (!s_ready)
         return;
     for (int f = 0; f < 1; f++) {

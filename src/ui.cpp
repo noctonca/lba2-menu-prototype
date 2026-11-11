@@ -193,28 +193,6 @@ void Ui_Steps(S32 xRight, S32 yc, S32 count, S32 lit, S32 *outLeft) {
     }
 }
 
-void Ui_MiniSlider(S32 x0, S32 x1, S32 yc, S32 value, S32 max, bool dim) {
-    const S32 h = 20;
-    S32 y0 = yc - h / 2, y1 = y0 + h - 1;
-    S32 fill = x0 + 1 + (x1 - x0 - 2) * value / (max ? max : 1);
-    if (fill > x0 + 1) {
-        if (dim)
-            Box(x0 + 1, y0 + 1, fill, y1 - 1, INK_DISABLED);
-        else
-            Cadre_FireBar(x0 + 1, y0 + 1, fill, y1 - 1, PLASMA_SLIDER);
-    }
-    if (fill < x1 - 1) {
-        if (dim)  // the empty track dark, as an unlit step
-            Cadre_Shade(fill + 1, y0 + 1, x1 - 1, y1 - 1, 4);
-        else
-            Box(fill + 1, y0 + 1, x1 - 1, y1 - 1, FILL_SELECTED);
-    }
-    Line(x0, y0, x1, y0, COUL_UP_BLUE);
-    Line(x0, y0, x0, y1, COUL_UP_BLUE);
-    Line(x1, y0 + 1, x1, y1, COUL_DOWN_BLUE);
-    Line(x0 + 1, y1, x1, y1, COUL_DOWN_BLUE);
-}
-
 S32 Ui_SmallWidth(const char *s, S32 scale) {
     return (S32)strlen(s) * 8 * scale;
 }
@@ -339,10 +317,9 @@ S32 Voice_Lines(const char *text, S32 width) {
     return Wrap(text, width, starts, lens, VOICE_MAX_LINES);
 }
 
-static S32 s_msPerWord = 300;
+static const S32 s_msPerWord = 300;  // how long a window of help is held, per word
 static S32 s_lastPage, s_lastPages;
 
-void Voice_SetMsPerWord(S32 ms) { s_msPerWord = ms; }
 
 void Voice_LastPage(S32 *page, S32 *pages) {
     *page = s_lastPage;

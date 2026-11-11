@@ -42,7 +42,6 @@ enum {
     S_MASTER, S_SFX, S_VOICES, S_MUSIC,
     S_CAM_OUT, S_CAM_IN, S_MOVIE_CAM, S_INVERT, S_SENS,
     S_FIXBUGS,
-    S_DODGE, S_HINTS,
     S_COUNT
 };
 
@@ -103,10 +102,6 @@ static const Setting kSettings[S_COUNT] = {
      "How fast the camera turns. Only with the Auto camera."},
     {"fix_bugs", "Fix retail bugs", K_TOGGLE, 1, {"Off", "On"}, 1, 0, true,
      "Fixes the 1997 release's known bugs. Off plays them as they were."},
-    {"dodge", "Dodge", K_CHOICE, 1, {"Classic", "Double tap"}, 0, 0, false,
-     "How Twinsen jumps aside in Athletic mode."},
-    {"hints", "Behaviour hints", K_TOGGLE, 1, {"Off", "On"}, 0, 0, false,
-     "Names the behaviour when you change it."},
 };
 
 static int g_val[S_COUNT];
@@ -122,14 +117,11 @@ static bool g_haveBeforeReset;
 
 static const char *kPresetNames[2] = {"Modern", "Classic"};
 
-// Switch presetlook (asked for 2026-11-12, prototype only): a preset also sets the look, so
-// choosing one shows the difference. Classic: the 1997 picture, the game font, Classic
-// cameras, 640 x 480. Modern: Twinsun, Zilla Slab, Auto and Follow cameras, the screen the
-// prototype started at (the display's own size on a console). Off: presets set the rules
-// only, as the plan has it; the self test runs with it off. A real port may leave the
-// screen alone.
-static int sw_presetlook = 1;
-static int sw_pagemark = 1;  // paged help: "1/2" in the corner (1) or the dialogue's arrow (0)
+// A preset also sets the look (asked for 2026-11-12, prototype only), so choosing one shows
+// the difference. Classic: the 1997 picture, the game font, Classic cameras, 640 x 480.
+// Modern: Twinsun, Zilla Slab, Auto and Follow cameras, the screen the prototype started at
+// (the display's own size on a console). The plan has presets set the rules only; a real
+// port may leave the screen alone.
 
 struct LookDef {
     int s;
@@ -144,8 +136,6 @@ static const LookDef kLook[] = {
 static const int kLookCount = (int)(sizeof kLook / sizeof kLook[0]);
 
 static const LookDef *Look(int s) {
-    if (!sw_presetlook)
-        return NULL;
     for (int i = 0; i < kLookCount; i++)
         if (kLook[i].s == s)
             return &kLook[i];
@@ -169,7 +159,7 @@ static int PresetValue(int preset, int s) {
     return l ? l->classic : kSettings[s].classic;
 }
 
-// The screen, with presetlook on: Classic's is 640 x 480, Modern's the one the prototype
+// The screen: Classic's is 640 x 480, Modern's the one the prototype
 // started at.
 struct ScreenSize {
     U32 w, h;
@@ -218,8 +208,7 @@ static void ApplyPreset(int p) {
         if (PresetSets(s))
             g_val[s] = PresetValue(p, s);
     Exp_Defaults();
-    if (sw_presetlook)
-        SetScreenTo(PresetScreen(p));
+    SetScreenTo(PresetScreen(p));
     Trace("apply preset=%s", kPresetNames[p]);
 }
 
@@ -229,7 +218,7 @@ static bool BackDiffers() {
     for (int s = 0; s < S_COUNT; s++)
         if (PresetSets(s) && g_before[s] != g_val[s])
             return true;
-    if (sw_presetlook && !SameScreen(g_beforeScreen, ScreenNow()))
+    if (!SameScreen(g_beforeScreen, ScreenNow()))
         return true;
     return ExpDiffers(g_beforeExp);
 }
@@ -240,7 +229,7 @@ static bool ResetBackDiffers() {
         return false;
     if (g_beforeResetPreset != g_preset)
         return true;
-    if (sw_presetlook && !SameScreen(g_beforeResetScreen, ScreenNow()))
+    if (!SameScreen(g_beforeResetScreen, ScreenNow()))
         return true;
     return memcmp(g_beforeReset, g_val, sizeof g_val) != 0 || ExpDiffers(g_beforeResetExp);
 }
@@ -249,8 +238,7 @@ static void ResetSettings() {
     bool fresh = g_preset == 0 && !Exp_AnyChanged();
     for (int s = 0; s < S_COUNT; s++)
         fresh = fresh && g_val[s] == FreshValue(s);
-    if (sw_presetlook)
-        fresh = fresh && SameScreen(ScreenNow(), g_modernScreen);
+    fresh = fresh && SameScreen(ScreenNow(), g_modernScreen);
     if (!fresh) {  // a second reset with nothing changed keeps the first one's undo
         memcpy(g_beforeReset, g_val, sizeof g_val);
         Exp_Get(g_beforeResetExp);
@@ -263,16 +251,8 @@ static void ResetSettings() {
     Exp_Defaults();
     g_preset = 0;
     g_haveBefore = false;
-    if (sw_presetlook)
-        SetScreenTo(g_modernScreen);
+    SetScreenTo(g_modernScreen);
     Trace("reset settings");
-}
-
-// presetlook turned: the look settings take the chosen preset's values under the new rule;
-// the screen stays as it is.
-static void PresetLookChanged() {
-    for (int i = 0; i < kLookCount; i++)
-        g_val[kLook[i].s] = PresetValue(g_preset, kLook[i].s);
 }
 
 // ───────────────────────────── Pages as data ─────────────────────────────
@@ -290,7 +270,7 @@ enum { A_KEYS, A_RESET, A_EXP, A_CONSOLE };  // R_ACTION: opens Keys and buttons
                                               // settings, opens the console
 enum { BACK_PRESET, BACK_RESET };  // R_BACK_TO_MINE: undoes a preset, or a reset
 
-enum { P_HUB, P_PRESET, P_LANG, P_DISPLAY, P_SOUND, P_CONTROLS, P_ADVANCED, P_GAMEPLAY, P_FIRST, P_ORIGINAL, P_COUNT };
+enum { P_HUB, P_PRESET, P_LANG, P_DISPLAY, P_SOUND, P_CONTROLS, P_ADVANCED, P_FIRST, P_ORIGINAL, P_COUNT };
 
 struct Page {
     const char *name;
@@ -300,27 +280,10 @@ struct Page {
 
 static Page g_pages[P_COUNT];
 
-// Switches.
-static int sw_band = 1, sw_typing = 0, sw_chip = 2, sw_tablefont = 1, sw_keyrule = 0, sw_word = 2, sw_island = 0, sw_help640 = 1,
-           sw_gameplay = 0, sw_overlay = 0;
-// Composition (2026-11-03 design pass): sheet, legend, bg, scale (scale remakes the canvas).
-static int sw_tstilt = 3328, sw_tssize = 140;  // the Twinsun background's tilt and size
-static int sw_vfsize = 100;  // Zilla Slab's size, percent of the game font's capitals
-static int sw_bgres = 3;  // the picture at the screen's resolution: 0 off, 1 whole step, 2 smooth,
-                          // 3 as the Image row says (Classic whole step, Smooth smooth; decided 2026-11-11)
-static int sw_sheet = 1, sw_legend = 1, sw_bg = 1, sw_scale = 1, sw_bandshade = 15, sw_panes = 1;
-static int sw_clash = 1, sw_short = 1, sw_narrow = 1;
-// Wide sliders: 1 the 1997 way, the row under the cursor is the slider (red plasma up to the
-// value, label on it) and the others show only the label (2026-11-11, after playing on the
-// Xbox: the plasma squeezed into a strip read badly); 0 a small slider at the value edge on
-// every row (2026-11-03).
-static int sw_slider = 1;
-// How long a window of help is held before the next is typed, in tenths of a second per word
-// (no key): 3 reads at about 200 words a minute. The demo reel holds a second a line.
-static int sw_pace = 3;
-// Where the Frame rate row sits (no key): 0 Display and graphics, under Vsync (decided 2026-11-03);
-// 1 Advanced and reset.
-static int sw_fpsrow = 0;
+// Switches (prototype aids; every review switch was pruned 2026-11-12, keeping what was decided).
+static int sw_overlay = 0;
+// Help typed on every cursor move (decided 2026-11-03); 1 shows it whole at once, for the self test.
+static int sw_whole = 0;
 
 // What a build off main says: lba2cc's LBA2_VERSION_STRING and the commit's first 7. A release
 // says its number alone. An example; the prototype has no build of its own to name.
@@ -328,16 +291,10 @@ static const char *kVersion = "0.13.3-dev 011394f";
 static const char *kVersionString = "0.13.3-dev";  // LBA2_VERSION_STRING alone, as the log's first line has it
 static const char *kCommit = "011394fbc247";
 
-// The preset row: 2 "Preset: Modern", the page's own name (2026-11-11, after playing on the
-// Xbox: "Modern settings" read as a page of settings, not the preset); 0 "Modern settings"
-// (decided 2026-11-03), 1 and 3 the other word-and-colon forms ("Settings: Modern", "Rules: Modern").
-static const char *kWords[3] = {"Settings", "Preset", "Rules"};
-
+// The preset row: "Preset: Modern", the page's own name (2026-11-11, after playing on the
+// Xbox: "Modern settings" read as a page of settings, not the preset).
 static const char *FormatPresetRow(char *buf, size_t n, const char *name, bool changed) {
-    if (sw_word == 0)
-        snprintf(buf, n, "%s settings%s", name, changed ? ", changed" : "");
-    else
-        snprintf(buf, n, "%s: %s%s", kWords[sw_word - 1], name, changed ? ", changed" : "");
+    snprintf(buf, n, "Preset: %s%s", name, changed ? ", changed" : "");
     return buf;
 }
 
@@ -359,27 +316,18 @@ static void BuildPages() {
     Page &hub = g_pages[P_HUB];
     hub.name = "Options";
     AddRow(hub, R_RETURN, "Return to the game", 0, "Back to where you were.");
-    AddRow(hub, R_PRESET_ROW, "", P_PRESET,
-           sw_presetlook ? "As in 1997, or today's look with bugs fixed."
-                         : "Choose how to play: the 1997 rules, or with the known bugs fixed.");
+    AddRow(hub, R_PRESET_ROW, "", P_PRESET, "As in 1997, or today's look with bugs fixed.");
     AddRow(hub, R_CATEGORY, "Language and interface", P_LANG, "Text, voices, the font and the background.");
     AddRow(hub, R_CATEGORY, "Display and graphics", P_DISPLAY, "Resolution, window and detail.");
     AddRow(hub, R_CATEGORY, "Sound", P_SOUND, "Volumes.");
     AddRow(hub, R_CATEGORY, "Controls and camera", P_CONTROLS, "Keys, pad and the camera.");
-    if (sw_gameplay)
-        AddRow(hub, R_CATEGORY, "Gameplay", P_GAMEPLAY, "How Twinsen moves and what the game tells you.");
     AddRow(hub, R_CATEGORY, "Advanced and reset", P_ADVANCED, "The rules switch, experiments and a fresh start.");
 
     Page &pr = g_pages[P_PRESET];
     pr.name = "Preset";
     AddRow(pr, R_RETURN, "Return to previous menu", 0, "");
-    if (sw_presetlook) {
-        AddRow(pr, R_PRESET_CHOICE, "Modern", 0, "Today's look, cameras that follow, bugs fixed.");
-        AddRow(pr, R_PRESET_CHOICE, "Classic", 1, "The 1997 look and cameras, bugs and all.");
-    } else {
-        AddRow(pr, R_PRESET_CHOICE, "Modern", 0, "The original, with its known bugs fixed. What a fresh install plays.");
-        AddRow(pr, R_PRESET_CHOICE, "Classic", 1, "The rules of the 1997 CD release, bugs and all. Nothing else changes.");
-    }
+    AddRow(pr, R_PRESET_CHOICE, "Modern", 0, "Today's look, cameras that follow, bugs fixed.");
+    AddRow(pr, R_PRESET_CHOICE, "Classic", 1, "The 1997 look and cameras, bugs and all.");
     if (BackDiffers())
         AddRow(pr, R_BACK_TO_MINE, "Undo preset", BACK_PRESET, "Puts back the settings you had before you chose a preset.");
 
@@ -398,8 +346,7 @@ static void BuildPages() {
     AddSetting(disp, S_RESOLUTION);
     AddSetting(disp, S_FULLSCREEN);
     AddSetting(disp, S_VSYNC);
-    if (!sw_fpsrow)
-        AddSetting(disp, S_FPS);
+    AddSetting(disp, S_FPS);
     AddSetting(disp, S_IMAGE);
 
     Page &snd = g_pages[P_SOUND];
@@ -429,19 +376,11 @@ static void BuildPages() {
     // features and the few unfinished ones, which it marks experimental.
     // Help within 750 px (2026-11-12); an experimental row's own help says it is experimental.
     AddRow(adv, R_ACTION, "More options", A_EXP, "Tuning and 1997 extras, in English.");
-    if (sw_fpsrow)
-        AddSetting(adv, S_FPS);
     // The row's value is the version, so a bug report can name the build from the menu.
     AddRow(adv, R_ACTION, "Console", A_CONSOLE, "Messages, and commands from a keyboard.");
     AddRow(adv, R_ACTION, "Reset settings", A_RESET, "Puts every setting back as a fresh install has it.");
     if (ResetBackDiffers())
         AddRow(adv, R_BACK_TO_MINE, "Undo reset", BACK_RESET, "Puts back what you had before the reset.");
-
-    Page &gp = g_pages[P_GAMEPLAY];
-    gp.name = "Gameplay";
-    AddRow(gp, R_RETURN, "Return to previous menu", 0, "");
-    AddSetting(gp, S_DODGE);
-    AddSetting(gp, S_HINTS);
 
     // A fixture: today's Options page from the boot menu, to diff against lba2cc's
     // `ui menu-main-options` capture.
@@ -456,13 +395,8 @@ static void BuildPages() {
 
     Page &fl = g_pages[P_FIRST];
     fl.name = "First launch";
-    if (sw_presetlook) {
-        AddRow(fl, R_PRESET_CHOICE, "Modern", 0, "Today's look, bugs fixed. You can change this later in the Options Menu.");
-        AddRow(fl, R_PRESET_CHOICE, "Classic", 1, "As in 1997, bugs and all. You can change this later in the Options Menu.");
-    } else {
-        AddRow(fl, R_PRESET_CHOICE, "Modern", 0, "The original, with its known bugs fixed. You can change this later in the Options Menu.");
-        AddRow(fl, R_PRESET_CHOICE, "Classic", 1, "The rules of the 1997 CD release, bugs and all. You can change this later in the Options Menu.");
-    }
+    AddRow(fl, R_PRESET_CHOICE, "Modern", 0, "Today's look, bugs fixed. You can change this later in the Options Menu.");
+    AddRow(fl, R_PRESET_CHOICE, "Classic", 1, "As in 1997, bugs and all. You can change this later in the Options Menu.");
 }
 
 // Invert and speed only mean something with the Auto camera: dimmed, not hidden.
@@ -520,7 +454,7 @@ struct QuestionText {
     const char *answers[2];
 };
 static const QuestionText kQuestions[2] = {
-    {"Play by the 1997 rules? The screen, sound and keys stay as they are.", {"No, keep Modern", "Yes, play Classic"}},
+    {"Play as in 1997? Sound and keys stay as they are.", {"No, keep Modern", "Yes, play Classic"}},
     {"Put every setting back as a fresh install has it?", {"No, keep my settings", "Yes, reset settings"}},
 };
 
@@ -537,32 +471,20 @@ static bool g_quit;        // Esc on that note: the prototype ends (a fullscreen
 enum { CON_CLOSED, CON_FULL, CON_READONLY };
 static int g_console;
 static Voice g_voice;
-static bool g_pageEntered; // typing mode 1: type once on entering a page
 static char g_toast[128];
 static U32 g_toastUntil;
 
 bool Menu_Wide() {
-    if (Engine_ScaleRule() == 1)
-        return Engine_RuleChoseWide();
-    if (sw_sheet)
-        return Engine_LogicalW() >= 960 && Engine_LogicalH() >= 540;
-    return Engine_LogicalW() >= 840;
+    return Engine_RuleChoseWide();
 }
 
 WideFrame Menu_WideFrame() {
     S32 W = (S32)Engine_LogicalW(), H = (S32)Engine_LogicalH();
-    WideFrame f = {0, 0, W, H};
-    if (sw_sheet) {
-        f.w = 960;
-        f.h = 540;
-        f.x0 = (W - 960) / 2;
-        f.y0 = (H - 540) / 2;
-    }
+    WideFrame f = {(W - 960) / 2, (H - 540) / 2, 960, 540};
     return f;
 }
 
 static bool Wide() { return Menu_Wide(); }
-int Menu_Panes() { return sw_panes; }
 
 static void Toast(const char *fmt, const char *a, int v) {
     snprintf(g_toast, sizeof g_toast, fmt, a, v);
@@ -621,9 +543,6 @@ static bool VoiceFits(const char *text, const Row *r) {
     S32 W = (S32)Engine_LogicalW();
     if (!Wide())
         return Voice_Lines(text, W - 49) <= 3;
-    W = Menu_WideFrame().w;
-    if (!sw_band)
-        return Voice_Lines(text, W - 64) <= 1;
     const char *keys[4], *words[4];
     int nk;
     LegendFor(r, keys, words, &nk);
@@ -638,13 +557,13 @@ static const char *HelpFor(const Row *r) {
     if (!r)
         return "";
     // One message at a time: a dimmed row says why it is dimmed, not what it does.
-    if (sw_short && r->type == R_SETTING && !RowActive(*r))
+    if (r->type == R_SETTING && !RowActive(*r))
         return "Only with the Auto camera.";
     if (r->type == R_BACK_TO_MINE && r->arg == BACK_PRESET && BackDiffers()) {
         char list[160] = "";
         for (int s = 0; s < S_COUNT; s++) {
             if ((PresetSets(s) && g_before[s] != g_val[s]) ||
-                (s == S_RESOLUTION && sw_presetlook && !SameScreen(g_beforeScreen, ScreenNow()))) {
+                (s == S_RESOLUTION && !SameScreen(g_beforeScreen, ScreenNow()))) {
                 if (list[0])
                     strncat(list, ", ", sizeof list - strlen(list) - 1);
                 strncat(list, Ui_Tr(kSettings[s].label), sizeof list - strlen(list) - 1);
@@ -669,13 +588,12 @@ static const char *HelpFor(const Row *r) {
         char preset[48];
         int n = 0;
         if (g_beforeResetPreset != g_preset) {
-            const char *w = sw_word == 0 ? "settings" : kWords[sw_word - 1];
-            snprintf(preset, sizeof preset, "%s %c%s", kPresetNames[g_beforeResetPreset], w[0] | 32, w + 1);  // "Classic settings"
+            snprintf(preset, sizeof preset, "%s preset", kPresetNames[g_beforeResetPreset]);  // "Classic preset"
             names[n++] = Ui_Tr(preset);
         }
         for (int s = 0; s < S_COUNT; s++)
             if (g_beforeReset[s] != g_val[s] ||
-                (s == S_RESOLUTION && sw_presetlook && !SameScreen(g_beforeResetScreen, ScreenNow())))
+                (s == S_RESOLUTION && !SameScreen(g_beforeResetScreen, ScreenNow())))
                 names[n++] = Ui_Tr(kSettings[s].label);
         int now[EXP_MAX];
         Exp_Get(now);
@@ -703,7 +621,7 @@ static const char *HelpFor(const Row *r) {
     return r->help ? r->help : "";
 }
 
-// Shorter help for translation (switch short, decided 2026-11-03): English at most about 750 px,
+// Shorter help for translation (decided 2026-11-03): English at most about 750 px,
 // so a translation half as long again still fits the voice's two lines.
 static const char *const kShortHelp[][2] = {
     {"Stops the picture tearing. Off can raise the frame rate on a slow display.", "Stops the picture tearing."},
@@ -714,12 +632,7 @@ static const char *const kShortHelp[][2] = {
     {"Classic holds still and cuts; Auto turns to follow you.", "Classic cuts; Auto follows you."},
     {"Turns the camera the other way. Only with the Auto camera.", "Turns the camera the other way."},
     {"How fast the camera turns. Only with the Auto camera.", "How fast the camera turns."},
-    {"Choose how to play: the 1997 rules, or with the known bugs fixed.", "The 1997 rules, or with the bugs fixed."},
-    {"How Twinsen moves and what the game tells you.", "The dodge and behaviour hints."},
-    {"The original, with its known bugs fixed. What a fresh install plays.", "The original, with its known bugs fixed."},
-    {"The rules of the 1997 CD release, bugs and all. Nothing else changes.", "The 1997 CD rules, bugs and all."},
     {"Puts back the settings you had before you chose a preset.", "Puts back what you had before."},
-    {"Play by the 1997 rules? The screen, sound and keys stay as they are.", "Play by the 1997 rules? Nothing else changes."},
     {"Talking, fighting, and the screens you open in play.", "Talking, fighting and the game's screens."},
     {"The game menu, pause, help, saving and loading.", "Game menu, pause, help, save and load."},
     {"Does what the behaviour does: jump, hit or hide.", "Jumps, hits or hides, by behaviour."},
@@ -732,11 +645,9 @@ const std::set<std::string> &Menu_VoiceMissed() { return s_voiceMissed; }
 
 static void Say(const char *text, bool translate) {
     if (translate) {
-        if (sw_short) {
-            for (size_t i = 0; i < sizeof kShortHelp / sizeof kShortHelp[0]; i++)
-                if (!strcmp(text, kShortHelp[i][0]))
-                    text = kShortHelp[i][1];
-        }
+        for (size_t i = 0; i < sizeof kShortHelp / sizeof kShortHelp[0]; i++)
+            if (!strcmp(text, kShortHelp[i][0]))
+                text = kShortHelp[i][1];
         if (g_val[S_TEXT_LANG] > 0 && text[0] && !Lang_Find(text, g_val[S_TEXT_LANG]))
             s_voiceMissed.insert(text);
         text = Lang_Tr(text, g_val[S_TEXT_LANG]);  // the voice speaks the Text language
@@ -759,24 +670,16 @@ static void Say(const char *text, bool translate) {
     }
     said[o] = 0;
     text = said;
-    bool typed = sw_typing == 0 || (sw_typing == 1 && g_pageEntered);
-    Voice_SetMsPerWord(sw_pace * 100);
-    if (strcmp(g_voice.text, text) != 0) {
-        Voice_Say(g_voice, text, typed);
-        g_pageEntered = false;
-    }
+    if (strcmp(g_voice.text, text) != 0)
+        Voice_Say(g_voice, text, !sw_whole);
 }
 
 void Menu_Say(const char *text) { Say(text, true); }
 void Menu_SayAsIs(const char *text) { Say(text, false); }
 
-void Menu_PageEntered() { g_pageEntered = true; }
-
 static void UpdateVoice() {
     const Row *r = CursorRow();
     const char *text = g_confirm ? kQuestions[g_question].voice : HelpFor(r);
-    if (g_confirm && g_question == Q_CLASSIC && sw_presetlook)
-        text = "Play as in 1997? Sound and keys stay as they are.";  // Classic sets the look too
     if (text == g_helpBuf)
         Menu_SayAsIs(text);
     else
@@ -788,7 +691,6 @@ static void Push(int page) {
     g_stack[g_depth++] = page;
     g_cursor = 0;  // the 1997 sub-menus open on their Return row
     g_scroll = 0;
-    g_pageEntered = true;
     Trace("open page=%s", g_pages[page].name);
 }
 
@@ -868,7 +770,6 @@ static void SyncLayout() {
             g_cursor++;
         }
     }
-    g_pageEntered = true;
     Trace("layout %s page=%s cursor=%d", wide ? "wide" : "column",
           g_pages[wide && g_focus == F_RIGHT ? RightPage() : TopPage()].name, g_cursor);
 }
@@ -879,7 +780,6 @@ static void Pop() {
         g_depth--;
         g_cursor = g_cursorStack[g_depth - 1];
         g_scroll = 0;
-        g_pageEntered = true;
     } else {
         g_closed = true;
         Trace("close options");
@@ -887,8 +787,7 @@ static void Pop() {
 }
 
 void Menu_Init(bool firstLaunch) {
-    sw_scale = Engine_ScaleRule();
-    g_modernScreen = ScreenNow();  // Modern's screen, with presetlook on
+    g_modernScreen = ScreenNow();  // Modern's screen
     for (int s = 0; s < S_COUNT; s++)
         g_val[s] = FreshValue(s);
     g_preset = 0;
@@ -901,7 +800,6 @@ void Menu_Init(bool firstLaunch) {
     g_first = firstLaunch;
     if (g_first)
         g_cursor = 0;
-    g_pageEntered = true;
     g_voice.text[0] = 0;
     g_layoutWide = Wide() ? 1 : 0;
     Trace("init layout=%s logical=%ux%u first=%d", Wide() ? "wide" : "column",
@@ -956,7 +854,6 @@ static void Activate(const Row &r) {
         if (Wide()) {
             g_focus = F_RIGHT;
             g_cursor = 0;
-            g_pageEntered = true;
             Trace("focus right page=%s", g_pages[r.arg].name);
         } else {
             Push(r.arg);
@@ -988,15 +885,13 @@ static void Activate(const Row &r) {
             Exp_Put(g_beforeResetExp);
             g_preset = g_beforeResetPreset;
             g_haveBeforeReset = false;
-            if (sw_presetlook)
-                SetScreenTo(g_beforeResetScreen);
+            SetScreenTo(g_beforeResetScreen);
         } else {
             memcpy(g_val, g_before, sizeof g_val);
             Exp_Put(g_beforeExp);
             g_preset = g_beforePreset;
             g_haveBefore = false;
-            if (sw_presetlook)
-                SetScreenTo(g_beforeScreen);
+            SetScreenTo(g_beforeScreen);
         }
         Trace("back to my settings");
         BuildPages();
@@ -1034,7 +929,6 @@ static void Move(int dir) {
         return;
     if (Wide() && !g_first && g_focus == F_LEFT) {
         g_leftCursor = (g_leftCursor + dir + n) % n;
-        g_pageEntered = true;
     } else {
         g_cursor = (g_cursor + dir + n) % n;
     }
@@ -1139,7 +1033,6 @@ void Menu_Update() {
             Activate(g_pages[P_FIRST].rows[0]);  // Escape answers Modern
         } else if (Wide() && g_focus == F_RIGHT) {
             g_focus = F_LEFT;
-            g_pageEntered = true;
             Trace("focus left");
         } else {
             Pop();
@@ -1253,7 +1146,7 @@ static void DrawWideRow(const char *pane, const Row &r, S32 x0, S32 y0, S32 x1, 
     bool active = RowActive(r);
     // The 1997 slider (GAMEMENU.CPP DrawOneChoice): under the cursor the whole row is the
     // slider plasma up to the value, fill-selected after it, the label on it.
-    const bool barRow = sw_slider && r.type == R_SETTING && kSettings[r.arg].kind == K_SLIDER;
+    const bool barRow = r.type == R_SETTING && kSettings[r.arg].kind == K_SLIDER;
     if (barRow && fill == FILL_CURSOR && active) {
         S32 x2 = x0 + (x1 - x0) * g_val[r.arg] / kSettings[r.arg].max;
         Cadre_BackupCorners(x0, y0, x1, y1);
@@ -1296,15 +1189,8 @@ static void DrawWideRow(const char *pane, const Row &r, S32 x0, S32 y0, S32 x1, 
             Ui_Steps(valueRight, yc, st.max, g_val[r.arg], &left);
             snprintf(d.value, sizeof d.value, "%d/%d", g_val[r.arg], st.max);
             valueLeft = left;
-        } else if (st.kind == K_SLIDER && sw_slider) {
-            snprintf(d.value, sizeof d.value, "%d", g_val[r.arg]);  // the bar is the value
         } else if (st.kind == K_SLIDER) {
-            left = valueRight - 128;
-            if (d.textRight + 8 > left - 17)
-                d.textRight = x1 + (d.textRight + 8 - (left - 17));
-            Ui_MiniSlider(left, valueRight, yc, g_val[r.arg], st.max, !active);
-            snprintf(d.value, sizeof d.value, "%d", g_val[r.arg]);
-            valueLeft = left;
+            snprintf(d.value, sizeof d.value, "%d", g_val[r.arg]);  // the bar is the value
         } else {
             ValueText(r.arg, val, sizeof val);
             left = valueRight + 1 - Ui_TextInkWidth(val);  // the ink ends on the value edge
@@ -1316,7 +1202,7 @@ static void DrawWideRow(const char *pane, const Row &r, S32 x0, S32 y0, S32 x1, 
         }
         d.changed = changed;
         d.valueRight = valueRight;
-        if (fill == FILL_CURSOR && active && !(st.kind == K_SLIDER && sw_slider)) {
+        if (fill == FILL_CURSOR && active && st.kind != K_SLIDER) {
             Ui_ChangeMarks(left - 17, valueRight + 17, yc);  // in the padding: the value never moves
             d.marks = true;
         }
@@ -1409,21 +1295,15 @@ static const char *LegendWord(const char *w) {
     return Ui_Tr(w);
 }
 
+// Stacked: the widest chip, the gap, the widest word.
 static S32 LegendWidth(const char **keys, const char **words, int n, S32 scale) {
-    S32 w = 0;
-    if (sw_legend) {
-        // Stacked: the widest chip, the gap, the widest word.
-        S32 chipW = 0, wordW = 0;
-        for (int i = 0; i < n; i++) {
-            S32 c = Ui_ChipWidth(keys[i], scale), t = Ui_SmallWidth(LegendWord(words[i]), scale);
-            chipW = c > chipW ? c : chipW;
-            wordW = t > wordW ? t : wordW;
-        }
-        return n ? chipW + 4 * scale + wordW : 0;
+    S32 chipW = 0, wordW = 0;
+    for (int i = 0; i < n; i++) {
+        S32 c = Ui_ChipWidth(keys[i], scale), t = Ui_SmallWidth(LegendWord(words[i]), scale);
+        chipW = c > chipW ? c : chipW;
+        wordW = t > wordW ? t : wordW;
     }
-    for (int i = 0; i < n; i++)
-        w += Ui_ChipWidth(keys[i], scale) + 4 * scale + Ui_SmallWidth(LegendWord(words[i]), scale) + (i + 1 < n ? 12 * scale : 0);
-    return w;
+    return n ? chipW + 4 * scale + wordW : 0;
 }
 
 static void LegendRecord(int i, const char *key, const char *word) {
@@ -1433,17 +1313,6 @@ static void LegendRecord(int i, const char *key, const char *word) {
 }
 
 // In a row: chip, word, chip, word, centred on yc.
-static void DrawLegend(S32 x, S32 yc, const char **keys, const char **words, int n, S32 scale) {
-    g_legend[0] = 0;
-    for (int i = 0; i < n; i++) {
-        S32 chipH = 12 * scale;
-        x += Ui_Chip(x, yc - chipH / 2, keys[i], scale) + 4 * scale;
-        Ui_Small(x, yc - 4 * scale, LegendWord(words[i]), INK_CONFIG_MENU, scale);
-        x += Ui_SmallWidth(LegendWord(words[i]), scale) + 12 * scale;
-        LegendRecord(i, keys[i], words[i]);
-    }
-}
-
 // Stacked (the review card's legend): one key a line from y0, the chips ending on
 // one column and the words starting on the next, so the words read as a list.
 static void DrawLegendStacked(S32 x, S32 y0, const char **keys, const char **words, int n, S32 scale) {
@@ -1490,27 +1359,19 @@ static void DrawConfirm(const char *pane, S32 x0, S32 x1, S32 y0) {
 
 // Paged help (help longer than its window) says where it is: "1/2" in the 8x8 font in the
 // window's bottom-right corner, kept on the last window, so a player who looks late still sees
-// there was more (switch pagemark, decided 2026-11-12). pagemark 0: the dialogue's arrow while
-// a later window is to come (MESSAGE.CPP AffFleche), as tried on the Xbox 2026-11-11.
-static bool g_moreArrow;
+// there was more (decided 2026-11-12, over the dialogue's arrow tried on the Xbox 2026-11-11).
 static char g_pageMark[8];
-static void DrawMoreArrow(S32 x1, S32 y1) {
+static void DrawPageMark(S32 x1, S32 y1) {
     S32 page = 0, pages = 1;
     Voice_LastPage(&page, &pages);
-    g_moreArrow = false;
     g_pageMark[0] = 0;
     if (pages < 2)
         return;
-    if (!sw_pagemark) {
-        g_moreArrow = page + 1 < pages && Engine_DrawMoreArrow(x1, y1);
-        return;
-    }
-    S32 sc = Wide() ? sw_chip : 1;
+    S32 sc = Wide() ? 2 : 1;
     snprintf(g_pageMark, sizeof g_pageMark, "%d/%d", (int)page + 1, (int)pages);
     Ui_Small(x1 - 12 - Ui_SmallWidth(g_pageMark, sc) + 1, y1 - 6 - 8 * sc, g_pageMark, INK_CONFIG_MENU, sc);
 }
 const char *Menu_PageMark() { return g_pageMark; }
-bool Menu_MoreArrow() { return g_moreArrow; }
 const char *Menu_Legend() { return g_legend; }
 
 S32 Menu_DialogueTop() { return (S32)Engine_LogicalH() - 1 - 137; }
@@ -1525,7 +1386,7 @@ void Menu_DrawDialogueIn(S32 x0, S32 y0, S32 x1, S32 y1) {
     Ui_Panel(x0, y0, x1, y1, PANEL_SHADE_LVL);
     g_voiceLines = Voice_Draw(g_voice, x0 + 16, y0 + 12, x1 - x0 - 32, 3, &g_voiceNeeded);
     g_voiceMax = 3;
-    DrawMoreArrow(x1, y1);  // MESSAGE.CPP AffFleche: the window's own corner
+    DrawPageMark(x1, y1);  // the window's own corner, where MESSAGE.CPP AffFleche puts its arrow
     g_helpBox.shown = true;
     g_helpBox.kind = "dialogue";
     g_helpBox.x0 = x0; g_helpBox.y0 = y0; g_helpBox.x1 = x1; g_helpBox.y1 = y1;
@@ -1534,11 +1395,10 @@ void Menu_DrawDialogueIn(S32 x0, S32 y0, S32 x1, S32 y1) {
 static void DrawColumn() {
     S32 W = (S32)Engine_LogicalW(), H = (S32)Engine_LogicalH();
     const Page &p = g_first ? g_pages[P_FIRST] : g_pages[TopPage()];
-    bool help = g_first || g_confirm || TopPage() == P_PRESET || sw_help640;
 
     // First launch on a canvas that takes the wide composition sits in its frame,
     // the dialogue window where the band is on every other page.
-    bool framed = g_first && sw_sheet && Wide();
+    bool framed = g_first && Wide();
     WideFrame fr = Menu_WideFrame();
     S32 oy = framed ? fr.y0 : 0;
     if (g_first) {
@@ -1553,7 +1413,8 @@ static void DrawColumn() {
     if (g_confirm) {
         DrawConfirm("confirm", W / 2 - 180, W / 2 + 180, 120);
     } else {
-        S32 top = 16, bottom = help ? H - 1 - 137 - 16 : H - 16;
+        // Help in the dialogue window on every one-column page (decided 2026-11-03).
+        S32 top = 16, bottom = H - 1 - 137 - 16;
         if (g_first)
             top = 168 - 8;
         int visible = (bottom - top + ROW_GAP) / ROW_PITCH;
@@ -1566,12 +1427,7 @@ static void DrawColumn() {
         if (g_cursor >= g_scroll + visible)
             g_scroll = g_cursor - visible + 1;
         S32 stackH = visible * ROW_PITCH - ROW_GAP;
-        // GAMEMENU.CPP: tables are centred on y 260 (DrawGameMenu takes it as the
-        // first row's centre after subtracting half the stack), so the stack sits
-        // 5 px above the true middle; taller canvases float it (UI_VCENTER_OFS).
-        S32 y = 260 + (H - 480) / 2 - stackH / 2 - ROW_H / 2;
-        if (help || y < top)
-            y = top + (bottom - top - stackH) / 2;
+        S32 y = top + (bottom - top - stackH) / 2;  // centred above the dialogue window
         if (g_first)
             y = oy + 168;
         // The 1997 width: LargeurMenu 550, centred.
@@ -1584,9 +1440,9 @@ static void DrawColumn() {
             Menu_DrawScrollBar(x1 + 9, y - visible * ROW_PITCH, y - visible * ROW_PITCH + stackH - 1, g_scroll, visible,
                           p.count);
     }
-    if (help && framed)
+    if (framed)
         Menu_DrawDialogueIn(fr.x0 + 32, fr.y0 + fr.h - 25 - 137, fr.x0 + fr.w - 33, fr.y0 + fr.h - 25);
-    else if (help)
+    else
         Menu_DrawDialogue();
 }
 
@@ -1598,14 +1454,11 @@ static void DrawWide() {
     S32 leftW = inner * 464 / 880;
     S32 lx0 = f.x0 + side, lx1 = lx0 + leftW - 1;
     S32 rx0 = lx1 + 1 + gap, rx1 = f.x0 + f.w - side - 1;
-    bool drawLeft = true, drawRight = true;
-    if (sw_panes) {
-        // One pane at a time, the focused one, centred and as wide as the 1997 canvas.
-        lx0 = rx0 = f.x0 + (f.w - DRILL_W) / 2;
-        lx1 = rx1 = lx0 + DRILL_W - 1;
-        drawLeft = g_focus == F_LEFT && !g_confirm;
-        drawRight = !drawLeft;
-    }
+    // One pane at a time, the focused one, centred and as wide as the 1997 canvas.
+    lx0 = rx0 = f.x0 + (f.w - DRILL_W) / 2;
+    lx1 = rx1 = lx0 + DRILL_W - 1;
+    bool drawLeft = g_focus == F_LEFT && !g_confirm;
+    bool drawRight = !drawLeft;
 
     // Left pane: the hub's categories.
     const Page &hub = g_pages[P_HUB];
@@ -1622,22 +1475,17 @@ static void DrawWide() {
     // question is up, its answers in place of the rows.
     if (!drawRight) {
     } else if (g_confirm) {
-        S32 qtop = top;
-        if (sw_panes)
-            qtop = Ui_Title(rx0, rx1, top, g_pages[RightPage()].name);
+        S32 qtop = Ui_Title(rx0, rx1, top, g_pages[RightPage()].name);
         DrawConfirm("right", rx0, rx1, qtop);
     } else {
         int rp = RightPage();
         const Page &page = g_pages[rp];
         int n = page.count - RightFirst();
         S32 limit = Menu_WideRowsLimit();
-        S32 rtop = top;
-        if (sw_panes) {
-            // Alone, the page names itself: a title in the seventh row's place.
-            rtop = Ui_Title(rx0, rx1, top, page.name);
-            Menu_Record("title", page.name, "", FILL_SHADE, rx0, top, rx1, top + 38).textLeft =
-                (rx0 + rx1 + 1) / 2 - Ui_TextWidth(page.name) / 2;
-        }
+        // Alone, the page names itself: a title in the seventh row's place.
+        S32 rtop = Ui_Title(rx0, rx1, top, page.name);
+        Menu_Record("title", page.name, "", FILL_SHADE, rx0, top, rx1, top + 38).textLeft =
+            (rx0 + rx1 + 1) / 2 - Ui_TextWidth(page.name) / 2;
         int visible = (limit - rtop + ROW_GAP) / ROW_PITCH;
         if (visible > n)
             visible = n;
@@ -1676,13 +1524,13 @@ static void DrawWide() {
 S32 Menu_WideRowsLimit() {
     WideFrame f = Menu_WideFrame();
     S32 H = f.y0 + f.h;
-    return sw_band ? H - 24 - 86 - 16 : H - 168 - 8;
+    return H - 24 - 86 - 16;
 }
 
 // The voice's width in the band: what the legend leaves, at most the review's 620.
 static S32 BandVoiceWidth(const char **keys, const char **words, int nk) {
     S32 W = Menu_WideFrame().w;
-    S32 legendW = LegendWidth(keys, words, nk, sw_chip);
+    S32 legendW = LegendWidth(keys, words, nk, 2);
     S32 voiceW = (W - 2 * 32) - legendW - 48;
     return voiceW > 620 ? 620 : voiceW;
 }
@@ -1695,39 +1543,24 @@ void Menu_DrawFoot(const char **keysIn, const char **words, int nk) {
     WideFrame f = Menu_WideFrame();
     S32 W = f.w, H = f.h;
     const S32 side = 32;
-    S32 chip = sw_chip;
+    const S32 chip = 2;  // the 8x8 key font at 2x (decided 2026-11-03)
     S32 bx0 = f.x0 + side, bx1 = f.x0 + W - side - 1;
     S32 bandY0 = f.y0 + H - 24 - 86, bandY1 = f.y0 + H - 25;
-    S32 helpLineY = f.y0 + H - 168, promptY = f.y0 + H - 68;
     S32 legendW = LegendWidth(keys, words, nk, chip);
-    if (sw_band) {
-        Ui_Panel(bx0, bandY0, bx1, bandY1, sw_bandshade ? sw_bandshade : BAND_SHADE_LVL);
-        S32 voiceW = BandVoiceWidth(keys, words, nk);
-        g_voiceLines = Voice_Draw(g_voice, bx0 + 16, bandY0 + 5, voiceW, 2, &g_voiceNeeded);
-        g_voiceMax = 2;
-        g_voiceWidth = voiceW;
-        // More to read: the dialogue's arrow at the voice's bottom-right corner, short of the legend.
-        S32 arrowX1 = bx0 + 16 + voiceW + 29, legendX = bx1 - 24 - legendW + 1;
-        if (arrowX1 > legendX - 8)
-            arrowX1 = legendX - 8;
-        DrawMoreArrow(arrowX1, bandY1);
-        if (sw_legend)
-            DrawLegendStacked(bx1 - 24 - legendW + 1, bandY0 + 7, keys, words, nk, chip);
-        else
-            DrawLegend(bx1 + 1 - 16 - legendW, (bandY0 + bandY1) / 2, keys, words, nk, chip);
-        g_helpBox.shown = true;
-        g_helpBox.kind = "band";
-        g_helpBox.x0 = bx0; g_helpBox.y0 = bandY0; g_helpBox.x1 = bx1; g_helpBox.y1 = bandY1;
-    } else {
-        // The proposal: a help line, and a prompt bar at the foot.
-        g_voiceLines = Voice_Draw(g_voice, bx0, helpLineY, W - 2 * side, 1, &g_voiceNeeded);
-        g_voiceMax = 1;
-        g_voiceWidth = W - 2 * side;
-        DrawLegend(bx0, promptY + 6 * chip, keys, words, nk, chip);
-        g_helpBox.shown = true;
-        g_helpBox.kind = "help-line";
-        g_helpBox.x0 = bx0; g_helpBox.y0 = helpLineY; g_helpBox.x1 = bx1; g_helpBox.y1 = helpLineY + 38;
-    }
+    Ui_Panel(bx0, bandY0, bx1, bandY1, 15);  // darkened to level 15 (decided 2026-11-03)
+    S32 voiceW = BandVoiceWidth(keys, words, nk);
+    g_voiceLines = Voice_Draw(g_voice, bx0 + 16, bandY0 + 5, voiceW, 2, &g_voiceNeeded);
+    g_voiceMax = 2;
+    g_voiceWidth = voiceW;
+    // More to read: the page mark at the voice's bottom-right corner, short of the legend.
+    S32 markX1 = bx0 + 16 + voiceW + 29, legendX = bx1 - 24 - legendW + 1;
+    if (markX1 > legendX - 8)
+        markX1 = legendX - 8;
+    DrawPageMark(markX1, bandY1);
+    DrawLegendStacked(bx1 - 24 - legendW + 1, bandY0 + 7, keys, words, nk, chip);
+    g_helpBox.shown = true;
+    g_helpBox.kind = "band";
+    g_helpBox.x0 = bx0; g_helpBox.y0 = bandY0; g_helpBox.x1 = bx1; g_helpBox.y1 = bandY1;
 }
 
 static void DrawOverlay() {
@@ -1735,26 +1568,7 @@ static void DrawOverlay() {
         "Prototype keys",
         "F1 this list   F2 / Shift F2 screen size",
         "Drag the window's edge: any screen size",
-        "F3 band / help line + prompt bar",
-        "F4 help typing: every move / page entry / none",
-        "F5 key font 2x / 1x    F6 preset word",
-        "Shift F5 Experimental table font 1x / 2x",
-        "F7 island palette      F8 help on 640 pages",
-        "F9 Gameplay category",
-        "F10 Controls: one device per view / all columns",
         "F11 pad names: connected / Xbox / PlayStation / Nintendo",
-        "F12 Controls heads: inside the first row / above",
-        "1 wide: one 960x540 composition, centred / stretched",
-        "2 band legend: stacked / in a row",
-        "3 background: even scale, cropped / stretched",
-        "4 scale: largest step the 960x540 fits / 640x480 rule",
-        "5 wide: one pane at a time, with a title / two panes",
-        "6 band: level 15 / 11, as before",
-        "7 a key clash: the note alone / after the help",
-        "8 help: shorter drafts / as written",
-        "9 640 key chips: 116 wide / 120",
-        "0 Experimental: dense 8x8 table (decided) / game-font list",
-        "(no key) fpsrow: Frame rate on Display / on Advanced",
     };
     S32 n = (S32)(sizeof lines / sizeof lines[0]);
     S32 w = 8 * 50 + 16, h = n * 12 + 12;
@@ -1818,10 +1632,10 @@ static void DrawFps() {
     Ui_Small(0, (S32)Engine_LogicalH() - 8, buf, INK_WHITE, 1);
 }
 
-// The picture's resolution follows switch bgres, and in its default the Image row.
-// Before anything is drawn: leaving or entering mode 0 remakes the canvas.
+// The picture at the screen's own resolution, as the Image row says (decided 2026-11-11):
+// Classic the smallest whole step that covers the screen, Smooth the exact cover factor.
 static void SyncBackgroundRes() {
-    const int want = sw_bgres == 3 ? 1 + g_val[S_IMAGE] : sw_bgres;
+    const int want = 1 + g_val[S_IMAGE];
     if (want != Engine_BackgroundRes())
         Engine_SetBackgroundRes(want);
 }
@@ -1881,17 +1695,9 @@ struct SwitchDef {
     int start;  // the value a fresh start has
 };
 static const SwitchDef kSwitches[] = {
-    {"band", &sw_band, 0, 1, 1},           {"typing", &sw_typing, 0, 2, 0},   {"chip", &sw_chip, 1, 2, 2},   {"tablefont", &sw_tablefont, 1, 2, 1}, {"keyrule", &sw_keyrule, 0, 1, 0},
-    {"word", &sw_word, 0, 3, 2},           {"island", &sw_island, 0, 1, 0},   {"help640", &sw_help640, 0, 1, 1},
-    {"gameplay", &sw_gameplay, 0, 1, 0},   {"overlay", &sw_overlay, 0, 1, 0},
-    {"devices", &sw_devices, 0, 1, 1},     {"padnames", &sw_padnames, 0, 3, 0},   {"heads", &sw_heads, 0, 1, 1},
-    {"sheet", &sw_sheet, 0, 1, 1},         {"legend", &sw_legend, 0, 1, 1},       {"bg", &sw_bg, 0, 1, 1},       {"bgres", &sw_bgres, 0, 3, 3},       {"vfsize", &sw_vfsize, 60, 160, 100},
-    {"scale", &sw_scale, 0, 1, 1},         {"bandshade", &sw_bandshade, 0, 15, 15}, {"panes", &sw_panes, 0, 1, 1},
-    {"clash", &sw_clash, 0, 1, 1},       {"short", &sw_short, 0, 1, 1},
-    {"narrow", &sw_narrow, 0, 1, 1},     {"exptable", &sw_exptable, 0, 1, 1}, {"exphelp", &sw_exphelp, 0, 1, 1},
-    {"fpsrow", &sw_fpsrow, 0, 1, 0},     {"slider", &sw_slider, 0, 1, 1},     {"pace", &sw_pace, 1, 9, 3},
-    {"tstilt", &sw_tstilt, 0, 4095, 3328}, {"tssize", &sw_tssize, 50, 200, 140},
-    {"presetlook", &sw_presetlook, 0, 1, 1}, {"pagemark", &sw_pagemark, 0, 1, 1},
+    {"overlay", &sw_overlay, 0, 1, 0},
+    {"padnames", &sw_padnames, 0, 3, 0},
+    {"whole", &sw_whole, 0, 1, 0},
 };
 
 bool Menu_SetSwitch(const char *name, int v) {
@@ -1906,32 +1712,8 @@ bool Menu_SetSwitch(const char *name, int v) {
         if (v < s.min || v > s.max)
             v = s.min + ((v - s.min) % (s.max - s.min + 1) + (s.max - s.min + 1)) % (s.max - s.min + 1);
         *s.value = v;
-        if (!strcmp(name, "bg"))
-            Engine_SetBackgroundFit(v);
-        if (!strcmp(name, "vfsize"))
-            VFont_SetSizePercent(v);
-        if (!strcmp(name, "tstilt"))
-            Twinsun_SetTilt(v);
-        if (!strcmp(name, "tssize"))
-            Twinsun_SetSizePercent(v);
-        if (!strcmp(name, "presetlook"))
-            PresetLookChanged();
-        if (!strcmp(name, "scale") && v != Engine_ScaleRule()) {
-            Engine_SetScaleRule(v);
-            if (!Engine_SetScreen(Engine_PhysW(), Engine_PhysH(), true)) {
-                Engine_SetScaleRule(!v);
-                *s.value = !v;
-            }
-        }
-        if (!strcmp(name, "island")) {
-            if (v)
-                Engine_UseIslandPalette(0);
-            else
-                Engine_UseMenuPalette();
-        }
         BuildPages();
         g_voice.text[0] = 0;  // say it again under the new rules
-        g_pageEntered = true;
         Toast("%s = %d", name, v);
         Trace("switch %s=%d", name, v);
         return true;
@@ -2020,14 +1802,8 @@ bool Menu_Set(const char *id, int value) {
 }
 
 void Menu_Reset() {
-    const int bgres = sw_bgres;  // a --switch bgres given before the reset stays
     for (size_t i = 0; i < sizeof kSwitches / sizeof kSwitches[0]; i++)
         *kSwitches[i].value = kSwitches[i].start;
-    sw_scale = Engine_ScaleRule();  // the canvas in use was made with it
-    sw_bgres = bgres;
-    Engine_SetBackgroundFit(sw_bg);
-    VFont_SetSizePercent(sw_vfsize);
-    Engine_UseMenuPalette();
     Engine_ResetInput();
     Controls_Reset();
     Exp_Reset();
@@ -2242,7 +2018,7 @@ void Menu_WriteState(FILE *f) {
     fprintf(f, ",\"lines\":%d,\"lines_needed\":%d,\"max_lines\":%d,\"width\":%d,\"page\":%d,\"pages\":%d,\"cut_off\":%s",
             g_voiceLines, g_voiceNeeded, g_voiceMax, g_voiceWidth, (int)page, (int)pages,
             g_voiceNeeded >= VOICE_MAX_LINES ? "true" : "false");
-    fprintf(f, ",\"more_arrow\":%s,\"page_mark\":", g_moreArrow ? "true" : "false");
+    fprintf(f, ",\"page_mark\":");
     Menu_JsonString(f, g_pageMark);
     fprintf(f, ",\"rect\":[%d,%d,%d,%d]}", g_helpBox.x0, g_helpBox.y0, g_helpBox.x1, g_helpBox.y1);
     fprintf(f, ",\"legend\":");

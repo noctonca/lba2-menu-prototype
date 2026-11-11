@@ -7,15 +7,10 @@ Options closed.	Options fermées.	Optionen geschlossen.	Opciones cerradas.	Opzio
 <ENTER> opens them again. <ESC> quits.	<ENTER> les rouvre. <ESC> quitte.	<ENTER> öffnet sie wieder. <ESC> beendet.	<ENTER> las vuelve a abrir. <ESC> sale.	<ENTER> le riapre. <ESC> esce.	<ENTER> volta a abri-las. <ESC> sai.
 Preset	Préréglage	Voreinstellung	Preajuste	Preimpostazione	Predefinição
 Settings	Réglages	Einstellungen	Ajustes	Impostazioni	Definições
-Rules	Règles	Regeln	Reglas	Regole	Regras
 Modern	Moderne	Modern	Moderno	Moderno	Moderno
 Classic	Classique	Klassisch	Clásico	Classico	Clássico
 Modern, changed	Moderne, modifié	Modern, geändert	Moderno, cambiado	Moderno, modificato	Moderno, alterado
 Classic, changed	Classique, modifié	Klassisch, geändert	Clásico, cambiado	Classico, modificato	Clássico, alterado
-Modern settings	Réglages Moderne	Moderne Einstellungen	Ajustes Moderno	Impostazioni Moderno	Definições Moderno
-Classic settings	Réglages Classique	Klassische Einstellungen	Ajustes Clásico	Impostazioni Classico	Definições Clássico
-Modern settings, changed	Réglages Moderne, modifiés	Moderne Einstellungen, geändert	Ajustes Moderno, cambiados	Impostazioni Moderno, modificate	Definições Moderno, alteradas
-Classic settings, changed	Réglages Classique, modifiés	Klassische Einstellungen, geändert	Ajustes Clásico, cambiados	Impostazioni Classico, modificate	Definições Clássico, alteradas
 Changed	Modifié	Geändert	Cambiado	Modificato	Alterado
 Undo preset	Annuler le préréglage	Voreinstellung zurücknehmen	Deshacer preajuste	Annulla preimpostazione	Anular predefinição
 Undo reset	Annuler la réinitialisation	Zurücksetzen zurücknehmen	Deshacer restablecer	Annulla ripristino	Anular reposição
@@ -33,7 +28,6 @@ Display and graphics	Affichage et graphismes	Anzeige und Grafik	Pantalla y gráf
 Sound	Son	Ton	Sonido	Audio	Som
 Controls and camera	Commandes et caméra	Steuerung und Kamera	Controles y cámara	Comandi e telecamera	Controlos e câmara
 Advanced and reset	Avancé et réinitialisation	Erweitert und Zurücksetzen	Avanzado y restablecer	Avanzate e ripristino	Avançado e reposição
-Gameplay	Jeu	Spielweise	Jugabilidad	Gioco	Jogabilidade
 Text	Texte	Text	Texto	Testo	Texto
 Voices	Voix	Stimmen	Voces	Voci	Vozes
 Subtitles	Sous-titres	Untertitel	Subtítulos	Sottotitoli	Legendas
@@ -72,8 +66,6 @@ Camera speed	Vitesse de la caméra	Kameratempo	Velocidad de cámara	Velocità te
 Keys and buttons	Touches et boutons	Tasten und Knöpfe	Teclas y botones	Tasti e pulsanti	Teclas e botões
 Fix retail bugs	Corriger les bugs d'origine	Originalfehler beheben	Corregir fallos originales	Correggi bug originali	Corrigir erros originais
 Dodge	Esquive	Ausweichen	Esquivar	Schivata	Esquiva
-Double tap	Double appui	Doppeltippen	Doble toque	Doppio tocco	Toque duplo
-Behaviour hints	Conseils de comportement	Verhaltenstipps	Consejos de modo	Consigli comportamento	Dicas de comportamento
 More options	Plus d'options	Weitere Optionen	Más opciones	Altre opzioni	Mais opções
 Console	Console	Konsole	Consola	Console	Consola
 Help	Aide	Hilfe	Ayuda	Aiuto	Ajuda

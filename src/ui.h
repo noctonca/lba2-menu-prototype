@@ -66,7 +66,6 @@ void Ui_ChangeMarks(S32 leftX, S32 rightX, S32 yCentre);
 void Ui_Steps(S32 xRight, S32 yCentre, S32 count, S32 lit, S32 *outLeft);
 // A small slider for the value column, x0..x1. Dimmed: no plasma, the filled part
 // flat in the dimmed label's grey (3:1 from the live plasma), the rest dark.
-void Ui_MiniSlider(S32 x0, S32 x1, S32 yCentre, S32 value, S32 max, bool dim);
 
 // 8x8 font, drawn at a whole-step scale.
 S32 Ui_SmallWidth(const char *s, S32 scale);
@@ -101,6 +100,5 @@ S32 Voice_Lines(const char *text, S32 width);
 // read, then the next one is typed. The last window stays.
 S32 Voice_Draw(const Voice &v, S32 x0, S32 y0, S32 width, S32 maxLines, S32 *needed);
 // How long a window is held: this many ms for each word in it, and at least 1.5 s.
-void Voice_SetMsPerWord(S32 ms);
 // The window the last Voice_Draw showed (0 is the first) and how many there are.
 void Voice_LastPage(S32 *page, S32 *pages);

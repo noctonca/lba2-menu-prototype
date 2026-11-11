@@ -13,7 +13,7 @@
 #include <stdio.h>
 #include <string.h>
 
-int sw_devices = 1, sw_padnames = 0, sw_heads = 1;
+int sw_padnames = 0;  // 0 the connected pad's names; 1 Xbox, 2 PlayStation, 3 Nintendo
 
 // ───────────────────────────── The actions ─────────────────────────────
 
@@ -296,7 +296,7 @@ static int g_scroll;
 static bool g_waiting;
 static U32 g_waitStart, g_waitFrame;
 static char g_lastBound[96];
-// A key another action has (switch keyrule 0): the page asks before it moves it,
+// A key another action has: the page asks before it moves it,
 // as Options asks before Classic or Reset settings: the voice says who has it, two
 // answer rows take the actions' place, No first. Yes swaps (the other action gets
 // this chip's old key, or nothing); No or Esc keeps both as they were.
@@ -322,16 +322,12 @@ static void SyncLayout() {
     g_layoutWide = wide;
 }
 
-// Wide, with heads=1: the column names sit inside the first row, so the actions start on the
-// top margin level with the groups. The one column keeps its heads above, as 1997's page.
-static bool HeadsInRow() { return sw_heads && Wide(); }
+// Wide, the column names sit inside the first row, so the actions start on the top margin
+// level with the groups. The one column keeps its heads above, as 1997's page.
+static bool HeadsInRow() { return Wide(); }
 
-// The columns this view shows: 0 Key 1, 1 Key 2, 2 the pad.
+// The columns this view shows: 0 Key 1, 1 Key 2, 2 the pad. One device per view; Tab switches.
 static int Columns(int *out) {
-    if (!sw_devices) {
-        out[0] = 0, out[1] = 1, out[2] = 2;
-        return 3;
-    }
     if (g_device == 0) {
         out[0] = 0, out[1] = 1;
         return 2;
@@ -342,7 +338,7 @@ static int Columns(int *out) {
 
 static const char *ColumnHead(int column) {
     static const char *kHeads[3] = {"Key 1", "Key 2", "Gamepad"};
-    if (column == 2 && sw_devices)
+    if (column == 2)
         return "Button";
     return kHeads[column];
 }
@@ -391,7 +387,6 @@ void Controls_Open() {
         ResetBindings();
         g_bindingsReady = true;
     }
-    Menu_PageEntered();
     Say();  // the group's help from the first frame, not the row's that opened the page
     Trace("controls open device=%s", DeviceName(g_device));
 }
@@ -401,7 +396,6 @@ void Controls_Close() {
         return;
     g_active = false;
     g_waiting = false;
-    Menu_PageEntered();
     Trace("controls close");
 }
 
@@ -442,7 +436,7 @@ static void Bind(int action, int column, int code) {
     // what the other action is left with.
     int slot;
     int holder = HolderOf(action, column, code, &slot);
-    if (holder >= 0 && Menu_GetSwitch("keyrule") == 0) {
+    if (holder >= 0) {
         CodeName(column, code, name, sizeof name);
         g_swap.action = action, g_swap.column = column, g_swap.code = code;
         g_swap.holder = holder, g_swap.slot = slot, g_swap.answer = 0;
@@ -544,11 +538,10 @@ static void UpdateWaiting() {
 }
 
 static void SwitchDevice() {
-    if (!sw_devices || !Engine_KeyboardSeen())  // no keyboard, no Keyboard view
+    if (!Engine_KeyboardSeen())  // no keyboard, no Keyboard view
         return;
     g_device ^= 1;
     g_column = 0;
-    Menu_PageEntered();
     Trace("controls device=%s", DeviceName(g_device));
 }
 
@@ -594,9 +587,9 @@ void Controls_Update() {
                 g_group = g_colCursor - 1;
         } else {
             if (Engine_Pressed(KEY_UP))
-                g_group = (g_group + GROUP_COUNT - 1) % GROUP_COUNT, Menu_PageEntered();
+                g_group = (g_group + GROUP_COUNT - 1) % GROUP_COUNT;
             if (Engine_Pressed(KEY_DOWN))
-                g_group = (g_group + 1) % GROUP_COUNT, Menu_PageEntered();
+                g_group = (g_group + 1) % GROUP_COUNT;
         }
         bool open = Engine_Pressed(KEY_ENTER) || (!column && Engine_Pressed(KEY_RIGHT));
         if (open && column && g_colCursor == 0) {
@@ -608,7 +601,6 @@ void Controls_Update() {
             g_row = 0;
             g_column = 0;
             g_scroll = 0;
-            Menu_PageEntered();
             Trace("controls group=%s", kGroups[g_group].name);
         } else if (Engine_Pressed(KEY_ESC)) {
             Controls_Close();
@@ -625,7 +617,7 @@ void Controls_Update() {
             if (g_column > 0)
                 g_column--;
             else if (!column)
-                g_focusRight = false, Menu_PageEntered();
+                g_focusRight = false;
         }
         bool fixed = FixedChip(CursorAction(), CursorColumn());
         if (g_focusRight && fixed && (Engine_Pressed(KEY_ENTER) || Engine_Pressed(KEY_DEL))) {
@@ -641,7 +633,6 @@ void Controls_Update() {
             Trace("clear action=\"%s\" column=\"%s\"", kActions[a].name, ColumnHead(c));
         } else if (Engine_Pressed(KEY_ESC)) {
             g_focusRight = false;
-            Menu_PageEntered();
             Trace("controls back to groups");
         }
     }
@@ -689,14 +680,8 @@ static void Say() {
         } else if (other >= 0) {
             char name[32];
             ChipText(a, c, name, sizeof name);
-            // One message at a time (switch clash): the note replaces the help.
-            if (Menu_GetSwitch("clash"))
-                snprintf(buf, sizeof buf, Menu_Tr("%s is also %s."), name, Ui_Tr(kActions[other].name));
-            else {
-                char note[96];
-                snprintf(note, sizeof note, Menu_Tr("%s is also %s."), name, Ui_Tr(kActions[other].name));
-                snprintf(buf, sizeof buf, "%s %s", Menu_Tr(kActions[a].help), note);
-            }
+            // One message at a time (decided 2026-11-03): the note replaces the help.
+            snprintf(buf, sizeof buf, Menu_Tr("%s is also %s."), name, Ui_Tr(kActions[other].name));
             text = buf;
         } else {
             text = kActions[a].help;
@@ -726,16 +711,16 @@ static struct {
 } g_heads[4];
 static int g_headCount;
 
-static S32 ChipScale() { return Menu_GetSwitch("chip"); }
+static S32 ChipScale() { return 2; }  // the 8x8 key font at 2x (decided 2026-11-03)
 
 // Chip x positions for this view. Wide, the last chip's right frame is the value edge, 24
 // in from the row's right edge, where every value ends (docs/UX.md, the grid); the one
 // column has no value edge and keeps them 12 in, to leave the centred names more room.
 static void ChipLayout(S32 rowX1, const int *cols, int ncols, S32 *x0, S32 *w) {
     S32 s = ChipScale();
-    // One column, switch narrow: 58 holds the same 6 letters of the 8x8 font as 60 (and the
-    // pad view's one chip the same 14), and leaves "Behaviour action" 8 clear of its chip.
-    S32 chipW = (!Wide() && Menu_GetSwitch("narrow") ? 58 : 60) * s, step = chipW + 8;
+    // One column: 58 holds the same 6 letters of the 8x8 font as 60 (and the pad view's one
+    // chip the same 14), and leaves "Behaviour action" 8 clear of its chip (decided 2026-11-03).
+    S32 chipW = (Wide() ? 60 : 58) * s, step = chipW + 8;
     S32 right = rowX1 - (Wide() ? 24 : 12);
     if (ncols == 1) {
         w[0] = 2 * chipW + 8;
@@ -811,7 +796,7 @@ static void DrawHeads(S32 nameX, S32 rowX1, const int *cols, int ncols, S32 y) {
     S32 s = ChipScale();
     S32 cx[3], cw[3];
     ChipLayout(rowX1, cols, ncols, cx, cw);
-    DrawHead(nameX, y, sw_devices ? DeviceName(g_device) : "Action", s);
+    DrawHead(nameX, y, DeviceName(g_device), s);
     for (int i = 0; i < ncols; i++)
         DrawHead(cx[i], y, ColumnHead(cols[i]), s);
 }
@@ -854,7 +839,7 @@ static void Legend(const char **keys, const char **words, int *n) {
     } else if (!g_focusRight) {
         keys[*n] = "Enter", words[(*n)++] = "Open";
     }
-    if (sw_devices && Engine_KeyboardSeen()) {
+    if (Engine_KeyboardSeen()) {
         snprintf(other, sizeof other, "%s", DeviceName(!g_device));
         keys[*n] = "Tab", words[(*n)++] = other;
     }
@@ -934,13 +919,10 @@ static void DrawWideControls() {
     S32 leftW = inner * 304 / 880;
     S32 lx0 = f.x0 + side, lx1 = lx0 + leftW - 1;
     S32 rx0 = lx1 + 1 + gap, rx1 = f.x0 + f.w - side - 1;
-    bool drawLeft = true, drawRight = true;
-    if (Menu_Panes()) {
-        lx0 = rx0 = f.x0 + (f.w - DRILL_W) / 2;
-        lx1 = rx1 = lx0 + DRILL_W - 1;
-        drawLeft = !g_focusRight;
-        drawRight = g_focusRight;
-    }
+    // One pane at a time, centred (decided 2026-11-03).
+    lx0 = rx0 = f.x0 + (f.w - DRILL_W) / 2;
+    lx1 = rx1 = lx0 + DRILL_W - 1;
+    bool drawLeft = !g_focusRight, drawRight = g_focusRight;
 
     S32 y = top;
     for (int g = 0; drawLeft && g < GROUP_COUNT; g++) {
@@ -955,9 +937,7 @@ static void DrawWideControls() {
         y += ROW_PITCH;
     }
     if (drawRight) {
-        S32 atop = top;
-        if (Menu_Panes())
-            atop = Ui_Title(rx0, rx1, top, kGroups[g_group].name);
+        S32 atop = Ui_Title(rx0, rx1, top, kGroups[g_group].name);
         DrawActions(rx0, rx1, atop, Menu_WideRowsLimit(), "controls-right");
     }
 
@@ -972,8 +952,7 @@ static void DrawColumnControls() {
     S32 x0 = W / 2 - 275, x1 = W / 2 + 275;
     if (!g_focusRight) {
         // The groups, as a 1997 sub-menu: a Return row, then one row each.
-        bool help = Menu_GetSwitch("help640") != 0;
-        S32 top = 16, bottom = help ? Menu_DialogueTop() - 16 : H - 16;
+        S32 top = 16, bottom = Menu_DialogueTop() - 16;
         int n = GROUP_COUNT + 1;
         int visible = (bottom - top + ROW_GAP) / ROW_PITCH;
         if (visible > n)
@@ -997,8 +976,7 @@ static void DrawColumnControls() {
         }
         if (visible < n)
             Menu_DrawScrollBar(x1 + 9, y0, y0 + stackH - 1, g_scroll, visible, n);
-        if (help)
-            Menu_DrawDialogue();
+        Menu_DrawDialogue();
         return;
     }
     // The actions page: column heads, the rows, and the voice below (it asks for the key).
@@ -1089,8 +1067,8 @@ void Controls_WriteState(FILE *f) {
     SyncLayout();
     char buf[32];
     int a = CursorAction(), c = CursorColumn();
-    fprintf(f, "{\"device\":\"%s\",\"devices\":%d,\"pad_names\":\"%s\",\"focus\":\"%s\",\"group\":", DeviceName(g_device),
-            sw_devices, kPadFamilyNames[PadFamily()], g_focusRight ? "actions" : "groups");
+    fprintf(f, "{\"device\":\"%s\",\"pad_names\":\"%s\",\"focus\":\"%s\",\"group\":", DeviceName(g_device),
+            kPadFamilyNames[PadFamily()], g_focusRight ? "actions" : "groups");
     Menu_JsonString(f, kGroups[g_group].name);
     fprintf(f, ",\"action\":");
     Menu_JsonString(f, kActions[a].name);

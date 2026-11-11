@@ -6,11 +6,8 @@
 
 #include <stdio.h>
 
-// Switch exptable (key 0; decided 2026-11-03): 1 = one dense table in the 8x8 font, as the 1997 key
-// binding screen (design card ExperimentalTable); 0 = the game-font list, a page
-// per group (ExperimentalList).
-extern int sw_exptable;
-extern int sw_exphelp;
+// One dense table in the 8x8 font, as the 1997 key binding screen (decided 2026-11-03;
+// design card ExperimentalTable).
 
 void Exp_Open();   // from the "More options" row
 void Exp_Close();  // back to Advanced and reset, as it was
@@ -39,11 +36,11 @@ struct ExpTable {
     int count;           // lines drawn
     const ExpLine *lines;
     int total, scroll;   // lines in the table, the first one drawn
-    const char *rowHelp; // the row's help in the status lines (switch exphelp), "" for none
+    const char *rowHelp; // the row's help in the status lines
     bool rowHelpCut;     // it needed more than its two lines
 };
 bool Exp_Table(ExpTable *out);
-const char *Exp_CursorName();  // the console name under the cursor, "" on the list's groups
+const char *Exp_CursorName();  // the console name under the cursor
 const char *Exp_CursorValue();
 const char *Exp_CursorGroupHelp();  // the help of the group the cursor's row is in
 

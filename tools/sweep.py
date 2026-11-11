@@ -9,7 +9,7 @@ margin, trailing, pitch, current, value, proximity). The self test then walks th
 menu by its keys and lists what they do wrong (see README "Testing").
 
     tools/sweep.py [--bin build/lba2menu] [--sizes 640x480,1920x1080] [--jobs N]
-                   [--combo band=1,gameplay=0 ...] [--only PAGE] [--again]
+                   [--combo padnames=2 ...] [--only PAGE] [--again]
                    [--layout-only] [--scripts [--shots DIR]] [--check-again]
 
 By default each (size, combo) is one `lba2menu --selftest` process, and --jobs
@@ -31,19 +31,17 @@ import argparse, json, os, shlex, subprocess, sys
 from concurrent.futures import ThreadPoolExecutor
 
 PAGES = ["Options", "Preset", "Language and interface", "Display and graphics", "Sound",
-         "Controls and camera", "Advanced and reset", "Gameplay"]
+         "Controls and camera", "Advanced and reset"]
 
 # Actions per group on the Controls page (controls.cpp kActions).
 CONTROL_GROUPS = [5, 6, 4, 7, 4, 4, 6]
 
 # Rows per group on the More options page (experimental.cpp kTuning).
-EXP_GROUPS = [22, 9, 7, 3]
+EXP_GROUPS = [22, 9, 7, 3, 3]
 EXP_PAGE = "More options"
 
-# The same seven as selftest.cpp kCombos: the chosen layouts and their variants
-# (band=0 and devices=0 were not chosen, 2026-11-03; --combo still tests them).
-COMBOS = ["band=1,gameplay=0", "band=1,gameplay=1", "help640=0,gameplay=1",
-          "padnames=2", "padnames=3", "chip=1,tablefont=2,keyrule=1", "heads=0"]
+# The same as selftest.cpp kCombos: the pad's names of each family.
+COMBOS = ["padnames=0", "padnames=2", "padnames=3"]
 
 def parse_combo(spec):
     return {k: int(v) for k, v in (part.split("=") for part in spec.split(","))}
@@ -71,11 +69,10 @@ def run_selftest(binary, size, combo, only, layout_only):
 
 # ───────────────────────────── The script path ─────────────────────────────
 
-def controls_lines(columns_kb, columns_pad):
-    """Every chip of every group, on each device the view shows."""
+def controls_lines():
+    """Every chip of every group, on the keyboard view (two columns) and the pad's (one)."""
     lines = ["open Keys and buttons", "wait 1", "state"]
-    devices = [columns_kb] if columns_pad is None else [columns_kb, columns_pad]
-    for d, cols in enumerate(devices):
+    for d, cols in enumerate([2, 1]):
         if d:
             lines += ["key tab", "wait 1"]
         for g, count in enumerate(CONTROL_GROUPS):
@@ -89,32 +86,23 @@ def controls_lines(columns_kb, columns_pad):
             lines += ["key esc", "wait 1", "key down"]
     return lines
 
-def experimental_lines(table):
-    """Every row of the More options page, in the table or the list."""
+def experimental_lines():
+    """Every row of the More options table."""
     lines = [f"open {EXP_PAGE}", "wait 1", "state"]
-    if table:
-        for _ in range(sum(EXP_GROUPS)):
-            lines += ["key down", "wait 1", "state"]
-        return lines
-    for count in EXP_GROUPS:
-        lines += ["wait 1", "state", "key enter", "wait 1"]
-        for _ in range(count):
-            lines += ["wait 1", "state", "key down"]
-        lines += ["key esc", "wait 1", "key down"]
+    for _ in range(sum(EXP_GROUPS)):
+        lines += ["key down", "wait 1", "state"]
     return lines
 
 def run_scripts(binary, size, combo, only, shots):
     switches = parse_combo(combo)
     tag = f"{size}-{'-'.join(f'{k}{v}' for k, v in switches.items())}"
-    # Presets set the rules only, as the self test runs (a combo may turn presetlook on).
-    lines = ["switch presetlook 0"] + [f"switch {k} {v}" for k, v in switches.items()] + ["switch typing 2", "wait 1"]
+    # Help shown whole, as the self test runs.
+    lines = [f"switch {k} {v}" for k, v in switches.items()] + ["switch whole 1", "wait 1"]
     if not only or only == "Keys and buttons":
-        lines += controls_lines(2, 1) if switches.get("devices", 1) else controls_lines(3, None)
+        lines += controls_lines()
         if shots:
             lines += [f"shot {shots}/{tag}-Keys_and_buttons.png"]
     for page in PAGES:
-        if page == "Gameplay" and not switches.get("gameplay"):
-            continue
         if only and only != page:
             continue
         lines += [f"open {page}", "wait 1", "state"]
@@ -123,7 +111,7 @@ def run_scripts(binary, size, combo, only, shots):
         if shots:
             lines += [f"shot {shots}/{tag}-{page.replace(' ', '_')}.png"]
     if not only or only == EXP_PAGE:
-        lines += experimental_lines(switches.get("exptable", 1))
+        lines += experimental_lines()
         if shots:
             lines += [f"shot {shots}/{tag}-Experimental_settings.png"]
     lines.append("quit")
@@ -139,7 +127,7 @@ def run_scripts(binary, size, combo, only, shots):
     return found
 
 def head_row(h, rows):
-    """The row a column head is drawn inside (heads=1), or None for a head above the rows."""
+    """The row a column head is drawn inside (wide), or None for a head above the rows (one column)."""
     x0, y0, x1, y1 = h["rect"]
     for r in rows:
         rx0, ry0, rx1, ry1 = r["rect"]

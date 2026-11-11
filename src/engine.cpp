@@ -38,7 +38,6 @@
 // Resource numbers, from lba2cc SOURCES/COMMON.H.
 #define RESS_PAL 0
 #define RESS_FONT_GPM 1
-#define RESS_XPL0 27   // Citadel
 #define RESS_XPL00 42  // citabau: what ChoicePalette loads at boot
 #define PCR_MENU 4
 
@@ -55,10 +54,7 @@ static U32 s_surfW, s_surfH;  // the presented frame: the canvas, or the screen 
 static char s_ress[1024], s_screen[1024];
 static U8 *s_palMenu;
 static U8 *s_xplBoot;        // the XPL the boot menu shades through (citabau)
-static U8 *s_xplIsland;      // Citadel's, for Options opened in play
 static U8 *s_menuImage;      // 640x480, as authored
-static U8 *s_arrow;          // sprites.hqr 6: the dialogue's bottom-right arrow
-static bool s_islandPal;
 static const U8 *s_palCurrent;
 static bool s_quit;
 
@@ -73,15 +69,11 @@ static const U32 kScancode[KEY_COUNT] = {
     K_0, K_PAGE_UP, K_PAGE_DOWN,
 };
 
-static int s_scaleRule = 1;
-void Engine_SetScaleRule(int rule) { s_scaleRule = rule; }
-int Engine_ScaleRule() { return s_scaleRule; }
-
-// Rule 1: a screen 3:2 or wider takes the wide composition (960x540) at the
+// A screen 3:2 or wider takes the wide composition (960x540) at the
 // largest whole step it fits; a squarer screen, or one too small for 960x540,
 // takes the one column at the largest step that holds 640x480.
 static bool WideByRule(U32 w, U32 h, U32 *scale) {
-    if (s_scaleRule != 1 || w * 2 < h * 3)
+    if (w * 2 < h * 3)
         return false;
     U32 wx = w / 960, wy = h / 540;
     U32 ws = wx < wy ? wx : wy;
@@ -416,26 +408,19 @@ bool Engine_Init(const EngineConfig &cfg) {
     DiscImage_Mount(dir, "lba2.hqr");
     JoinPath(s_ress, sizeof s_ress, dir, "ress.hqr");
     JoinPath(s_screen, sizeof s_screen, dir, "screen.hqr");
-    char sprites[1024];
-    JoinPath(sprites, sizeof sprites, dir, "sprites.hqr");
-    s_arrow = (U8 *)LoadMalloc_HQR(sprites, 6);  // as PERSO.CPP's HQRPtrSprite, entry 6
-    if (!s_arrow)
-        fprintf(stderr, "no sprites.hqr in %s: paged help has no arrow\n", dir);
 
     s_palMenu = (U8 *)LoadMalloc_HQR(s_ress, RESS_PAL);
     U8 *font = (U8 *)LoadMalloc_HQR(s_ress, RESS_FONT_GPM);
     s_xplBoot = (U8 *)LoadMalloc_HQR(s_ress, RESS_XPL00);
-    s_xplIsland = (U8 *)LoadMalloc_HQR(s_ress, RESS_XPL0);
     char holomap[1024];
     JoinPath(holomap, sizeof holomap, dir, "holomap.hqr");
     Twinsun_Init(holomap);  // the Background row's Twinsun; black without it
     s_menuImage = (U8 *)malloc(640 * 480 + 4096);
-    if (!s_palMenu || !font || !s_xplBoot || !s_xplIsland || !Load_HQR(s_screen, s_menuImage, PCR_MENU)) {
+    if (!s_palMenu || !font || !s_xplBoot || !Load_HQR(s_screen, s_menuImage, PCR_MENU)) {
         fprintf(stderr, "could not read the game data in %s\n", dir);
         return false;
     }
     FromLE32InPlace(s_xplBoot, sizeof(XplHeader) / 4);
-    FromLE32InPlace(s_xplIsland, sizeof(XplHeader) / 4);
     // ShadeBoxBlk darkens through PtrCLUTGouraud. Checked against lba2cc's
     // `ui menu-main-options` capture: identical outside the plasma with citabau.
     PtrCLUTGouraud = s_xplBoot + ((const XplHeader *)s_xplBoot)->OffsetFog;
@@ -454,21 +439,10 @@ void Engine_Shutdown() {
 }
 
 void Engine_UseMenuPalette() {
-    s_islandPal = false;
     s_palCurrent = s_palMenu;
     PtrCLUTGouraud = s_xplBoot + ((const XplHeader *)s_xplBoot)->OffsetFog;
     SetVideoPaletteSync(s_palMenu);
 }
-
-void Engine_UseIslandPalette(S32) {
-    s_islandPal = true;
-    const XplHeader *xh = (const XplHeader *)s_xplIsland;
-    s_palCurrent = s_xplIsland + xh->OffsetPalette;
-    PtrCLUTGouraud = s_xplIsland + xh->OffsetFog;
-    SetVideoPaletteSync(s_palCurrent);
-}
-
-bool Engine_IslandPaletteActive() { return s_islandPal; }
 
 U32 Engine_TimeMs() {
     ManageTime();
@@ -621,12 +595,6 @@ S32 Engine_RawPressed() { return s_rawPressed; }
 bool Engine_KeyboardSeen() { return s_keyboardSeen; }
 void Engine_SetKeyboardSeen(bool seen) { s_keyboardSeen = seen; }
 
-bool Engine_DrawMoreArrow(S32 x1, S32 y1) {
-    if (!s_arrow)
-        return false;
-    AffGraph(0, x1 - 27, y1 - 27, s_arrow);  // INVENT.CPP DrawAngles, ARROW_ID
-    return true;
-}
 bool Engine_LastInputWasPad() { return s_lastPad; }
 
 static const char *kPadCodeNames[PAD_CODE_COUNT] = {
@@ -804,9 +772,6 @@ void Engine_ResetInput() {
     s_lastPad = false;
 }
 
-static int s_bgFit = 1;
-void Engine_SetBackgroundFit(int fit) { s_bgFit = fit; }
-
 static int s_backdrop;
 void Engine_SetBackdrop(int backdrop) { s_backdrop = backdrop; }
 
@@ -826,37 +791,26 @@ void Engine_DrawBackground() {
         ScreenBg_NoPicture(fill);
         return;
     }
-    if (s_bgFit == 1) {
-        // Cover: one factor for both axes, the larger of W/640 and H/480 (as a
-        // fraction num/den), the overflow cropped evenly; nearest neighbour.
-        U32 num, den;
-        if (s_logW * 480 >= s_logH * 640) {
-            num = s_logW;
-            den = 640;
-        } else {
-            num = s_logH;
-            den = 480;
-        }
-        // Scaled size 640*num/den x 480*num/den; offsets centre it.
-        U32 ox = (640 * num / den - s_logW) / 2, oy = (480 * num / den - s_logH) / 2;
-        for (U32 y = 0; y < s_logH; y++) {
-            U32 sy = (y + oy) * den / num;
-            const U8 *row = s_menuImage + (sy < 480 ? sy : 479) * 640;
-            U8 *out = dst + TabOffLine[y];
-            for (U32 x = 0; x < s_logW; x++) {
-                U32 sx = (x + ox) * den / num;
-                out[x] = row[sx < 640 ? sx : 639];
-            }
-        }
-        ScreenBg_BeginFrame(s_logW, s_logH);
-        return;
+    // Cover: one factor for both axes, the larger of W/640 and H/480 (as a
+    // fraction num/den), the overflow cropped evenly; nearest neighbour.
+    U32 num, den;
+    if (s_logW * 480 >= s_logH * 640) {
+        num = s_logW;
+        den = 640;
+    } else {
+        num = s_logH;
+        den = 480;
     }
-    // Nearest-neighbour stretch of the 640x480 image, as Image_LoadStretched does.
+    // Scaled size 640*num/den x 480*num/den; offsets centre it.
+    U32 ox = (640 * num / den - s_logW) / 2, oy = (480 * num / den - s_logH) / 2;
     for (U32 y = 0; y < s_logH; y++) {
-        const U8 *row = s_menuImage + (y * 480 / s_logH) * 640;
+        U32 sy = (y + oy) * den / num;
+        const U8 *row = s_menuImage + (sy < 480 ? sy : 479) * 640;
         U8 *out = dst + TabOffLine[y];
-        for (U32 x = 0; x < s_logW; x++)
-            out[x] = row[x * 640 / s_logW];
+        for (U32 x = 0; x < s_logW; x++) {
+            U32 sx = (x + ox) * den / num;
+            out[x] = row[sx < 640 ? sx : 639];
+        }
     }
     ScreenBg_BeginFrame(s_logW, s_logH);
 }

@@ -28,7 +28,6 @@ void VFont_Init();
 void VFont_Set(int face);  // VFONT_GAME draws with the game font as before
 int VFont_Face();
 inline bool VFont_On() { return VFont_Face() != VFONT_GAME; }
-void VFont_SetSizePercent(int percent);  // 100: capitals as tall as the game font's
 
 // Start of a frame: forget last frame's text.
 void VFont_BeginFrame();

@@ -14,9 +14,5 @@
 bool Twinsun_Init(const char *holomapHqr);
 bool Twinsun_Ready();
 
-// Tuning (switches tstilt, tssize): the view's tilt in 1/4096 turns, the size in percent.
-void Twinsun_SetTilt(int alpha);
-void Twinsun_SetSizePercent(int percent);
-
 // Draws the stars and the globe into Log (w x h), turned for `timeMs`.
 void Twinsun_Draw(U32 w, U32 h, U32 timeMs);

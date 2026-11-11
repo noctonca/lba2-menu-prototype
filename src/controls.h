@@ -8,7 +8,7 @@
 //   devices   1 = one device per view, Tab switches (the review); 0 = Key 1, Key 2 and Gamepad side by side
 //   padnames  0 = the connected pad's own names (Xbox when none), 1 Xbox, 2 PlayStation, 3 Nintendo
 //   heads     wide: 1 = the column names inside the first row, above its chips; 0 = a line of heads above the rows
-extern int sw_devices, sw_padnames, sw_heads;
+extern int sw_padnames;
 
 void Controls_Open();   // from the "Keys and buttons" row
 void Controls_Close();  // back to the Options, as they were

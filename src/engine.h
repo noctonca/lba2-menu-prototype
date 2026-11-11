@@ -13,9 +13,7 @@ struct EngineConfig {
 // Rule 0, the menu plan's: scale = max(1, floor(min(W/640, H/480))).
 // Rule 1: a screen 3:2 or wider takes the wide composition (960x540) at the
 // largest whole step it fits; any other takes rule 0's step and the one column.
-void Engine_SetScaleRule(int rule);  // then Engine_SetScreen, if after Engine_Init
-int Engine_ScaleRule();
-bool Engine_RuleChoseWide();  // rule 1 picked the wide composition for this screen
+bool Engine_RuleChoseWide();  // the wide composition for this screen
 U32 Engine_Scale(U32 physW, U32 physH);
 
 bool Engine_Init(const EngineConfig &cfg);
@@ -93,7 +91,6 @@ void Engine_SetKeyboardSeen(bool seen);  // the "keyboard" switch: try a console
 // The dialogue's "more to read" arrow (sprites.hqr 6, MESSAGE.CPP AffFleche), its
 // 25x25 drawn with its bottom-right corner 2 inside (x1, y1). False when the
 // game data has no sprites.hqr.
-bool Engine_DrawMoreArrow(S32 x1, S32 y1);
 // The connected pad's family: 0 none, 1 Xbox-like, 2 PlayStation, 3 Nintendo.
 S32 Engine_PadFamily();
 // The SDL name of a keyboard scancode.
@@ -109,7 +106,6 @@ const U8 *Engine_Palette();
 // Draw the menu background (the PCR_MENU image): fit 0 stretches it like the game
 // does (Image_LoadStretched); fit 1 scales it evenly to cover the canvas, cropped
 // and centred.
-void Engine_SetBackgroundFit(int fit);
 void Engine_DrawBackground();
 // What Engine_DrawBackground draws: 0 the picture, 1 plain blue, 2 Twinsun, 3 black.
 void Engine_SetBackdrop(int backdrop);
@@ -121,5 +117,3 @@ bool Engine_ShotScreen(const char *path);
 
 // Palette work: switch between the menu palette and an island's.
 void Engine_UseMenuPalette();
-void Engine_UseIslandPalette(S32 island);  // 0 = Citadel
-bool Engine_IslandPaletteActive();

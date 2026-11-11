@@ -79,15 +79,14 @@ the call is answered.
 - **Controls column heads sit inside the first visible row**, above their
   chips, in the 8x8 font at 1x: the one place 1x is used on the wide canvas,
   since 2x does not fit between a row's frame and its chip. Both panes then
-  start at y 24 and their rows line up (decided 2026-11-03, switch `heads`;
-  0 shows the head line above). With one pane at a time the group's name is
+  start at y 24 and their rows line up (decided 2026-11-03). With one pane at a time the group's name is
   the title and the actions start one pitch below it. The pad column's head reads "Gamepad", so the
   page names the device it shows.
 - **A question takes the page's place** in the wide layout: its answers replace
   the page's rows under its title, on the label edge, and the voice asks it in
   the band. At
   640x480 it stays the centred box (decided 2026-11-03).
-- **One pane at a time** (decided 2026-11-03, switch `panes`): the hub's
+- **One pane at a time** (decided 2026-11-03): the hub's
   categories, then a page, as the 1997 menu goes from a page to a sub-page.
   Two panes side by side left the page 416 pixels at 960 wide, short of what
   six English labels and their values need (up to 556); one pane is 640 wide
@@ -259,17 +258,16 @@ is read; help cut off is not. **[self test: help cut off]**
 - **Help never pages** (2026-11-12, replaces "long help pages on"). Menu help
   stays within its budget, so it fits its window in every Text language; the
   console help on More options is in the table's own status lines, in the
-  8x8 font, two lines above the default and range (switch `exphelp`), whole
+  8x8 font, two lines above the default and range, whole
   and in English. The voice there says the group's help, in the Text
   language. **[self test: help in N windows, table: row help cut off, voice
   text with no translation]**
 - **Paged help says where it is** (2026-11-12, replaces the dialogue's arrow,
-  which asks for a key the menu never waits for). Where help still pages
-  (`exphelp` 0, the list view), "1/2" in the 8x8 font sits in the window's
-  bottom-right corner, in the band short of the legend, and the last window
-  keeps "2/2", so a player who looks late sees there was more. Each window is
-  typed and held for its words (switch `pace`), as the demo reel pages a
-  dialogue. Switch `pagemark` 0 brings back the arrow. **[self test: device]**
+  which asks for a key the menu never waits for). Should help ever page,
+  "1/2" in the 8x8 font sits in the window's bottom-right corner, in the band
+  short of the legend, and the last window keeps "2/2", so a player who looks
+  late sees there was more. Each window is typed and held for its words (0.3 s
+  a word), as the demo reel pages a dialogue.
 
 **Jakob's Law (the player's own device).** The legend names what the player
 holds (2026-11-11): after a pad press the pad's buttons (A Open, B Back), after
@@ -282,7 +280,7 @@ once a key has been typed, and until then the legend names the pad.
 the row under the cursor is the slider, the 1997 red plasma up to the value with
 the label on it, and the other rows show only their label, as GAMEMENU.CPP
 DrawOneChoice draws a volume. The wide layout first squeezed the plasma into a
-strip at the value edge, which read badly on a TV (switch `slider=0`).
+strip at the value edge, which read badly on a TV.
 
 - **One message at a time** (decided 2026-11-03). When there is something to
   tell about the row (a key clash, a question, the wait for a key, why a row
@@ -353,8 +351,7 @@ check the parts marked.
 
 ## Colour and contrast
 
-- Palette indices only (brand book rule 1), checked in the menu palette and
-  on Citadel Island (F7).
+- Palette indices only (brand book rule 1), checked in the menu palette.
 - Minimum contrast against what is behind the text, measured from a
   screenshot: 3:1 for the game font (38 px line, large text), 4.5:1 for the
   8x8 font at 2x (16 px) and at 1x (the Experimental table: at least 5.6:1
@@ -375,8 +372,8 @@ check the parts marked.
 
 ## Visual QA checklist
 
-Every page, both layouts (640x480 and 1920x1080 at least), both palettes
-(menu and island), the switch combinations the self test runs.
+Every page, both layouts (640x480 and 1920x1080 at least), the pad name
+families the self test runs.
 
 1. `lba2menu --selftest` and `tools/sweep.py`: no problem against the rules
    above that isn't a known open call.

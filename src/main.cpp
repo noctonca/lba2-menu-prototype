@@ -9,7 +9,7 @@
 // Without --headless the window stays up afterwards, on the screen they lead to.
 //
 // --selftest: walk every chip of the Controls page and every row of every page at
-// this size, for each switch combination (tools/sweep.py's eight, or the --combo
+// this size, for each switch combination (tools/sweep.py's, or the --combo
 // ones), check that everything fits, then walk the menu by its keys and check
 // what they do (Esc goes back, values come back, presets, binding a key). Print
 // each problem with the command line that shows it, and exit 1 if there were any.
@@ -25,7 +25,7 @@
 //   wait <frames>        let frames pass
 //   state                print the state as one JSON line: "state {...}"
 //   shot <path> [scale]  write the screen as a PNG (logical size x scale)
-//   switch <name> <v>    band typing chip tablefont word island help640 gameplay overlay devices padnames heads
+//   switch <name> <v>    overlay padnames keyboard whole
 //   set <setting> <v>    a fake setting by id (see `state`)
 //   open <page name>     jump to a page ("Display and graphics", "Keys and buttons", "original", ...)
 //   size <WxH>           another screen size, in place: the page, cursor and values stay
@@ -254,10 +254,7 @@ int Lba2Main(int argc, char *argv[]) {
             trace = v;
             i++;
         } else if (!strcmp(a, "--switch")) {
-            if (!strncmp(v, "scale=", 6))
-                Engine_SetScaleRule(atoi(v + 6));  // the canvas depends on it: before Engine_Init
-            else
-                switches.push_back(v);
+            switches.push_back(v);
             i++;
         } else if (!strcmp(a, "--do")) {
             // Split on ';' into script lines.
@@ -406,86 +403,14 @@ int Lba2Main(int argc, char *argv[]) {
         // The prototype's own keys.
         if (Engine_Pressed(KEY_F1))
             Menu_SetSwitch("overlay", !Menu_GetSwitch("overlay"));
-        if (Engine_Pressed(KEY_F3))
-            Menu_SetSwitch("band", !Menu_GetSwitch("band"));
-        if (Engine_Pressed(KEY_F4))
-            Menu_SetSwitch("typing", Menu_GetSwitch("typing") + 1);
-        if (Engine_Pressed(KEY_F5)) {
-            const char *sw = Engine_ShiftHeld() ? "tablefont" : "chip";
-            Menu_SetSwitch(sw, Menu_GetSwitch(sw) == 2 ? 1 : 2);
-        }
-        if (Engine_Pressed(KEY_F6))
-            Menu_SetSwitch("word", Menu_GetSwitch("word") + 1);
-        if (Engine_Pressed(KEY_F7))
-            Menu_SetSwitch("island", !Menu_GetSwitch("island"));
-        if (Engine_Pressed(KEY_F8))
-            Menu_SetSwitch("help640", !Menu_GetSwitch("help640"));
-        if (Engine_Pressed(KEY_F9))
-            Menu_SetSwitch("gameplay", !Menu_GetSwitch("gameplay"));
-        if (Engine_Pressed(KEY_F10))
-            Menu_SetSwitch("devices", !Menu_GetSwitch("devices"));
         if (Engine_Pressed(KEY_F11))
             Menu_SetSwitch("padnames", Menu_GetSwitch("padnames") + 1);
-        if (Engine_Pressed(KEY_F12))
-            Menu_SetSwitch("heads", !Menu_GetSwitch("heads"));
         if (Engine_Pressed(KEY_F2))
             if (Engine_StepScreen(Engine_ShiftHeld() ? -1 : 1))
                 Menu_NoteScreen();
         U32 dragW, dragH;
         if (Engine_WindowResized(&dragW, &dragH))
             SwitchScreen(dragW, dragH, false);
-        // The composition switches (design pass, 2026-11-03).
-        if (Engine_Pressed(KEY_1)) {
-            if (Engine_ShiftHeld())  // presets set the look too, or the rules only
-                Menu_SetSwitch("presetlook", !Menu_GetSwitch("presetlook"));
-            else
-                Menu_SetSwitch("sheet", !Menu_GetSwitch("sheet"));
-        }
-        if (Engine_Pressed(KEY_2))
-            Menu_SetSwitch("legend", !Menu_GetSwitch("legend"));
-        if (Engine_Pressed(KEY_3)) {
-            if (Engine_ShiftHeld())  // the picture at the screen's resolution: off, whole step, smooth, as Image
-                Menu_SetSwitch("bgres", Menu_GetSwitch("bgres") + 1);
-            else
-                Menu_SetSwitch("bg", !Menu_GetSwitch("bg"));
-        }
-        if (Engine_Pressed(KEY_4))
-            Menu_SetSwitch("scale", !Engine_ScaleRule());
-        if (Engine_Pressed(KEY_5))
-            Menu_SetSwitch("panes", !Menu_GetSwitch("panes"));
-        if (Engine_Pressed(KEY_6))
-            Menu_SetSwitch("bandshade", Menu_GetSwitch("bandshade") ? 0 : 15);
-        // Shift+7 and Shift+8: the Twinsun background's tilt and size (the Background row picks it).
-        if (Engine_Pressed(KEY_7)) {
-            if (Engine_ShiftHeld()) {
-                static const int tilts[] = {3840, 3584, 3328, 0, 256, 512};
-                int i = 0;
-                while (i < 6 && tilts[i] != Menu_GetSwitch("tstilt"))
-                    i++;
-                Menu_SetSwitch("tstilt", tilts[(i + 1) % 6]);
-            } else
-                Menu_SetSwitch("clash", !Menu_GetSwitch("clash"));
-        }
-        if (Engine_Pressed(KEY_8)) {
-            if (Engine_ShiftHeld()) {
-                const int s = Menu_GetSwitch("tssize");
-                Menu_SetSwitch("tssize", s >= 140 ? 80 : s + 20);
-            } else
-                Menu_SetSwitch("short", !Menu_GetSwitch("short"));
-        }
-        // Shift+9 and Shift+0: Zilla Slab 5% smaller or larger (the Font row picks it).
-        if (Engine_Pressed(KEY_9)) {
-            if (Engine_ShiftHeld())
-                Menu_SetSwitch("vfsize", Menu_GetSwitch("vfsize") > 60 ? Menu_GetSwitch("vfsize") - 5 : 60);
-            else
-                Menu_SetSwitch("narrow", !Menu_GetSwitch("narrow"));
-        }
-        if (Engine_Pressed(KEY_0)) {
-            if (Engine_ShiftHeld())
-                Menu_SetSwitch("vfsize", Menu_GetSwitch("vfsize") < 160 ? Menu_GetSwitch("vfsize") + 5 : 160);
-            else
-                Menu_SetSwitch("exptable", !Menu_GetSwitch("exptable"));
-        }
 
         Menu_Update();
         if (Menu_WantsQuit())

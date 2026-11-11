@@ -129,9 +129,9 @@
 
   <section id="pick" class="page"><div class="panel frame">
     <h2 class="title">Your game files</h2>
-    <p class="voice">The menu draws with the game's own font, picture and palette, so it needs four files from your
+    <p class="voice">The menu draws with the game's own font, picture and palette, so it needs three files from your
       copy of Little Big Adventure 2:</p>
-    <p class="files"><span class="chip">RESS.HQR</span><span class="chip">SCREEN.HQR</span><span class="chip">SPRITES.HQR</span><span class="chip">HOLOMAP.HQR</span></p>
+    <p class="files"><span class="chip">RESS.HQR</span><span class="chip">SCREEN.HQR</span><span class="chip">HOLOMAP.HQR</span></p>
     <p class="voice">Any copy with loose .HQR files works, the free 1997 demo too. They stay in this browser for
       your next visit. Nothing is uploaded.</p>
     <div class="rows">
@@ -149,14 +149,13 @@
     <p class="voice">A fan-made prototype of a new Options menu for LBA2 Classic Community. It is not the game, and
       not affiliated with the game's owners. The settings are pretend: nothing is saved.</p>
     <p class="voice">The menu's screen is the size of this window: resize the window to try other sizes, or step
-      through lba2cc's list with F2, shown with black bars. The switches are described in the README.</p>
+      through lba2cc's list with F2, shown with black bars. The prototype's keys are listed in the README.</p>
     <div class="legend system">
       <span><i class="chip">Up</i><i class="chip">Down</i></span><span>Move</span>
       <span><i class="chip">Enter</i></span><span>Choose</span>
       <span><i class="chip">Esc</i><i class="chip">Q</i></span><span>Back</span>
       <span><i class="chip">F2</i></span><span>Screen size</span>
-      <span><i class="chip">F1</i><i class="chip">F3</i><i class="chip">F4</i><i class="chip">F8</i></span><span>Switches being tried</span>
-      <span><i class="chip">1</i>&ndash;<i class="chip">0</i></span><span>More switches</span>
+      <span><i class="chip">F1</i></span><span>The prototype's keys</span>
     </div>
     <p class="voice">A gamepad works too. Some browsers keep F5, F11 and F12 for themselves.</p>
     <p class="voice">In fullscreen, Firefox and Safari keep Esc for leaving it: use Q to go back. In Chrome and
@@ -172,7 +171,7 @@
 
 <script>
 (function () {
-  var NEEDED = ['ress.hqr', 'screen.hqr', 'sprites.hqr'];
+  var NEEDED = ['ress.hqr', 'screen.hqr'];
   var OPTIONAL = ['holomap.hqr'];
   var DB = 'lba2menu', STORE = 'files';
   var statusEl = document.getElementById('status');

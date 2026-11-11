@@ -43,7 +43,6 @@ static S16 s_coor[COLS * ROWS * 3];
 static U16 s_proj[COLS * ROWS * 2];
 static U32 s_tri[(COLS - 1) * (ROWS - 1)];  // depth << 16 | offset into s_proj
 static bool s_ready;
-static int s_tilt = VIEW_ALPHA, s_size = SIZE_PERCENT;
 
 static struct Star {
     U16 x, y;  // in 1/65536 of the canvas
@@ -108,8 +107,6 @@ bool Twinsun_Init(const char *path) {
 }
 
 bool Twinsun_Ready() { return s_ready; }
-void Twinsun_SetTilt(int alpha) { s_tilt = alpha & 4095; }
-void Twinsun_SetSizePercent(int percent) { s_size = percent; }
 
 static int ByDepthFarFirst(const void *a, const void *b) {
     const U32 da = *(const U32 *)a >> 16, db = *(const U32 *)b >> 16;
@@ -125,10 +122,10 @@ void Twinsun_Draw(U32 w, U32 h, U32 timeMs) {
     if (!s_ready)
         return;
 
-    const S32 factor = PROJ_FACTOR * (S32)h * s_size / (480 * 100);
+    const S32 factor = PROJ_FACTOR * (S32)h * SIZE_PERCENT / (480 * 100);
     SetProjection((S32)w / 2, (S32)h / 2, 128, factor, factor);
     const S32 beta = (S32)((U64)(timeMs % TURN_MS) * 4096 / TURN_MS);
-    SetFollowCamera(0, 0, 0, s_tilt, beta, 0, ZOOM_PLANET);
+    SetFollowCamera(0, 0, 0, VIEW_ALPHA, beta, 0, ZOOM_PLANET);
 
     // ComputeGlobeProj from HOLOGLOB.CPP; the quads are sorted far first here
     // instead of going through the holomap's z-buffer.
