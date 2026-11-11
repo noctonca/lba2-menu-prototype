@@ -125,6 +125,9 @@ static bool RunCommand(Runner &r, const char *line) {
         int scale = n >= 3 ? atoi(b) : 1;
         bool ok = Shot_Write(a, Engine_Palette(), scale);
         printf("%s %s\n", ok ? "shot" : "err shot", a);
+    } else if (!strcmp(cmd, "shotscreen")) {
+        bool ok = Engine_ShotScreen(a);
+        printf("%s %s\n", ok ? "shotscreen" : "err shotscreen", a);
     } else if (!strcmp(cmd, "switch")) {
         if (!Menu_SetSwitch(a, atoi(b)))
             printf("err unknown switch %s\n", a);
@@ -426,8 +429,12 @@ int Lba2Main(int argc, char *argv[]) {
             Menu_SetSwitch("sheet", !Menu_GetSwitch("sheet"));
         if (Engine_Pressed(KEY_2))
             Menu_SetSwitch("legend", !Menu_GetSwitch("legend"));
-        if (Engine_Pressed(KEY_3))
-            Menu_SetSwitch("bg", !Menu_GetSwitch("bg"));
+        if (Engine_Pressed(KEY_3)) {
+            if (Engine_ShiftHeld())  // the picture at the screen's resolution: off, whole step, smooth, as Image
+                Menu_SetSwitch("bgres", Menu_GetSwitch("bgres") + 1);
+            else
+                Menu_SetSwitch("bg", !Menu_GetSwitch("bg"));
+        }
         if (Engine_Pressed(KEY_4))
             Menu_SetSwitch("scale", !Engine_ScaleRule());
         if (Engine_Pressed(KEY_5))

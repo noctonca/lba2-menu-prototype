@@ -49,6 +49,8 @@ static void Chunk(FILE *f, const char *type, const unsigned char *data, size_t l
     fwrite(c, 1, 4, f);
 }
 
+static bool WriteRows(const char *path, unsigned w, unsigned h, unsigned char *img);
+
 bool Shot_Write(const char *path, const unsigned char *palette, int scale) {
     if (!s_crcTable[1])
         CrcInit();
@@ -70,6 +72,32 @@ bool Shot_Write(const char *path, const unsigned char *palette, int scale) {
             row[3 + x * 3] = rgb[2];
         }
     }
+    return WriteRows(path, w, h, img);
+}
+
+bool Shot_WriteArgb(const char *path, unsigned w, unsigned h, const unsigned *argb) {
+    if (!s_crcTable[1])
+        CrcInit();
+    const size_t rowLen = 1 + (size_t)w * 3;
+    unsigned char *img = (unsigned char *)malloc(rowLen * h);
+    if (!img)
+        return false;
+    for (unsigned y = 0; y < h; y++) {
+        unsigned char *row = img + y * rowLen;
+        row[0] = 0;
+        for (unsigned x = 0; x < w; x++) {
+            const unsigned p = argb[(size_t)y * w + x];
+            row[1 + x * 3] = (unsigned char)(p >> 16);
+            row[2 + x * 3] = (unsigned char)(p >> 8);
+            row[3 + x * 3] = (unsigned char)p;
+        }
+    }
+    return WriteRows(path, w, h, img);
+}
+
+// Takes `img` (filter byte + RGB per row) and frees it.
+static bool WriteRows(const char *path, unsigned w, unsigned h, unsigned char *img) {
+    const size_t raw = (1 + (size_t)w * 3) * h;
 
     // zlib stream of stored blocks.
     size_t blocks = (raw + 65534) / 65535;

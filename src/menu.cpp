@@ -34,7 +34,7 @@ struct Setting {
 };
 
 enum {
-    S_TEXT_LANG, S_VOICE_LANG, S_SUBTITLES,
+    S_TEXT_LANG, S_VOICE_LANG, S_SUBTITLES, S_BACKGROUND,
     S_RESOLUTION, S_FULLSCREEN, S_VSYNC, S_FPS, S_IMAGE,
     S_MASTER, S_SFX, S_VOICES, S_MUSIC,
     S_CAM_OUT, S_CAM_IN, S_MOVIE_CAM, S_INVERT, S_SENS,
@@ -51,6 +51,11 @@ static const Setting kSettings[S_COUNT] = {
      "The language the characters speak."},
     {"subtitles", "Subtitles", K_TOGGLE, 1, {"Off", "On"}, 1, 1, false,
      "Shows what is said while the voices play."},
+    // What the menu is drawn over (asked for 2026-11-11). Blue is menu palette 181, the
+    // picture's second most common colour (picked over 196); rows and the band darken it
+    // as they darken the picture. Off is black.
+    {"background", "Background", K_CHOICE, 2, {"Picture", "Blue", "Off"}, 0, 0, false,
+     "What is behind the menu: the 1997 picture, plain blue, or nothing."},
     // Not a stored value: the row shows the screen in use and steps it through
     // Engine_SizeAt's list, as F2 does. g_val keeps its fresh value, so presets,
     // Reset settings and their undo leave the screen alone.
@@ -211,6 +216,8 @@ static Page g_pages[P_COUNT];
 static int sw_band = 1, sw_typing = 0, sw_chip = 2, sw_tablefont = 1, sw_keyrule = 0, sw_word = 2, sw_island = 0, sw_help640 = 1,
            sw_gameplay = 0, sw_overlay = 0;
 // Composition (2026-11-03 design pass): sheet, legend, bg, scale (scale remakes the canvas).
+static int sw_bgres = 3;  // the picture at the screen's resolution: 0 off, 1 whole step, 2 smooth,
+                          // 3 as the Image row says (Classic whole step, Smooth smooth; decided 2026-11-11)
 static int sw_sheet = 1, sw_legend = 1, sw_bg = 1, sw_scale = 1, sw_bandshade = 15, sw_panes = 1;
 static int sw_clash = 1, sw_short = 1, sw_narrow = 1;
 // Wide sliders: 1 the 1997 way, the row under the cursor is the slider (red plasma up to the
@@ -263,7 +270,7 @@ static void BuildPages() {
     hub.name = "Options";
     AddRow(hub, R_RETURN, "Return to the game", 0, "Back to where you were.");
     AddRow(hub, R_PRESET_ROW, "", P_PRESET, "Choose how to play: the 1997 rules, or with the known bugs fixed.");
-    AddRow(hub, R_CATEGORY, "Language and interface", P_LANG, "Text, voices and subtitles.");
+    AddRow(hub, R_CATEGORY, "Language and interface", P_LANG, "Text, voices, subtitles and the background.");
     AddRow(hub, R_CATEGORY, "Display and graphics", P_DISPLAY, "Resolution, window and detail.");
     AddRow(hub, R_CATEGORY, "Sound", P_SOUND, "Volumes.");
     AddRow(hub, R_CATEGORY, "Controls and camera", P_CONTROLS, "Keys, pad and the camera.");
@@ -285,6 +292,7 @@ static void BuildPages() {
     AddSetting(lang, S_TEXT_LANG);
     AddSetting(lang, S_VOICE_LANG);
     AddSetting(lang, S_SUBTITLES);
+    AddSetting(lang, S_BACKGROUND);
 
     Page &disp = g_pages[P_DISPLAY];
     disp.name = "Display and graphics";
@@ -1634,7 +1642,16 @@ static void DrawFps() {
     Ui_Small(0, (S32)Engine_LogicalH() - 8, buf, INK_WHITE, 1);
 }
 
+// The picture's resolution follows switch bgres, and in its default the Image row.
+// Before anything is drawn: leaving or entering mode 0 remakes the canvas.
+static void SyncBackgroundRes() {
+    const int want = sw_bgres == 3 ? 1 + g_val[S_IMAGE] : sw_bgres;
+    if (want != Engine_BackgroundRes())
+        Engine_SetBackgroundRes(want);
+}
+
 void Menu_Draw() {
+    SyncBackgroundRes();
     SyncLayout();
     g_drawnCount = 0;
     g_helpBox.shown = false;
@@ -1642,6 +1659,7 @@ void Menu_Draw() {
     g_voiceLines = g_voiceNeeded = g_voiceMax = g_voiceWidth = 0;
     g_legend[0] = 0;
 
+    Engine_SetBackdrop(g_val[S_BACKGROUND]);
     Engine_DrawBackground();
     Cadre_AnimatePlasma();
 
@@ -1688,7 +1706,7 @@ static const SwitchDef kSwitches[] = {
     {"word", &sw_word, 0, 3, 2},           {"island", &sw_island, 0, 1, 0},   {"help640", &sw_help640, 0, 1, 1},
     {"gameplay", &sw_gameplay, 0, 1, 0},   {"overlay", &sw_overlay, 0, 1, 0},
     {"devices", &sw_devices, 0, 1, 1},     {"padnames", &sw_padnames, 0, 3, 0},   {"heads", &sw_heads, 0, 1, 1},
-    {"sheet", &sw_sheet, 0, 1, 1},         {"legend", &sw_legend, 0, 1, 1},       {"bg", &sw_bg, 0, 1, 1},
+    {"sheet", &sw_sheet, 0, 1, 1},         {"legend", &sw_legend, 0, 1, 1},       {"bg", &sw_bg, 0, 1, 1},       {"bgres", &sw_bgres, 0, 3, 3},
     {"scale", &sw_scale, 0, 1, 1},         {"bandshade", &sw_bandshade, 0, 15, 15}, {"panes", &sw_panes, 0, 1, 1},
     {"clash", &sw_clash, 0, 1, 1},       {"short", &sw_short, 0, 1, 1},
     {"narrow", &sw_narrow, 0, 1, 1},     {"exptable", &sw_exptable, 0, 1, 1},
@@ -1813,9 +1831,11 @@ bool Menu_Set(const char *id, int value) {
 }
 
 void Menu_Reset() {
+    const int bgres = sw_bgres;  // a --switch bgres given before the reset stays
     for (size_t i = 0; i < sizeof kSwitches / sizeof kSwitches[0]; i++)
         *kSwitches[i].value = kSwitches[i].start;
     sw_scale = Engine_ScaleRule();  // the canvas in use was made with it
+    sw_bgres = bgres;
     Engine_SetBackgroundFit(sw_bg);
     Engine_UseMenuPalette();
     Engine_ResetInput();

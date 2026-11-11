@@ -57,6 +57,7 @@ add_executable(lba2menu
     src/ui.cpp
     src/trace.cpp
     src/shot.cpp
+    src/screenbg.cpp
     src/selftest.cpp
     ${LBA2CC_GAME_SOURCES}
     $<TARGET_OBJECTS:lba2_platform_entry>

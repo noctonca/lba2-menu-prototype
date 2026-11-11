@@ -30,6 +30,8 @@
 #include <string.h>
 
 #include "cadre.h"
+#include "screenbg.h"
+#include "shot.h"
 
 // Resource numbers, from lba2cc SOURCES/COMMON.H.
 #define RESS_PAL 0
@@ -47,6 +49,7 @@ struct XplHeader {
 };
 
 static U32 s_physW, s_physH, s_logW, s_logH;
+static U32 s_surfW, s_surfH;  // the presented frame: the canvas, or the screen when bgres is on
 static char s_ress[1024], s_screen[1024];
 static U8 *s_palMenu;
 static U8 *s_xplBoot;        // the XPL the boot menu shades through (citabau)
@@ -186,10 +189,13 @@ bool Engine_SetScreen(U32 w, U32 h, bool sizeWindow) {
         h = 480;
     U32 scale = Engine_Scale(w, h);
     U32 lw = w / scale, lh = h / scale;
-    if (lw != s_logW || lh != s_logH) {
+    // With the picture at the screen's resolution the presented frame is the
+    // screen; the canvas stays logical.
+    U32 sw = ScreenBg_Mode() ? w : lw, sh = ScreenBg_Mode() ? h : lh;
+    if (lw != s_logW || lh != s_logH || sw != s_surfW || sh != s_surfH) {
         // As RES_SWITCH.CPP: Log, then the texture and Phys, then both clips.
         EndScreen();
-        if (!CreateScreenMemory(lw, lh) || !ResizeWindowSurface(lw, lh, true) || !ResizeVideoSurface(lw, lh)) {
+        if (!CreateScreenMemory(lw, lh) || !ResizeWindowSurface(sw, sh, true) || !ResizeVideoSurface(sw, sh)) {
             fprintf(stderr, "could not switch to %ux%u (logical %ux%u)\n", (unsigned)w, (unsigned)h,
                     (unsigned)lw, (unsigned)lh);
             return false;
@@ -197,6 +203,8 @@ bool Engine_SetScreen(U32 w, U32 h, bool sizeWindow) {
         SetClipWindow(0, 0, (S32)lw - 1, (S32)lh - 1);
         SetClip(0, 0, (S32)lw - 1, (S32)lh - 1);
         BoxChangeClip(0, 0, (S32)lw - 1, (S32)lh - 1, TRUE);
+        s_surfW = sw;
+        s_surfH = sh;
     }
     s_physW = w;
     s_physH = h;
@@ -335,6 +343,8 @@ bool Engine_Init(const EngineConfig &cfg) {
         fprintf(stderr, "InitGraphics %ux%u failed\n", (unsigned)s_logW, (unsigned)s_logH);
         return false;
     }
+    s_surfW = s_logW;
+    s_surfH = s_logH;
     SizeWindow();
     InitKeyboard();
     InitTimer();
@@ -673,9 +683,53 @@ static bool s_pixels = true;
 void Engine_SetPixels(bool on) { s_pixels = on; }
 bool Engine_Pixels() { return s_pixels; }
 
+static void PaintSmooth(U32 *argb, U32 pitch, U32 w, U32 h, const U8 *palette) {
+    ScreenBg_PaintSmooth(argb, pitch, w, h, palette, s_menuImage);
+}
+
+void Engine_SetBackgroundRes(int mode) {
+    ScreenBg_SetMode(mode);
+    SetPrePresentCallback(mode == 2 ? PaintSmooth : NULL);
+    Engine_SetScreen(s_physW, s_physH, false);
+}
+
+int Engine_BackgroundRes() { return ScreenBg_Mode(); }
+
 void Engine_Present() {
-    if (!s_headless)
+    if (s_headless)
+        return;
+    if (!ScreenBg_Mode()) {
         BoxStaticFullflip();
+        return;
+    }
+    // The screen's frame straight into Phys; an empty copy marks it for the present.
+    ScreenBg_Compose((U8 *)Phys, VideoSurfacePitch(), s_surfW, s_surfH, s_logW, s_logH,
+                     Engine_Scale(s_physW, s_physH), s_menuImage);
+    T_BOX none = {0, 0, 0, 0, NULL};
+    LockVideoSurface();
+    CopyVideoArea(Phys, Log, TabOffPhysLine, &none);
+    UnlockVideoSurface();
+}
+
+bool Engine_ShotScreen(const char *path) {
+    const U32 w = s_physW, h = s_physH;
+    U8 *idx = (U8 *)malloc((size_t)w * h);
+    U32 *argb = (U32 *)malloc((size_t)w * h * 4);
+    if (!idx || !argb) {
+        free(idx);
+        free(argb);
+        return false;
+    }
+    ScreenBg_Compose(idx, w, w, h, s_logW, s_logH, Engine_Scale(w, h), s_menuImage);
+    for (size_t i = 0; i < (size_t)w * h; i++) {
+        const U8 *rgb = s_palCurrent + idx[i] * 3;
+        argb[i] = 0xff000000u | (U32)rgb[0] << 16 | (U32)rgb[1] << 8 | rgb[2];
+    }
+    ScreenBg_PaintSmooth(argb, w * 4, w, h, s_palCurrent, s_menuImage);
+    bool ok = Shot_WriteArgb(path, w, h, argb);
+    free(idx);
+    free(argb);
+    return ok;
 }
 
 void Engine_ResetInput() {
@@ -690,10 +744,20 @@ void Engine_ResetInput() {
 static int s_bgFit = 1;
 void Engine_SetBackgroundFit(int fit) { s_bgFit = fit; }
 
+static int s_backdrop;
+void Engine_SetBackdrop(int backdrop) { s_backdrop = backdrop; }
+
 void Engine_DrawBackground() {
     if (!s_pixels)
         return;
     U8 *dst = (U8 *)Log;
+    if (s_backdrop) {
+        const U8 fill = s_backdrop == 1 ? 181 : 0;  // a blue from the picture; black
+        for (U32 y = 0; y < s_logH; y++)
+            memset(dst + TabOffLine[y], fill, s_logW);
+        ScreenBg_NoPicture(fill);
+        return;
+    }
     if (s_bgFit == 1) {
         // Cover: one factor for both axes, the larger of W/640 and H/480 (as a
         // fraction num/den), the overflow cropped evenly; nearest neighbour.
@@ -716,6 +780,7 @@ void Engine_DrawBackground() {
                 out[x] = row[sx < 640 ? sx : 639];
             }
         }
+        ScreenBg_BeginFrame(s_logW, s_logH);
         return;
     }
     // Nearest-neighbour stretch of the 640x480 image, as Image_LoadStretched does.
@@ -725,4 +790,5 @@ void Engine_DrawBackground() {
         for (U32 x = 0; x < s_logW; x++)
             out[x] = row[x * 640 / s_logW];
     }
+    ScreenBg_BeginFrame(s_logW, s_logH);
 }

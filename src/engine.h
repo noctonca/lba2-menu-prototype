@@ -111,6 +111,13 @@ const U8 *Engine_Palette();
 // and centred.
 void Engine_SetBackgroundFit(int fit);
 void Engine_DrawBackground();
+// What Engine_DrawBackground draws: 0 the picture, 1 plain blue, 2 black.
+void Engine_SetBackdrop(int backdrop);
+// The picture at the screen's resolution (screenbg.h): 0 off, 1 whole step, 2 smooth.
+void Engine_SetBackgroundRes(int mode);
+int Engine_BackgroundRes();
+// The screen as presented (the canvas at its whole step, the picture per bgres), as a PNG.
+bool Engine_ShotScreen(const char *path);
 
 // Palette work: switch between the menu palette and an island's.
 void Engine_UseMenuPalette();

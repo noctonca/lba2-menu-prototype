@@ -1,6 +1,7 @@
 #include "cadre.h"
 
 #include "engine.h"
+#include "screenbg.h"
 
 #include <POLYGON/POLY.H>
 #include <SVGA/CLIP.H>
@@ -240,6 +241,7 @@ void Cadre_Shade(S32 x0, S32 y0, S32 x1, S32 y1, S32 deccoul) {
     hi -= (U8)(deccoul & 0xFF);
     clutOffset = (clutOffset & 0xFFFF00FF) | ((U32)hi << 8);
     U8 *clut = PtrCLUTGouraud + clutOffset;
+    ScreenBg_NoteShade(x0, y0, x1, y1, hi);
 
     for (S32 y = y0; y <= y1; y++) {
         for (S32 x = 0; x <= x1 - x0; x++)

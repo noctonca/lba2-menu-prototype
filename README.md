@@ -113,6 +113,7 @@ own switches are on F1 to F12 and 0 to 9.
 | 1 | `sheet` | wide: one 960x540 composition, centred on any larger screen / stretched to the screen's margins |
 | 2 | `legend` | the band's legend stacked at its right / in a row beside the voice |
 | 3 | `bg` | the background scaled evenly and cropped / stretched, as lba2cc does |
+| Shift+3 | `bgres` | the menu picture at the screen's own resolution: off, part of the canvas (as before) / whole step: the smallest whole factor that covers the screen, cropped / smooth: the exact cover factor, Catmull-Rom / as the Image row says (the start): Classic whole step, Smooth smooth. The menu stays on the canvas at its whole step; darkened rows and the band darken the screen-size picture through the same fog rows (src/screenbg.cpp) |
 | 4 | `scale` | screens 3:2 or wider take the 960x540 composition at the largest whole step it fits, others the one column / the plan's rule |
 | 5 | `panes` | wide: one pane at a time, centred, the page's name as a title / two panes side by side |
 | 6 | `bandshade` | the band darkened to level 15 / 11 |
@@ -207,6 +208,8 @@ the 1997 game's six languages were compared for the help review.
   above the actions or inside their first row (`heads`: text and rectangle),
   every binding and every conflict.
 - `shot` writes exactly what is in the frame buffer through the current palette.
+- `shotscreen` writes the screen as presented, at the screen's size: the canvas at its
+  whole step and the picture as `bgres` draws it.
 - Every key and every change is a trace line (`trace t=<ms> f=<frame> ...`) on
   stderr and in `--trace FILE`.
 - Headless runs use a fixed clock and a fixed plasma seed, so a script gives
