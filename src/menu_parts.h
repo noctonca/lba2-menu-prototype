@@ -9,7 +9,7 @@
 
 // ── The page model (docs/plan/MENU_PLAN.md, "The page model") ──
 
-enum RowType { R_RETURN, R_CATEGORY, R_PRESET_ROW, R_SETTING, R_PRESET_CHOICE, R_BACK_TO_MINE, R_ACTION, R_BINDING };
+enum RowType { R_RETURN, R_CATEGORY, R_PRESET_ROW, R_SETTING, R_PRESET_CHOICE, R_BACK_TO_MINE, R_ACTION, R_BINDING, R_TUNING };
 
 // A check on the menu's state, for the menu plan's "shown when" and "active when".
 typedef bool (*RowCheck)();
@@ -34,17 +34,20 @@ struct Page {
 };
 
 // The pages: the Options pages, then Keys and buttons (its groups) and a page of each group's
-// actions, which bindings.cpp makes from its tables (Bindings_Pages).
+// actions, which bindings.cpp makes from its tables (Bindings_Pages), then More options, a row
+// for each of its values, which more_options.cpp makes from its table (MoreOptions_Pages).
 enum { KEY_GROUPS = 7 };  // bindings.cpp kGroups
 enum {
     P_HUB, P_PRESET, P_LANG, P_DISPLAY, P_SOUND, P_CONTROLS, P_ADVANCED, P_FIRST, P_ORIGINAL,
-    P_KEYS, P_KEY_GROUP, P_COUNT = P_KEY_GROUP + KEY_GROUPS
+    P_KEYS, P_KEY_GROUP, P_MORE = P_KEY_GROUP + KEY_GROUPS, P_COUNT
 };
-void Bindings_Pages(Page *pages);  // fills pages[P_KEYS] and pages[P_KEY_GROUP + group]
+void Bindings_Pages(Page *pages);     // fills pages[P_KEYS] and pages[P_KEY_GROUP + group]
+void MoreOptions_Pages(Page *pages);  // fills pages[P_MORE]
 
-// Where the player is: the page on top of the stack and the row its cursor is on, checked as
-// it is read; and the view's scroll (the first row drawn), which starts again when a page
-// opens or closes or the layout changes.
+// Where the player is: the page on top of the stack (-1 before Menu_Init) and the row its
+// cursor is on, checked as it is read; and the view's scroll (the first row drawn; on More
+// options the first line, its group heads counted), which starts again when a page opens or
+// closes or the layout changes.
 int Menu_TopPage();
 int Menu_TopRow();
 int &Menu_Scroll();

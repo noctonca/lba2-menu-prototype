@@ -382,8 +382,9 @@ walk finds starts with the walk's name:
 - `more_options:` Advanced and reset has the More options row; Enter opens the page and Esc comes back to the row;
   on every row Right and Left change the value and the other key puts it back,
   the change marks the preset row on a tuning row and not on a player's
-  setting, and Del puts the default back; Page Down and Page Up stop at the
-  last and first rows; Modern puts a changed tuning value back to its default,
+  setting, Del puts the default back, and Enter steps a switch or a choice
+  and leaves a number; Page Down and Page Up stop at the last and first rows,
+  and the page opened again starts at its top; Modern puts a changed tuning value back to its default,
   Undo preset names it and puts it back; Reset settings and Undo reset do the
   same, and the cursor stays on Reset settings; Reverse stereo, the last row
   and a player's setting, keeps its value through Classic.

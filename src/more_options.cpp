@@ -10,6 +10,7 @@
 #include <SVGA/CLIP.H>
 #include <SVGA/FIL_LINE.H>
 
+#include <assert.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -249,39 +250,29 @@ static void StatusText(int i, char *buf, size_t n, S32 width, S32 s) {
         snprintf(buf, n, "Default %s%s.", def, range);
 }
 
-// ───────────────────────────── Page state ─────────────────────────────
+// ───────────────────────────── The page ─────────────────────────────
 
-static bool g_active;
-static int g_cursor;      // the row under the cursor, 0..TUNING_COUNT-1
-static int g_scroll;      // the first line shown
-static int g_visible;     // lines in the table's window at the last draw
+// A row for each value, in the table's order: the cursor's row is the value's index.
+static Row s_rows[TUNING_COUNT];
+
+void MoreOptions_Pages(Page *pages) {
+    for (int i = 0; i < TUNING_COUNT; i++) {
+        assert((i == 0 || kTuning[i].group >= kTuning[i - 1].group) && "a group's rows are together");
+        s_rows[i] = {R_TUNING, kTuning[i].name, i, kTuning[i].help, NULL, NULL, NULL};
+    }
+    pages[P_MORE] = {"More options", s_rows, TUNING_COUNT};
+}
+
+bool MoreOptions_Active() { return Menu_TopPage() == P_MORE; }
+
+static int Cursor() {
+    assert(MoreOptions_Active() && "the cursor is on More options");
+    return Menu_TopRow();
+}
+
+static int g_visible;  // lines in the table's window at the last draw
 
 static bool Wide() { return Menu_Wide(); }
-
-static void Say();
-
-void MoreOptions_Open() {
-    Ready();
-    g_active = true;
-    g_cursor = g_scroll = 0;
-    Say();
-    Trace("more_options open");
-}
-
-void MoreOptions_Close() {
-    if (!g_active)
-        return;
-    g_active = false;
-    Trace("more_options close");
-}
-
-bool MoreOptions_Active() { return g_active; }
-
-void MoreOptions_Reset() {
-    g_active = false;
-    g_cursor = g_scroll = 0;
-    MoreOptions_Defaults();
-}
 
 // ───────────────────────────── Input ─────────────────────────────
 
@@ -312,38 +303,21 @@ static void Default(int i) {
     Trace("default %s=%s", kTuning[i].name, ValueText(i, buf, sizeof buf));
 }
 
-// Left, Right, Enter and Del on a row.
-static void RowKeys(int i) {
+void MoreOptions_Keys(int i) {
     if (Host_Pressed(KEY_LEFT))
         Change(i, -1);
     if (Host_Pressed(KEY_RIGHT))
-        Change(i, +1);
-    if (Host_Pressed(KEY_ENTER) && kTuning[i].kind != T_NUM)
         Change(i, +1);
     if (Host_Pressed(KEY_DEL))
         Default(i);
 }
 
-static void UpdateTable() {
-    int page = g_visible > 3 ? g_visible - 2 : 1;  // the group heads take lines too
-    if (Host_Pressed(KEY_UP))
-        g_cursor = (g_cursor + TUNING_COUNT - 1) % TUNING_COUNT;
-    if (Host_Pressed(KEY_DOWN))
-        g_cursor = (g_cursor + 1) % TUNING_COUNT;
-    if (Host_Pressed(KEY_PGUP))
-        g_cursor = g_cursor > page ? g_cursor - page : 0;
-    if (Host_Pressed(KEY_PGDN))
-        g_cursor = g_cursor + page < TUNING_COUNT ? g_cursor + page : TUNING_COUNT - 1;
-    RowKeys(g_cursor);
-    if (Host_Pressed(KEY_ESC))
-        MoreOptions_Close();
+void MoreOptions_Enter(int i) {
+    if (kTuning[i].kind != T_NUM)
+        Change(i, +1);
 }
 
-void MoreOptions_Update() {
-    UpdateTable();
-    if (g_active)
-        Say();
-}
+int MoreOptions_PageStep() { return g_visible > 3 ? g_visible - 2 : 1; }  // the group heads take lines too
 
 // The row's help as the table shows it: the console's words, "Experimental: " before an
 // experimental row's.
@@ -359,7 +333,7 @@ static const char *RowHelp(int i, char *buf, size_t n) {
 
 // The row's help is in the table's own status lines, in the 8x8 font (decided 2026-11-12):
 // the console's English, whole, never paged. The voice says the row's group.
-static void Say() { Menu_Say(kGroups[kTuning[g_cursor].group].help); }
+void MoreOptions_Say() { Menu_Say(kGroups[kTuning[Cursor()].group].help); }
 
 // ───────────────────────────── Drawing ─────────────────────────────
 
@@ -426,6 +400,8 @@ static int TableLines(int *line) {
 // status line at its foot and the scroll bar beside it.
 static void DrawTable(S32 px0, S32 px1, S32 py0, S32 py1) {
     const S32 s = kScale, pitch = 10 * s;
+    const int cursorRow = Cursor();
+    int &scroll = Menu_Scroll();  // in lines, the group heads counted
     Ui_Panel(px0, py0, px1, py1, 15);  // as the band (decided 2026-11-03)
 
     S32 nameX = px0 + 16;
@@ -441,18 +417,18 @@ static void DrawTable(S32 px0, S32 px1, S32 py0, S32 py1) {
     g_total = total;
     int cl = 0;
     for (int k = 0; k < total; k++)
-        if (line[k] == g_cursor)
+        if (line[k] == cursorRow)
             cl = k;
     // Keep the cursor in view, and its group's head when it is the group's first row.
     int want = line[cl - 1] < 0 ? cl - 1 : cl;
-    if (want < g_scroll)
-        g_scroll = want;
-    if (cl >= g_scroll + visible)
-        g_scroll = cl - visible + 1;
-    if (g_scroll > total - visible)
-        g_scroll = total - visible;
-    if (g_scroll < 0)
-        g_scroll = 0;
+    if (want < scroll)
+        scroll = want;
+    if (cl >= scroll + visible)
+        scroll = cl - visible + 1;
+    if (scroll > total - visible)
+        scroll = total - visible;
+    if (scroll < 0)
+        scroll = 0;
     if (visible > total)
         visible = total;
     g_visible = visible;
@@ -464,7 +440,7 @@ static void DrawTable(S32 px0, S32 px1, S32 py0, S32 py1) {
     g_table.valueEdge = valueRight;
     g_table.marksRight = valueRight + 12 * s;
     g_table.total = total;
-    g_table.scroll = g_scroll;
+    g_table.scroll = scroll;
     // The tags line up, two letters clear of the longest name.
     S32 tagX = 0;
     for (int i = 0; i < TUNING_COUNT; i++) {
@@ -475,8 +451,8 @@ static void DrawTable(S32 px0, S32 px1, S32 py0, S32 py1) {
     tagX += nameX + 16 * s;
     MemoClip();
     SetClip(px0 + 1, py0 + 1, px1 - 1, py1 - 1);
-    for (int k = g_scroll; k < g_scroll + visible; k++) {
-        S32 y = bodyTop + (k - g_scroll) * pitch;
+    for (int k = scroll; k < scroll + visible; k++) {
+        S32 y = bodyTop + (k - scroll) * pitch;
         MoreOptionsLine &d = g_lines[g_lineCount < 63 ? g_lineCount++ : 63];
         memset(&d, 0, sizeof d);
         d.x0 = px0 + 8, d.x1 = px1 - 8, d.y0 = y - s, d.y1 = y + 9 * s - 1;
@@ -490,7 +466,7 @@ static void DrawTable(S32 px0, S32 px1, S32 py0, S32 py1) {
             continue;
         }
         int i = line[k];
-        bool cursor = i == g_cursor;
+        bool cursor = i == cursorRow;
         bool changed = g_val[i] != kTuning[i].def;
         if (cursor)
             Ui_RowBackground(d.x0, d.y0, d.x1, d.y1, FILL_CURSOR);
@@ -529,14 +505,14 @@ static void DrawTable(S32 px0, S32 px1, S32 py0, S32 py1) {
     Line(px0 + 8, statusTop + 1, px1 - 8, statusTop + 1, COUL_UP_BLUE);
     g_helpCut = false;
     g_helpShown[0] = 0;
-    if (g_cursor >= 0 && g_cursor < TUNING_COUNT) {
+    if (cursorRow >= 0 && cursorRow < TUNING_COUNT) {
         char hb[320];
-        const char *help = RowHelp(g_cursor, hb, sizeof hb);
+        const char *help = RowHelp(cursorRow, hb, sizeof hb);
         snprintf(g_helpShown, sizeof g_helpShown, "%s", help);
         g_helpCut = !DrawSmallWrapped(nameX, statusTop + 5 * s, px1 - 24 - nameX, helpLines, help, s);
     }
     S32 statusY = statusTop + 5 * s + helpLines * 10 * s;
-    StatusText(g_cursor, g_status, sizeof g_status, px1 - 24 - nameX, s);
+    StatusText(cursorRow, g_status, sizeof g_status, px1 - 24 - nameX, s);
     Ui_Small(nameX, statusY, g_status, INK_CONFIG_HEAD, s);
     RestoreClip();
     g_table.status = g_status;
@@ -548,7 +524,7 @@ static void DrawTable(S32 px0, S32 px1, S32 py0, S32 py1) {
     g_table.lines = g_lines;
 
     if (visible < total)
-        Menu_DrawScrollBar(px1 + 9, py0, py1, g_scroll, visible, total);
+        Menu_DrawScrollBar(px1 + 9, py0, py1, scroll, visible, total);
 }
 
 static void Legend(const char **keys, const char **words, int *n) {
@@ -594,38 +570,37 @@ void MoreOptions_Draw() {
 // ───────────────────────────── State ─────────────────────────────
 
 bool MoreOptions_Table(MoreOptionsTable *out) {
-    if (!g_active || !g_tableShown)
+    if (!MoreOptions_Active() || !g_tableShown)
         return false;
     *out = g_table;
     return true;
 }
 
-const char *MoreOptions_CursorGroupHelp() { return kGroups[kTuning[g_cursor].group].help; }
+const char *MoreOptions_CursorGroupHelp() { return kGroups[kTuning[Cursor()].group].help; }
 
-const char *MoreOptions_CursorName() { return kTuning[g_cursor].name; }
+const char *MoreOptions_CursorName() { return kTuning[Cursor()].name; }
 
-bool MoreOptions_CursorPresetsSet() { return MoreOptions_PresetsSet(g_cursor); }
+bool MoreOptions_CursorPresetsSet() { return MoreOptions_PresetsSet(Cursor()); }
 
 const char *MoreOptions_CursorValue() {
     static char buf[24];
-    return ValueText(g_cursor, buf, sizeof buf);
+    return ValueText(Cursor(), buf, sizeof buf);
 }
 
-int MoreOptions_Where(char *buf, size_t n) {
-    const int i = g_cursor;
+void MoreOptions_Where(char *buf, size_t n) {
+    const int i = Cursor();
     char val[24];
     ValueText(i, val, sizeof val);
     snprintf(buf, n, "%s | %s | %s", kGroups[kTuning[i].group].name, kTuning[i].name, val);
-    return 1;
 }
 
 void MoreOptions_WriteState(FILE *f) {
-    const int i = g_cursor;
+    const int i = Cursor();
     fprintf(f, "{\"group\":");
     Menu_JsonString(f, kGroups[kTuning[i].group].name);
     fprintf(f, ",\"row\":");
     Menu_JsonString(f, kTuning[i].name);
-    fprintf(f, ",\"scroll\":%d,\"visible\":%d,\"total\":%d,\"status\":", g_scroll, g_visible, g_total);
+    fprintf(f, ",\"scroll\":%d,\"visible\":%d,\"total\":%d,\"status\":", Menu_Scroll(), g_visible, g_total);
     Menu_JsonString(f, g_status);
     fprintf(f, ",\"row_help\":");
     Menu_JsonString(f, g_helpShown);

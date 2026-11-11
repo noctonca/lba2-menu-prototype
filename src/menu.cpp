@@ -543,13 +543,14 @@ static bool RowShown(const Page &p, int i) {
     return !r.shown || r.shown();
 }
 
-enum { PAGE_ROWS_MAX = 16 };
+enum { PAGE_ROWS_MAX = MORE_OPTIONS_MAX };  // More options is the longest page
 
 // The rows a page shows, in order: their indices in its table.
 static int ShownRows(int page, int *out) {
     const Page &p = g_pages[page];
+    assert(p.count <= PAGE_ROWS_MAX && "PAGE_ROWS_MAX holds every page's rows");
     int n = 0;
-    for (int i = 0; i < p.count && n < PAGE_ROWS_MAX; i++)
+    for (int i = 0; i < p.count; i++)
         if (RowShown(p, i))
             out[n++] = i;
     return n;
@@ -596,7 +597,7 @@ static const Row *CursorRow() {
     return &g_pages[t.page].rows[t.row];
 }
 
-int Menu_TopPage() { return TopPage(); }
+int Menu_TopPage() { return g_depth ? TopPage() : -1; }
 int Menu_TopRow() { return Top().row; }
 int &Menu_Scroll() { return g_scroll; }
 
@@ -714,6 +715,10 @@ static void UpdateVoice() {
         Bindings_Say();
         return;
     }
+    if (MoreOptions_Active()) {
+        MoreOptions_Say();
+        return;
+    }
     const Row *r = CursorRow();
     const char *text = g_confirm ? kQuestions[g_question].voice : HelpFor(r);
     if (text == g_helpBuf)
@@ -764,6 +769,7 @@ void Menu_Init(bool firstLaunch) {
         g_val[s] = FreshValue(s);
     g_preset = 0;
     Bindings_Pages(g_pages);
+    MoreOptions_Pages(g_pages);
     g_first = firstLaunch;
     g_depth = 1;
     g_stack[0].page = g_first ? P_FIRST : P_HUB;
@@ -819,11 +825,14 @@ static void Activate(const Row &r) {
     case R_CATEGORY:
     case R_PRESET_ROW:
         Push(r.arg);
-        if (r.arg >= P_KEY_GROUP)
+        if (r.arg >= P_KEY_GROUP && r.arg < P_KEY_GROUP + KEY_GROUPS)
             Bindings_GroupOpened();
         break;
     case R_BINDING:
         Bindings_Enter();  // waits for a key, or says the chip is fixed
+        break;
+    case R_TUNING:
+        MoreOptions_Enter(r.arg);
         break;
     case R_SETTING:
         if (kSettings[r.arg].kind == K_CHOICE || kSettings[r.arg].kind == K_TOGGLE)
@@ -853,7 +862,7 @@ static void Activate(const Row &r) {
         if (r.arg == A_RESET)
             Ask(Q_RESET);
         else if (r.arg == A_EXP)
-            MoreOptions_Open();
+            Push(P_MORE);
         else if (r.arg == A_CONSOLE) {
             g_console = Host_LastInputWasPad() ? CON_READONLY : CON_FULL;
             Trace("open console mode=%s", g_console == CON_READONLY ? "read-only" : "full");
@@ -894,10 +903,6 @@ void Menu_Update() {
     SyncView();
     if (Bindings_Busy()) {  // waiting for a key, or asking about one another action has
         Bindings_UpdateBusy();
-        return;
-    }
-    if (MoreOptions_Active()) {
-        MoreOptions_Update();
         return;
     }
     if (g_console) {
@@ -950,6 +955,14 @@ void Menu_Update() {
         Move(-1);
     if (Host_Pressed(KEY_DOWN))
         Move(+1);
+    if (TopPage() == P_MORE) {  // a long table: Page Up and Page Down, stopping at its ends
+        const int step = MoreOptions_PageStep(), last = g_pages[P_MORE].count - 1;
+        Place &t = Top();
+        if (Host_Pressed(KEY_PGUP))
+            t.row = t.row > step ? t.row - step : 0;
+        if (Host_Pressed(KEY_PGDN))
+            t.row = t.row + step < last ? t.row + step : last;
+    }
 
     const Row *r = CursorRow();
     if (r && r->type == R_SETTING && RowActive(*r)) {
@@ -963,6 +976,8 @@ void Menu_Update() {
             Bindings_StepColumn(+1);
         if (Host_Pressed(KEY_LEFT) && !Bindings_StepColumn(-1) && Wide())
             Pop();
+    } else if (r && r->type == R_TUNING) {
+        MoreOptions_Keys(r->arg);  // Left and Right change the value, Del puts its default back
     } else if (Wide() && !g_first && r && (r->type == R_CATEGORY || r->type == R_PRESET_ROW) &&
                Host_Pressed(KEY_RIGHT)) {
         Activate(*r);  // wide, Right opens what Enter opens: a category, the preset page, a group
@@ -981,8 +996,7 @@ void Menu_Update() {
             Pop();
     }
 
-    if (!MoreOptions_Active())  // More options just opened says its own help
-        UpdateVoice();
+    UpdateVoice();
 }
 
 // ───────────────────────────── Drawing ─────────────────────────────
@@ -1654,8 +1668,8 @@ bool Menu_Open(const char *name) {
     }
     if (!strcmp(name, "More options")) {
         Menu_Open("Advanced and reset");
-        PutCursorOn(R_ACTION, A_EXP);
-        MoreOptions_Open();
+        PutCursorOn(R_ACTION, A_EXP);  // as Enter on it leaves it
+        Activate(*CursorRow());
         return true;
     }
     if (!strcmp(name, "Console")) {
@@ -1666,7 +1680,6 @@ bool Menu_Open(const char *name) {
     }
     g_console = CON_CLOSED;
     Bindings_Close();
-    MoreOptions_Close();
     for (int p = 0; p < P_KEYS; p++) {  // Keys and buttons opens from its row, above
         if (strcmp(g_pages[p].name, name) != 0)
             continue;
@@ -1708,7 +1721,7 @@ void Menu_Reset() {
         *kSwitches[i].value = kSwitches[i].start;
     Host_ResetInput();
     Bindings_Reset();
-    MoreOptions_Reset();
+    MoreOptions_Defaults();
     g_confirm = false;
     g_confirmCursor = 0;
     g_closed = false;
@@ -1749,8 +1762,6 @@ bool Menu_WantsQuit() { return g_quit; }
 const char *Menu_Layout() { return g_closed ? "closed" : g_first ? "first-launch" : Wide() ? "wide" : "column"; }
 
 const char *Menu_PageName() {
-    if (MoreOptions_Active())
-        return "More options";
     return g_pages[Top().page].name;
 }
 
@@ -1783,9 +1794,9 @@ int Menu_Where(char *buf, size_t n) {
     }
     if (MoreOptions_Active()) {
         char inner[200];
-        int d = MoreOptions_Where(inner, sizeof inner);
+        MoreOptions_Where(inner, sizeof inner);
         snprintf(buf, n, "%s | %s", Menu_PageName(), inner);
-        return Depth() + d;
+        return Depth();
     }
     if (g_console) {
         snprintf(buf, n, "%s | %s | console", Menu_PageName(), Menu_CursorLabel());
@@ -1896,7 +1907,7 @@ void Menu_WriteState(FILE *f) {
     }
     fprintf(f, "],\"cursor\":%d,\"scroll\":%d,\"confirm\":%s", Position(top.page, top.row), g_scroll,
             g_confirm ? "true" : "false");
-    const Row *r = MoreOptions_Active() ? NULL : CursorRow();
+    const Row *r = CursorRow();
     fprintf(f, ",\"cursor_row\":");
     Menu_JsonString(f, r ? (r->type == R_PRESET_ROW ? PresetRowLabel(buf, sizeof buf) : RowLabel(*r)) : "");
     fprintf(f, ",\"preset\":\"%s\",\"preset_changed\":%s,\"preset_row\":", kPresetNames[g_preset],

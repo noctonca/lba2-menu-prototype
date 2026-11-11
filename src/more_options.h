@@ -9,10 +9,14 @@
 // One dense table in the 8x8 font, as the 1997 key binding screen (decided 2026-11-03;
 // design card ExperimentalTable).
 
-void MoreOptions_Open();   // from the "More options" row
-void MoreOptions_Close();  // back to Advanced and reset, as it was
-bool MoreOptions_Active();
-void MoreOptions_Update();
+// The page is on the menu's stack (P_MORE, a row for each value, MoreOptions_Pages): the
+// menu's loop moves along it and Esc leaves it. The page keeps what its rows add: changing
+// a value, its own help and status lines, and its drawing.
+bool MoreOptions_Active();          // the page is on top
+void MoreOptions_Keys(int row);     // Left, Right and Del on a row
+void MoreOptions_Enter(int row);    // Enter on a row: steps a choice or a switch
+int MoreOptions_PageStep();         // rows Page Up and Page Down move
+void MoreOptions_Say();             // the voice says the cursor row's group
 void MoreOptions_Draw();
 void MoreOptions_WriteState(FILE *f);
 // The table as the last MoreOptions_Draw drew it, for the self test: its panel, its lines
@@ -45,10 +49,8 @@ const char *MoreOptions_CursorValue();
 const char *MoreOptions_CursorGroupHelp();  // the help of the group the cursor's row is in
 bool MoreOptions_CursorPresetsSet();  // the cursor's row is a tuning value, which presets set
 
-// Where the cursor is ("Auto camera | cam_ease_ms"), and how deep within the page.
-int MoreOptions_Where(char *buf, size_t n);
-// The page closed and every value at its default, as a fresh start has it.
-void MoreOptions_Reset();
+// Where the cursor is ("Auto camera | cam_ease_ms | 300").
+void MoreOptions_Where(char *buf, size_t n);
 
 // The values, for the presets, Reset settings and their undo. Two kinds of row: tuning
 // values (the Auto camera's), which a preset puts back to their defaults and which mark

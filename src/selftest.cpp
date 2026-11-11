@@ -1061,8 +1061,19 @@ struct Walker {
                                        : Fmt("more_options: %s, a player's setting, changed makes the preset row %s",
                                              name.c_str(), Repr(Menu_PresetLabel()).c_str()));
         Key("del");
-        Expect(MoreOptions_CursorValue() == v0, Fmt("more_options: Del leaves %s at %s, not its default %s", name.c_str(),
-                                            Repr(MoreOptions_CursorValue()).c_str(), Repr(v0.c_str()).c_str()));
+        if (!Expect(MoreOptions_CursorValue() == v0, Fmt("more_options: Del leaves %s at %s, not its default %s", name.c_str(),
+                                                 Repr(MoreOptions_CursorValue()).c_str(), Repr(v0.c_str()).c_str())))
+            return;
+        // Enter steps a switch or a choice, as Right does; a number it leaves alone.
+        const bool number = v0.find_first_not_of("-0123456789") == std::string::npos;
+        Key("enter");
+        const std::string ve = MoreOptions_CursorValue();
+        if (number)
+            Expect(ve == v0, Fmt("more_options: Enter changes %s, a number, from %s to %s", name.c_str(),
+                                 Repr(v0.c_str()).c_str(), Repr(ve.c_str()).c_str()));
+        else
+            Expect(ve != v0, Fmt("more_options: Enter leaves %s at %s", name.c_str(), Repr(v0.c_str()).c_str()));
+        Key("del");
     }
 
     void MoreOptions() {
@@ -1113,6 +1124,17 @@ struct Walker {
                Fmt("more_options: Page Down stops at %s, not the last row", MoreOptions_CursorName()));
         Key("pgup", 10);
         Expect(MoreOptions_CursorName() == first, Fmt("more_options: Page Up stops at %s, not the first row", MoreOptions_CursorName()));
+
+        // Opened again after leaving it at the end, the page starts at its top, its first
+        // group's head showing.
+        Key("pgdn", 10);
+        Key("esc");
+        Key("enter");
+        MoreOptionsTable table;
+        if (Expect(MoreOptions_Table(&table), "more_options: Enter on the row again does not open the page"))
+            Expect(table.scroll == 0 && MoreOptions_CursorName() == first,
+                   Fmt("more_options: opened again, the table starts at line %d on %s", table.scroll,
+                       MoreOptions_CursorName()));
 
         // Presets: changed, Modern, Undo preset.
         Fresh(kExpPage);

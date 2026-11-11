@@ -406,7 +406,10 @@ void Bindings_Close() {
     g_swap.action = -1;
 }
 
-bool Bindings_Active() { return Menu_TopPage() >= P_KEYS; }
+bool Bindings_Active() {
+    const int p = Menu_TopPage();
+    return p >= P_KEYS && p < P_KEY_GROUP + KEY_GROUPS;
+}
 
 void Bindings_GroupOpened() { g_column = 0; }
 
