@@ -932,8 +932,168 @@ static void PutCursorOn(RowType type, int arg) {
     }
 }
 
+// ── The pointer (EPmager, 2026-11-11: the prototype took no mouse) ──
+// As lba2cc's game menu: hover moves the cursor when the mouse moves, a press puts it there
+// and a release on the same target acts. The right button is Esc, the wheel Up and Down.
+
+typedef MenuPoint PointTarget;
+enum { POINT_MAX = 96 };
+static PointTarget g_points[POINT_MAX];
+static int g_pointCount;
+static PointTarget g_press;  // what the left button went down on
+static bool g_pressOn;
+static int g_wheel;          // notches still to walk, one a frame
+
+void Menu_Point(PointKind kind, S32 x0, S32 y0, S32 x1, S32 y1, int a, int b) {
+    if (g_pointCount < POINT_MAX)
+        g_points[g_pointCount++] = PointTarget{kind, x0, y0, x1, y1, a, b};
+}
+
+int Menu_Points(const MenuPoint **out) {
+    *out = g_points;
+    return g_pointCount;
+}
+
+static const PointTarget *PointAt(S32 x, S32 y) {
+    for (int i = g_pointCount - 1; i >= 0; i--) {
+        const PointTarget &p = g_points[i];
+        if (x >= p.x0 && x <= p.x1 && y >= p.y0 && y <= p.y1)
+            return &p;
+    }
+    return NULL;
+}
+
+static bool SameTarget(const PointTarget &a, const PointTarget &b) {
+    return a.kind == b.kind && a.a == b.a && a.b == b.b;
+}
+
+static void CursorTo(int page, int row) {
+    if (!g_depth || TopPage() != page)
+        return;
+    Place &t = g_stack[g_depth - 1];
+    if (t.row == row || row < 0 || row >= g_pages[page].count || !RowShown(g_pages[page], row))
+        return;
+    t.row = row;
+    const Row *r = CursorRow();
+    Trace("cursor %s (pointer)", r ? (r->type == R_PRESET_ROW ? "preset row" : RowLabel(*r)) : "-");
+}
+
+// The cursor where the pointer is.
+static void PointTo(const PointTarget &p) {
+    switch (p.kind) {
+    case POINT_ROW:
+        CursorTo(p.a, p.b);
+        break;
+    case POINT_CHIP:
+        CursorTo(TopPage(), p.a);
+        Bindings_PointChip(p.b);
+        break;
+    case POINT_STEP:
+    case POINT_SLIDER:
+        CursorTo(TopPage(), p.b);
+        break;
+    case POINT_ANSWER:
+        if (Bindings_Busy()) {
+            Bindings_PointAnswer(p.a);
+        } else if (g_confirm && g_confirmCursor != p.a) {
+            g_confirmCursor = p.a;
+            Trace("cursor %s (pointer)", g_confirmCursor ? "Yes" : "No");
+        }
+        break;
+    case POINT_KEY:
+        break;
+    }
+}
+
+// A slider's value where the pointer is along its bar.
+static void SlideTo(const PointTarget &p, S32 x) {
+    const Setting &st = kSettings[p.a];
+    S32 w = p.x1 - p.x0;
+    int v = w > 0 ? (int)(((x - p.x0) * st.max + w / 2) / w) : 0;
+    v = v < 0 ? 0 : v > st.max ? st.max : v;
+    if (v != g_val[p.a]) {
+        g_val[p.a] = v;
+        char buf[32];
+        Trace("set %s=%s (pointer)", st.id, ValueText(p.a, buf, sizeof buf));
+    }
+}
+
+static void UpdatePointer() {
+    HostPointer in;
+    Host_Pointer(&in);
+    const PointTarget *at = PointAt(in.x, in.y);
+    if (Bindings_Waiting()) {
+        // A click is not a key to bind: only the legend's Cancel and the right button act.
+        g_wheel = 0;
+        if (in.pressed) {
+            g_pressOn = at && at->kind == POINT_KEY;
+            if (g_pressOn)
+                g_press = *at;
+        }
+        if (in.released && g_pressOn) {
+            g_pressOn = false;
+            if (at && SameTarget(*at, g_press))
+                Host_PressNow((UiKey)at->a);
+        }
+        if (in.rightPressed)
+            Host_PressNow(KEY_ESC);
+        return;
+    }
+    if (g_console || g_closed) {
+        if (in.pressed)
+            Host_PressNow(g_closed ? KEY_ENTER : KEY_ESC);  // a click closes the console, reopens Options
+        else if (in.rightPressed && g_console)
+            Host_PressNow(KEY_ESC);
+        return;
+    }
+    if (in.moved && at && !in.held)
+        PointTo(*at);
+    if (in.pressed) {
+        g_pressOn = at != NULL;
+        if (at) {
+            g_press = *at;
+            PointTo(*at);
+            if (at->kind == POINT_SLIDER)
+                SlideTo(*at, in.x);
+        }
+    } else if (in.held && in.moved && g_pressOn && g_press.kind == POINT_SLIDER) {
+        SlideTo(g_press, in.x);  // dragged along the bar, even off it
+    }
+    if (in.released && g_pressOn) {
+        g_pressOn = false;
+        if (at && SameTarget(*at, g_press)) {
+            switch (at->kind) {
+            case POINT_ROW:
+            case POINT_CHIP:
+            case POINT_ANSWER:
+                Host_PressNow(KEY_ENTER);
+                break;
+            case POINT_STEP:
+                Host_PressNow(at->a < 0 ? KEY_LEFT : KEY_RIGHT);
+                break;
+            case POINT_KEY:
+                Host_PressNow((UiKey)at->a);
+                break;
+            case POINT_SLIDER:
+                break;
+            }
+        }
+    }
+    if (in.rightPressed)
+        Host_PressNow(KEY_ESC);
+    g_wheel += in.wheel;
+    if (g_wheel > 0) {
+        Host_PressNow(KEY_UP);
+        g_wheel--;
+    } else if (g_wheel < 0) {
+        Host_PressNow(KEY_DOWN);
+        g_wheel++;
+    }
+}
+
 void Menu_Update() {
     SyncView();
+    UpdatePointer();
     if (Bindings_Busy()) {  // waiting for a key, or asking about one another action has
         Bindings_UpdateBusy();
         return;
@@ -1078,7 +1238,7 @@ void Menu_RowLabelCentred(S32 x0, S32 x1, S32 yc, const char *s, U8 colour, bool
 }
 
 // One column: the 1997 row, "Label: Value" in one string, sliders as fills.
-static void DrawColumnRow(const Row &r, S32 x0, S32 y0, S32 x1, S32 y1, bool cursor) {
+static void DrawColumnRow(const Row &r, int row, S32 x0, S32 y0, S32 x1, S32 y1, bool cursor) {
     S32 yc = (y0 + y1) / 2;
     char text[160], val[48];
     RowFill fill = cursor ? FILL_CURSOR : FILL_SHADE;
@@ -1120,10 +1280,13 @@ static void DrawColumnRow(const Row &r, S32 x0, S32 y0, S32 x1, S32 y1, bool cur
     d.setting = r.type == R_SETTING;
     d.textLeft = (x0 + x1) / 2 - Ui_TextWidth(text) / 2;
     d.textRight = (x0 + x1) / 2 + Ui_TextWidth(text) / 2 + 8;  // 8: the original's side padding
+    Menu_Point(POINT_ROW, x0, y0, x1, y1, TopPage(), row);
+    if (slider && cursor && active && kSettings[r.arg].kind == K_SLIDER)
+        Menu_Point(POINT_SLIDER, x0, y0, x1, y1, r.arg, row);
 }
 
 // Wide: label at the pane's one edge, value in a column on the right.
-static void DrawWideRow(const char *pane, const Row &r, S32 x0, S32 y0, S32 x1, S32 y1, RowFill fill) {
+static void DrawWideRow(const char *pane, const Row &r, int row, S32 x0, S32 y0, S32 x1, S32 y1, RowFill fill) {
     S32 yc = (y0 + y1) / 2;
     char label[160], val[48];
     bool active = RowActive(r);
@@ -1161,6 +1324,9 @@ static void DrawWideRow(const char *pane, const Row &r, S32 x0, S32 y0, S32 x1, 
     d.setting = r.type == R_SETTING;
     d.textLeft = x0 + 16;
     d.textRight = x0 + 16 + Ui_TextWidth(label);
+    Menu_Point(POINT_ROW, x0, y0, x1, y1, TopPage(), row);
+    if (barRow && fill == FILL_CURSOR && active)
+        Menu_Point(POINT_SLIDER, x0, y0, x1, y1, r.arg, row);
 
     const S32 valueRight = x1 - 24;
     S32 valueLeft = 0;  // where a value starts: the label's room ends 8 before its marks
@@ -1188,6 +1354,9 @@ static void DrawWideRow(const char *pane, const Row &r, S32 x0, S32 y0, S32 x1, 
         if (fill == FILL_CURSOR && active && st.kind != K_SLIDER) {
             Ui_ChangeMarks(left - 17, valueRight + 17, yc);  // in the padding: the value never moves
             d.marks = true;
+            // Each arrow and the padding around it (Triangle: 10 wide from its tip).
+            Menu_Point(POINT_STEP, left - 17 - 6, y0, left - 3, y1, -1, row);
+            Menu_Point(POINT_STEP, valueRight + 3, y0, valueRight + 17 + 6, y1, +1, row);
         }
     } else if (r.type == R_ACTION && r.arg == A_CONSOLE) {
         // The version where a value goes, in the dimmed grey: it reads, it does not change.
@@ -1307,6 +1476,26 @@ static void KeyText(const char *key, char *out, size_t n) {
     }
 }
 
+// A legend entry the pointer can press: the key its word stands for. The arrows' entries
+// (Adjust, and Choose on a question) take no click: the rows and arrows are pointed at.
+static void LegendPoint(S32 x0, S32 y0, S32 x1, S32 y1, const char *key, const char *word) {
+    static const struct {
+        const char *word;
+        UiKey key;
+    } kWordKeys[] = {
+        {"Back", KEY_ESC},  {"Cancel", KEY_ESC},  {"Modern", KEY_ESC},     {"Close", KEY_ESC},
+        {"Open", KEY_ENTER}, {"Change", KEY_ENTER}, {"Answer", KEY_ENTER}, {"Choose", KEY_ENTER},
+        {"Clear", KEY_DEL},  {"Defaults", KEY_DEL}, {"Keyboard", KEY_TAB}, {"Gamepad", KEY_TAB},
+    };
+    if ((key[0] == '\x11' || key[0] == '\x18') && !strchr(key, CHIP_AND[0]))
+        return;
+    for (const auto &w : kWordKeys)
+        if (!strcmp(word, w.word)) {
+            Menu_Point(POINT_KEY, x0, y0, x1, y1, w.key);
+            return;
+        }
+}
+
 static void LegendRecord(int i, const char *key, const char *word) {
     char item[64], k[32];
     KeyText(key, k, sizeof k);
@@ -1331,6 +1520,8 @@ static void DrawLegendStacked(S32 x, S32 y0, const char **keys, const char **wor
         Ui_Chip(x + chipW - c, y, keys[i], scale);
         Ui_Word(x + chipW + 4 * scale, y + chipH / 2 - 4 * scale, LegendWord(words[i]), INK_CONFIG_MENU, scale);
         LegendRecord(i, keys[i], words[i]);
+        LegendPoint(x + chipW - c, y - 1, x + chipW + 4 * scale + Ui_WordWidth(LegendWord(words[i]), scale), y + chipH,
+                    keys[i], words[i]);
     }
 }
 
@@ -1345,6 +1536,7 @@ static void DrawConfirm(const char *pane, S32 x0, S32 x1, S32 y0) {
         RowFill fill = i == g_confirmCursor ? FILL_CURSOR : FILL_SHADE;
         Ui_RowBackground(x0, ry0, x1, ry0 + ROW_H, fill);
         DrawnRow &d = Menu_Record(pane, answers[i], "", fill, x0, ry0, x1, ry0 + ROW_H);
+        Menu_Point(POINT_ANSWER, x0, ry0, x1, ry0 + ROW_H, i);
         if (centred) {
             Menu_RowLabelCentred(x0, x1, yc, answers[i], INK_WHITE, false, i == g_confirmCursor);
             d.textLeft = (x0 + x1) / 2 - Ui_TextWidth(answers[i]) / 2;
@@ -1413,6 +1605,8 @@ static S32 DrawLegendRow(S32 x, S32 y, const char **keys, const char **words, in
             Ui_Chip(x + w, y, keys[i], scale);
             Ui_Word(x + w + c + 4 * scale, y + 2 * scale, LegendWord(words[i]), INK_CONFIG_MENU, scale);
             LegendRecord(i, keys[i], words[i]);
+            LegendPoint(x + w, y - 1, x + w + c + 4 * scale + Ui_WordWidth(LegendWord(words[i]), scale), y + 12 * scale,
+                        keys[i], words[i]);
         }
         w += c + 4 * scale + Ui_WordWidth(LegendWord(words[i]), scale);
     }
@@ -1496,7 +1690,7 @@ static void DrawColumn() {
         // The 1997 width: LargeurMenu 550, centred.
         S32 x0 = W / 2 - 275, x1 = W / 2 + 275;
         for (int i = g_scroll; i < g_scroll + visible; i++) {
-            DrawColumnRow(p.rows[shown[i]], x0, y, x1, y + ROW_H, i == cursor);
+            DrawColumnRow(p.rows[shown[i]], shown[i], x0, y, x1, y + ROW_H, i == cursor);
             y += ROW_PITCH;
         }
         if (visible < count)
@@ -1551,7 +1745,7 @@ static void DrawWide() {
                 fill = FILL_CURSOR;
             else if (sw_greencurrent && row.type == R_PRESET_CHOICE && !g_first && row.arg == g_preset)
                 fill = FILL_CURRENT;  // the chosen preset wears the current-value plasma, as in the column
-            DrawWideRow("wide", row, x0, y, x1, y + ROW_H, fill);
+            DrawWideRow("wide", row, shown[i], x0, y, x1, y + ROW_H, fill);
             y += ROW_PITCH;
         }
         if (visible < n)
@@ -1692,6 +1886,7 @@ void Menu_Draw() {
     ScreenFont_BeginFrame();
     SyncView();
     g_drawnCount = 0;
+    g_pointCount = 0;
     g_helpBox.shown = false;
     g_helpBox.x0 = g_helpBox.y0 = g_helpBox.x1 = g_helpBox.y1 = 0;  // where it was is no help on a new screen
     g_voiceLines = g_voiceNeeded = g_voiceMax = g_voiceWidth = 0;
@@ -2069,6 +2264,15 @@ void Menu_WriteState(FILE *f) {
         fprintf(f, ",\"cursor_value\":\"%s\"", !isValue ? "none" : steps ? "enter steps" : "enter leaves");
     }
     fprintf(f, ",\"clip\":[%d,%d,%d,%d]", (int)ClipXMin, (int)ClipYMin, (int)ClipXMax, (int)ClipYMax);
+    // What the pointer can point at, as the last draw placed it: [kind, x0, y0, x1, y1, a, b].
+    static const char *const kPointKinds[] = {"row", "chip", "answer", "step", "slider", "key"};
+    fprintf(f, ",\"points\":[");
+    for (int i = 0; i < g_pointCount; i++) {
+        const PointTarget &p = g_points[i];
+        fprintf(f, "%s[\"%s\",%d,%d,%d,%d,%d,%d]", i ? "," : "", kPointKinds[p.kind], (int)p.x0, (int)p.y0, (int)p.x1,
+                (int)p.y1, p.a, p.b);
+    }
+    fprintf(f, "]");
     fprintf(f, ",\"console\":\"%s\",\"console_bottom\":%d,\"version\":", g_console == CON_FULL ? "full" : g_console == CON_READONLY ? "read-only" : "closed",
             g_console ? (int)g_consoleBottom : -1);
     Menu_JsonString(f, kVersion);

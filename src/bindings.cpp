@@ -660,6 +660,23 @@ void Bindings_Clear() {
 }
 
 bool Bindings_Busy() { return g_waiting || g_swap.action >= 0 || g_reset.asking; }
+bool Bindings_Waiting() { return g_waiting; }
+
+void Bindings_PointChip(int chip) {
+    int cols[3];
+    if (chip >= 0 && chip < Columns(cols) && chip != g_column) {
+        g_column = chip;
+        Trace("chip %s (pointer)", ColumnHead(cols[chip]));
+    }
+}
+
+void Bindings_PointAnswer(int answer) {
+    int &a = g_reset.asking ? g_reset.answer : g_swap.answer;
+    if (a != answer) {
+        a = answer;
+        Trace("cursor %s (pointer)", a ? "Yes" : "No");
+    }
+}
 
 // The wait for a key, and the question about a key another action has: each takes every key.
 void Bindings_UpdateBusy() {
@@ -796,7 +813,7 @@ static void ChipLayout(S32 rowX1, const int *cols, int ncols, S32 *x0, S32 *w) {
 // gives a head 1 px more and puts a 2x key name on the action name's cap band.
 static S32 ChipTop(S32 yc, S32 s) { return yc - Ui_KeyChipHeight(s) / 2 + (HeadsInRow() ? 1 : 0); }
 
-static void DrawActionRow(int action, S32 x0, S32 y0, S32 x1, S32 y1, const int *cols, int ncols, bool cursorRow,
+static void DrawActionRow(int action, int row, S32 x0, S32 y0, S32 x1, S32 y1, const int *cols, int ncols, bool cursorRow,
                           const char *pane) {
     S32 yc = (y0 + y1) / 2;
     Ui_RowBackground(x0, y0, x1, y1, FILL_SHADE);
@@ -810,6 +827,7 @@ static void DrawActionRow(int action, S32 x0, S32 y0, S32 x1, S32 y1, const int 
 
     S32 s = ChipScale(), ch = Ui_KeyChipHeight(s);
     DrawnRow &d = Menu_Record(pane, kActions[action].name, "", FILL_SHADE, x0, y0, x1, y1);
+    Menu_Point(POINT_ROW, x0, y0, x1, y1, Menu_TopPage(), row);
     d.textLeft = x0 + 16;
     d.textRight = x0 + 16 + Ui_TextWidth(kActions[action].name);
     if (d.textRight + 8 > cx[0])
@@ -824,6 +842,7 @@ static void DrawActionRow(int action, S32 x0, S32 y0, S32 x1, S32 y1, const int 
         bool red = ConflictOf(action, c) >= 0;
         S32 cy = ChipTop(yc, s);
         bool fits = Ui_KeyChip(cx[i], cy, cw[i], name, s, fill, red);
+        Menu_Point(POINT_CHIP, cx[i], cy, cx[i] + cw[i] - 1, cy + ch - 1, row, i);
         if (g_chipCount < 32) {
             DrawnChip &k = g_chips[g_chipCount++];
             k.action = action;
@@ -920,6 +939,7 @@ static void DrawAnswers(S32 x0, S32 x1, S32 top, const char *pane, const char *c
         RowFill fill = i == answer ? FILL_CURSOR : FILL_SHADE;
         Ui_RowBackground(x0, y0, x1, y0 + ROW_H, fill);
         DrawnRow &d = Menu_Record(pane, label, "", fill, x0, y0, x1, y0 + ROW_H);
+        Menu_Point(POINT_ANSWER, x0, y0, x1, y0 + ROW_H, i);
         if (centred) {
             Menu_RowLabelCentred(x0, x1, yc, shown, INK_WHITE, true, i == answer);
             d.textLeft = (x0 + x1) / 2 - Ui_TextWidthAsIs(shown) / 2;
@@ -974,7 +994,7 @@ static void DrawActions(S32 x0, S32 x1, S32 headsTop, S32 limit, const char *pan
     S32 y = top;
     int first = GroupFirst(g);
     for (int i = scroll; i < scroll + visible; i++) {
-        DrawActionRow(first + i, x0, y, x1, y + ROW_H, cols, ncols, i == row, pane);
+        DrawActionRow(first + i, i, x0, y, x1, y + ROW_H, cols, ncols, i == row, pane);
         y += ROW_PITCH;
     }
     if (HeadsInRow() && visible > 0)
@@ -999,6 +1019,7 @@ static void DrawWideControls() {
             Ui_RowBackground(x0, y, x1, y + ROW_H, fill);
             Ui_TextInRoom(x0 + 16, x1 - 16, y + ROW_H / 2 - 18, Ui_Tr(kGroups[g].name), INK_WHITE, fill == FILL_CURSOR);
             DrawnRow &d = Menu_Record("bindings-left", kGroups[g].name, "", fill, x0, y, x1, y + ROW_H);
+            Menu_Point(POINT_ROW, x0, y, x1, y + ROW_H, P_KEYS, g + 1);  // row 0 is Return, not shown wide
             d.textLeft = x0 + 16;
             d.textRight = x0 + 16 + Ui_TextWidth(kGroups[g].name);
             y += ROW_PITCH;
@@ -1057,6 +1078,7 @@ static void DrawColumnControls() {
             Ui_RowBackground(x0, y, x1, y + ROW_H, fill);
             Menu_RowLabelCentred(x0, x1, y + ROW_H / 2, label, INK_WHITE, false, i == cursor);
             DrawnRow &d = Menu_Record("column", label, "", fill, x0, y, x1, y + ROW_H);
+            Menu_Point(POINT_ROW, x0, y, x1, y + ROW_H, P_KEYS, i);
             d.textLeft = (x0 + x1) / 2 - Ui_TextWidth(label) / 2;
             d.textRight = (x0 + x1) / 2 + Ui_TextWidth(label) / 2 + 8;
             y += ROW_PITCH;

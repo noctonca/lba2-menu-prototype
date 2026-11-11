@@ -76,6 +76,25 @@ bool Host_Pressed(UiKey k);
 // The control channel presses keys through here; they count on the next frame.
 void Host_Inject(UiKey k);
 bool Host_KeyByName(const char *name, UiKey *out);
+// A key pressed this frame, as if typed: what a click on the menu stands for.
+void Host_PressNow(UiKey k);
+
+// The mouse (or a finger, which arrives as one), in the canvas's logical pixels, this frame.
+struct HostPointer {
+    S32 x, y;
+    bool moved;         // it moved since the last frame
+    bool held;          // the left button is down
+    bool pressed;       // the left button went down this frame
+    bool released;      // and up
+    bool rightPressed;  // the right button went down this frame
+    S32 wheel;          // notches turned, up positive
+};
+void Host_Pointer(HostPointer *out);
+// A script's mouse: `mouse X Y` moves it, `click [right]` presses and lets go a frame
+// later, `wheel N` turns it.
+void Host_InjectPointer(S32 x, S32 y);
+void Host_InjectClick(bool right);
+void Host_InjectWheel(S32 notches);
 const char *Host_KeyName(UiKey k);
 
 // Raw keys, for rebinding. A code is an SDL scancode (1..255) or

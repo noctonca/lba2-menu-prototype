@@ -475,10 +475,13 @@ static void DrawTable(S32 px0, S32 px1, S32 py0, S32 py1) {
         S32 vx = valueRight + 1 - Ui_SmallWidth(val, s);
         Ui_Small(vx, y, val, changed ? INK_COUNT : cursor ? INK_WHITE : INK_CONFIG_MENU, s);
         S32 left = vx, right = vx + Ui_SmallWidth(val, s) - 1;  // what is drawn on the right, for the record
+        Menu_Point(POINT_ROW, d.x0, d.y0, d.x1, d.y1, P_MORE, i);
         if (cursor) {
             left = vx - 12 * s;
             Ui_Small(left, y, "\x11", INK_WHITE, s);
             Ui_Small(right + 1 + 4 * s, y, "\x10", INK_WHITE, s);
+            Menu_Point(POINT_STEP, left - 2 * s, d.y0, left + 9 * s, d.y1, -1, i);
+            Menu_Point(POINT_STEP, right + 1 + 3 * s, d.y0, right + 14 * s, d.y1, +1, i);
             right += 12 * s;
         }
         snprintf(d.text, sizeof d.text, "%s", kTuning[i].name);

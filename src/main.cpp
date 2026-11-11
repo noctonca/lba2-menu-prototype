@@ -23,6 +23,9 @@
 //   press <name>         a raw key for rebinding: an SDL key name ("J", "Left Alt",
 //                        "Keypad 5") or pad:<a|b|x|y|lb|rb|lt|rt|start|back|ls|rs|dpad-up|lstick-left...>
 //   wait <frames>        let frames pass
+//   mouse <x> <y>        move the pointer there, in the canvas's logical pixels
+//   click [right]        press the left (or right) button and let go a frame later
+//   wheel <notches>      turn the wheel, up positive
 //   state                print the state as one JSON line: "state {...}"
 //   shot <path> [scale]  write the screen as a PNG (logical size x scale)
 //   switch <name> <v>    overlay padnames keyboard whole
@@ -102,6 +105,20 @@ static bool RunCommand(Runner &r, const char *line) {
             return false;
         }
         r.waitFrames = 1;
+    } else if (!strcmp(cmd, "mouse")) {
+        if (n < 3) {
+            printf("err mouse needs x y\n");
+            return false;
+        }
+        Host_InjectPointer(atoi(a), atoi(b));
+        r.waitFrames = 1;
+    } else if (!strcmp(cmd, "click")) {
+        Host_InjectClick(n >= 2 && !strcmp(a, "right"));
+        r.waitFrames = 2;  // down, then up
+    } else if (!strcmp(cmd, "wheel")) {
+        int notches = n >= 2 ? atoi(a) : 1;
+        Host_InjectWheel(notches);
+        r.waitFrames = (U32)(notches < 0 ? -notches : notches);
     } else if (!strcmp(cmd, "wait")) {
         r.waitFrames = (U32)atoi(a);
     } else if (!strcmp(cmd, "measure")) {

@@ -1624,6 +1624,81 @@ struct Walker {
         Devices();
         Languages();
         PadNames();
+        Pointer();
+    }
+
+    void Mouse(S32 x, S32 y) {
+        path.push_back(Fmt("mouse %d %d", (int)x, (int)y));
+        Host_InjectPointer(x, y);
+        Frame();
+    }
+    void Click() {
+        path.push_back("click");
+        Host_InjectClick(false);
+        Frame();
+        Frame();
+    }
+
+    // The pointer (2026-11-12): on every page, the mouse over a row's target puts the cursor on
+    // the row drawn there, and a click on the legend's Back goes back one, as Esc does.
+    void Pointer() {
+        if (opt->only)
+            return;
+        std::vector<const char *> pages(kPages, kPages + sizeof kPages / sizeof kPages[0]);
+        pages.push_back("Keys and buttons");
+        pages.push_back("More options");
+        const S32 W = (S32)Host_LogicalW(), H = (S32)Host_LogicalH();
+        for (const char *page : pages) {
+            Fresh(page);
+            const MenuPoint *pts;
+            int n = Menu_Points(&pts);
+            std::vector<MenuPoint> targets(pts, pts + n);
+            int rowsSeen = 0;
+            for (const MenuPoint &p : targets) {
+                Expect(p.x0 >= 0 && p.y0 >= 0 && p.x1 < W && p.y1 < H && p.x0 <= p.x1 && p.y0 <= p.y1,
+                       Fmt("pointer: a target off the canvas on %s: %d,%d-%d,%d", page, (int)p.x0, (int)p.y0, (int)p.x1, (int)p.y1));
+                if (p.kind != POINT_ROW)
+                    continue;
+                rowsSeen++;
+                const S32 x = (p.x0 + p.x1) / 2, y = (p.y0 + p.y1) / 2;
+                Mouse(x, y);
+                // The row drawn under the pointer is the cursor's (More options draws its own lines).
+                const DrawnRow *rows;
+                int nr = Menu_DrawnRows(&rows);
+                const char *under = NULL;
+                bool isCursor = false;
+                for (int i = 0; i < nr; i++)
+                    if (strcmp(rows[i].pane, "title") && x >= rows[i].x0 && x <= rows[i].x1 && y >= rows[i].y0 && y <= rows[i].y1) {
+                        under = rows[i].label;
+                        isCursor = !strcmp(rows[i].fill, "cursor");
+                    }
+                if (!MoreOptions_Active())
+                    Expect(under && isCursor, Fmt("pointer: over %s on %s, the cursor is not on the row drawn there",
+                                                  under ? Repr(under).c_str() : "nothing", page));
+                else
+                    Expect(Menu_TopRow() == p.b, Fmt("pointer: over More options row %d, the cursor is on %d", p.b, Menu_TopRow()));
+            }
+            Expect(rowsSeen > 0, Fmt("pointer: no row on %s takes the pointer", page));
+            // Back, from the legend.
+            Frame();
+            n = Menu_Points(&pts);
+            int depth0 = 0;
+            Where(&depth0);
+            bool back = false;
+            for (int i = 0; i < n && !back; i++) {
+                if (pts[i].kind == POINT_KEY && pts[i].a == KEY_ESC) {
+                    back = true;
+                    const MenuPoint p = pts[i];
+                    Mouse((p.x0 + p.x1) / 2, (p.y0 + p.y1) / 2);
+                    Click();
+                    int depth1 = 0;
+                    Where(&depth1);
+                    Expect(depth1 == depth0 - 1 || (depth0 == 1 && depth1 == 0),
+                           Fmt("pointer: Back in the legend on %s leaves depth %d, not %d", page, depth1, depth0 - 1));
+                }
+            }
+            Expect(back, Fmt("pointer: no Back in the legend on %s takes a click", page));
+        }
     }
 
     // The pad's family from the names browsers and SDL give (2026-11-12): the vendor a

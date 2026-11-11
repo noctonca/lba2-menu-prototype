@@ -99,6 +99,15 @@ Game data: `LBA2_GAME_DIR`, or `--data DIR`; the default is
 `~/code/lba-hacking/assets/lba2-activision-us-cd` (a disc image is mounted as
 the engine does).
 
+The mouse works as lba2cc's game menu has it: moving it puts the cursor on the
+row, chip or answer under it, and a click (press and let go on the same thing)
+does what Enter does. A value's arrows step it, a slider takes the value where
+it is clicked or dragged, and a legend entry presses its key (Back, Defaults,
+Keyboard and the rest). The right button is Esc, the wheel Up and Down. While
+the game waits for a key to bind, only the right button and the legend's
+Cancel act. The targets are placed as each page draws, so a click can't miss
+what is drawn.
+
 ### Screen sizes
 
 The screen size changes in place, as lba2cc's own resolution switch does it:
@@ -236,7 +245,7 @@ Every run can be steered and read back without a person at the keys.
 Commands, one per line: `key <up|down|left|right|enter|esc|tab|del|f1..f12> [count]`,
 `press <key>` (a raw key for rebinding: an SDL name such as `J`, `Left Alt` or
 `Keypad 5`, or `pad:a`, `pad:lb`, `pad:lstick-up` ...),
-`wait <frames>`, `state`, `measure`, `widths <file> [voice width]`, `shot <path.png> [scale]`, `switch <name> <value>`,
+`wait <frames>`, `mouse <x> <y>` (logical pixels), `click [right]`, `wheel <notches>`, `state`, `measure`, `widths <file> [voice width]`, `shot <path.png> [scale]`, `switch <name> <value>`,
 `set <setting> <value>`, `open <page name>`, `size <WxH>`, `quit`.
 
 `measure` prints the width in the game font of every setting's label, its

@@ -23,6 +23,9 @@ void Bindings_Enter();             // Enter on a binding row: wait for a key
 void Bindings_Clear();             // Del on a binding row
 void Bindings_AskReset();          // Del on the groups page: asks, then the device's defaults
 bool Bindings_Busy();              // waiting for a key, or asking
+bool Bindings_Waiting();           // waiting for a key: the pointer stays out of it
+void Bindings_PointChip(int chip); // the pointer on a chip of the cursor's row: 0 the first shown
+void Bindings_PointAnswer(int answer);  // the pointer on an answer of the question asked
 void Bindings_UpdateBusy();        // while busy: takes every key
 void Bindings_Say();               // the help, or what the wait or the question says
 void Bindings_Draw();

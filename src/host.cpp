@@ -16,6 +16,7 @@
 #include <SYSTEM/KEYBOARD_KEYS.H>
 #include <SYSTEM/LE.H>
 #include <SYSTEM/LOADMALL.H>
+#include <SYSTEM/MOUSE.H>
 #include <SYSTEM/RANDOM.H>
 #include <SYSTEM/TIMER.H>
 #include <SYSTEM/WINDOW.H>
@@ -104,7 +105,18 @@ U32 Host_PhysH() { return s_physH; }
 
 static void PadRemoved(uint32_t id);
 
+// Button presses and releases counted as they arrive: LIB386's Click says only what is held
+// when the frame reads it, so a click quicker than a frame (a browser's, a touchpad tap) was lost.
+static int s_leftDowns, s_leftUps, s_rightDowns;
+
 static int EventFilter(const PlatformEvent *event) {
+    if (event->type == PLATFORM_EVENT_MOUSE_BUTTON_DOWN || event->type == PLATFORM_EVENT_MOUSE_BUTTON_UP) {
+        const bool down = event->type == PLATFORM_EVENT_MOUSE_BUTTON_DOWN;
+        if (event->button.button == 1)
+            (down ? s_leftDowns : s_leftUps)++;
+        else if (event->button.button == 3 && down)
+            s_rightDowns++;
+    }
     if (event->type == PLATFORM_EVENT_QUIT)
         s_quit = true;
     else if (event->type == PLATFORM_EVENT_GAMEPAD_REMOVED)
@@ -141,6 +153,25 @@ EM_JS(int, WebCanvasCssW, (), { var c = document.getElementById('canvas'); retur
 EM_JS(int, WebCanvasCssH, (), { var c = document.getElementById('canvas'); return c ? Math.round(c.getBoundingClientRect().height) : 0; });
 // CSS pixels to the display's, as SDL counts them at a high pixel density.
 EM_JS(int, WebCanvasPx, (int css), { return Math.round(css * (window.devicePixelRatio || 1)); });
+// The pointer over the canvas in thousandths of its CSS box, from the canvas's own events:
+// SDL's window-to-canvas mapping came out at twice the place on a 2x display (2026-11-12).
+// -1 before the pointer has been over it.
+EM_JS(int, WebPointerMilli, (int axis), {
+    var c = document.getElementById('canvas');
+    if (!c) return -1;
+    if (!Module.ptrHooked) {
+        Module.ptrHooked = true;
+        Module.ptrAt = [-1, -1];
+        var at = function (e) {
+            var r = c.getBoundingClientRect();
+            if (r.width > 0 && r.height > 0)
+                Module.ptrAt = [Math.round((e.clientX - r.left) * 1000 / r.width), Math.round((e.clientY - r.top) * 1000 / r.height)];
+        };
+        c.addEventListener('pointermove', at);
+        c.addEventListener('pointerdown', at);
+    }
+    return Module.ptrAt[axis];
+});
 
 // Give SDL's window the canvas's CSS size, so its pixels are the page's at the
 // display's pixel ratio. SDL only looks on the browser's resize events, and at
@@ -515,6 +546,7 @@ static const char *kKeyNames[KEY_COUNT] = {
 
 void Host_Inject(UiKey k) { s_injected[k] = true; }
 
+
 bool Host_KeyByName(const char *name, UiKey *out) {
     for (int k = 0; k < KEY_COUNT; k++) {
         if (strcmp(kKeyNames[k], name) == 0) {
@@ -791,10 +823,65 @@ S32 Host_PadFamily() {
     return Host_PadFamilyOfName(g_platform.input.gamepad_name(s_pad));
 }
 
+// ── The pointer ──
+static HostPointer s_ptr;
+static bool s_ptrInjected;        // a script put it; a real move takes it back
+static S32 s_injX, s_injY;
+static bool s_injMoved, s_injDown, s_injRight;
+static S32 s_injWheel;
+
+void Host_InjectPointer(S32 x, S32 y) {
+    s_ptrInjected = true;
+    s_injX = x, s_injY = y;
+    s_injMoved = true;
+}
+void Host_InjectClick(bool right) {
+    if (right)
+        s_injRight = true;
+    else
+        s_injDown = true;
+}
+void Host_InjectWheel(S32 notches) { s_injWheel += notches; }
+void Host_Pointer(HostPointer *out) { *out = s_ptr; }
+
+static void ReadPointer() {
+    const bool realMove = MouseConsumeMotionFlag();
+    if (realMove)
+        s_ptrInjected = false;
+    const bool wasHeld = s_ptr.held;
+    static bool rightHeld;
+    s_ptr.moved = realMove || s_injMoved;
+    s_ptr.x = s_ptrInjected ? s_injX : (S32)MouseX;
+    s_ptr.y = s_ptrInjected ? s_injY : (S32)MouseY;
+#ifdef __EMSCRIPTEN__
+    const int mx = WebPointerMilli(0), my = WebPointerMilli(1);
+    if (!s_ptrInjected && mx >= 0 && my >= 0) {
+        s_ptr.x = (S32)((S64)mx * (S32)s_logW / 1000);
+        s_ptr.y = (S32)((S64)my * (S32)s_logH / 1000);
+        s_ptr.x = s_ptr.x >= (S32)s_logW ? (S32)s_logW - 1 : s_ptr.x;
+        s_ptr.y = s_ptr.y >= (S32)s_logH ? (S32)s_logH - 1 : s_ptr.y;
+    }
+#endif
+    s_ptr.held = (Click & 1) != 0 || s_injDown;
+    s_ptr.pressed = (s_ptr.held && !wasHeld) || s_leftDowns > 0;
+    s_ptr.released = (!s_ptr.held && wasHeld) || (s_leftUps > 0 && !s_ptr.held);
+    const bool right = (Click & 2) != 0;
+    s_ptr.rightPressed = (right && !rightHeld) || s_rightDowns > 0 || s_injRight;
+    rightHeld = right;
+    s_leftDowns = s_leftUps = s_rightDowns = 0;
+    s_ptr.wheel = ConsumeMouseWheelY() + s_injWheel;
+    s_injMoved = s_injDown = s_injRight = false;
+    s_injWheel = 0;
+    if (s_ptr.moved || s_ptr.pressed || s_ptr.rightPressed || s_ptr.wheel)
+        s_lastPad = false;  // the legend names keys again
+}
+
 bool Host_BeginFrame() {
+    ClearMouseBox();  // the canvas as it is now: LIB386 keeps the pointer inside its box
     ManageEvents();
     ManageKeyboard();
     ScanRaw();
+    ReadPointer();
     if (s_fixedDt)
         Timer_FixedDtAdvance();
     s_frame++;
@@ -818,6 +905,7 @@ bool Host_BeginFrame() {
 }
 
 bool Host_Pressed(UiKey k) { return s_pressed[k]; }
+void Host_PressNow(UiKey k) { s_pressed[k] = true; }
 
 void Host_SetHeadless(bool on) { s_headless = on; }
 

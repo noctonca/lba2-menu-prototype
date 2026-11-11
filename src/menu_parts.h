@@ -69,6 +69,24 @@ struct DrawnRow {
 DrawnRow &Menu_Record(const char *pane, const char *label, const char *value, RowFill fill, int x0, int y0, int x1,
                       int y1);
 
+// What the pointer can point at, as the last draw placed it, so a click can't miss what is
+// drawn (lba2cc's game menu once hit-tested at 320 while drawing elsewhere). Later targets lie
+// on top of earlier ones.
+//   POINT_ROW     a row: a = page, b = row. Hover puts the cursor on it, a click is Enter
+//   POINT_CHIP    a binding's chip: a = row, b = chip. Hover puts the cursor on it, a click is Enter
+//   POINT_ANSWER  a question's answer: a = answer. Hover chooses it, a click is Enter
+//   POINT_STEP    a value's arrow: a = -1 or +1, b = row. A click is Left or Right
+//   POINT_SLIDER  a slider's bar: a = setting, b = row. A press or a drag sets the value there
+//   POINT_KEY     a legend entry: a = the UiKey it names. A click presses it
+enum PointKind { POINT_ROW, POINT_CHIP, POINT_ANSWER, POINT_STEP, POINT_SLIDER, POINT_KEY };
+void Menu_Point(PointKind kind, S32 x0, S32 y0, S32 x1, S32 y1, int a, int b = 0);
+struct MenuPoint {
+    PointKind kind;
+    S32 x0, y0, x1, y1;
+    int a, b;
+};
+int Menu_Points(const MenuPoint **out);  // the last draw's, for the self test
+
 // Centred in the row; wider than the row, from its left (8 in) and, with cursor, swinging.
 void Menu_RowLabelCentred(S32 x0, S32 x1, S32 yc, const char *s, U8 colour, bool asIs = false, bool cursor = false);
 void Menu_DrawScrollBar(S32 x0, S32 y0, S32 y1, int first, int visible, int total);
