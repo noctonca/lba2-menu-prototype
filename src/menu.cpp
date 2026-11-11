@@ -322,6 +322,10 @@ enum { BACK_PRESET, BACK_RESET };  // R_BACK_TO_MINE: undoes a preset, or a rese
 static int sw_overlay = 0;
 // Help typed on every cursor move (decided 2026-11-03); 1 shows it whole at once, for the self test.
 static int sw_whole = 0;
+// The chosen preset: "(current)" after its name always; 1 also gives it the green
+// current-value plasma, as before (EPmager, 2026-11-11: green and the blue cursor read alike,
+// so he asked for the words alone). F3; off at start, to show his proposal.
+static int sw_greencurrent = 0;
 
 // What a build off main says: lba2cc's LBA2_VERSION_STRING and the commit's first 7. A release
 // says its number alone. An example; the prototype has no build of its own to name.
@@ -436,7 +440,20 @@ static Page g_pages[P_COUNT] = {
 };
 #undef PAGE
 
-static const char *RowLabel(const Row &r) { return r.type == R_SETTING ? kSettings[r.arg].label : r.label; }
+static bool g_first;       // first-launch screen
+
+static const char *RowLabel(const Row &r) {
+    if (r.type == R_SETTING)
+        return kSettings[r.arg].label;
+    if (r.type == R_PRESET_CHOICE && !g_first && r.arg == g_preset) {
+        static char marked[2][64];  // two rows can be drawn before the first is used
+        static int next;
+        char *out = marked[next++ & 1];
+        snprintf(out, sizeof marked[0], "%s (current)", r.label);  // Ui_Tr takes the parts apart
+        return out;
+    }
+    return r.label;
+}
 static const char *RowHelp(const Row &r) { return r.type == R_SETTING ? kSettings[r.arg].help : r.help; }
 static bool RowActive(const Row &r) { return !r.active || r.active(); }
 
@@ -477,7 +494,6 @@ struct Place {
 static Place g_stack[8];
 static int g_depth;
 static int g_scroll;       // the first shown row drawn: the view's, counted as its layout shows rows
-static bool g_first;       // first-launch screen
 static bool g_confirm;     // a question is up: Classic, or Reset settings
 static int g_confirmCursor;
 enum Question { Q_CLASSIC, Q_RESET };
@@ -1055,7 +1071,7 @@ static void DrawColumnRow(const Row &r, S32 x0, S32 y0, S32 x1, S32 y1, bool cur
     RowFill fill = cursor ? FILL_CURSOR : FILL_SHADE;
     bool active = RowActive(r);
 
-    if (r.type == R_PRESET_CHOICE && !g_first && r.arg == g_preset && !cursor)
+    if (sw_greencurrent && r.type == R_PRESET_CHOICE && !g_first && r.arg == g_preset && !cursor)
         fill = FILL_CURRENT;  // the chosen preset wears the current-value plasma
 
     bool slider = r.type == R_SETTING && (kSettings[r.arg].kind == K_SLIDER || kSettings[r.arg].kind == K_STEPS);
@@ -1520,7 +1536,7 @@ static void DrawWide() {
             RowFill fill = FILL_SHADE;
             if (i == cursor)
                 fill = FILL_CURSOR;
-            else if (row.type == R_PRESET_CHOICE && !g_first && row.arg == g_preset)
+            else if (sw_greencurrent && row.type == R_PRESET_CHOICE && !g_first && row.arg == g_preset)
                 fill = FILL_CURRENT;  // the chosen preset wears the current-value plasma, as in the column
             DrawWideRow("wide", row, x0, y, x1, y + ROW_H, fill);
             y += ROW_PITCH;
@@ -1583,6 +1599,7 @@ static void DrawOverlay() {
         "Prototype keys",
         "F1 this list   F2 / Shift F2 screen size",
         "Drag the window's edge: any screen size",
+        "F3 green plasma on the chosen preset: off / on",
         "F11 pad names: connected / Xbox / PlayStation / Nintendo",
     };
     S32 n = (S32)(sizeof lines / sizeof lines[0]);
@@ -1713,6 +1730,7 @@ static const SwitchDef kSwitches[] = {
     {"overlay", &sw_overlay, 0, 1, 0},
     {"padnames", &sw_padnames, 0, 3, 0},
     {"whole", &sw_whole, 0, 1, 0},
+    {"greencurrent", &sw_greencurrent, 0, 1, 0},
 };
 
 bool Menu_SetSwitch(const char *name, int v) {

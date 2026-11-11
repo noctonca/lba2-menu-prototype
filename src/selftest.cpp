@@ -24,8 +24,8 @@
 #include <vector>
 
 // The switch combinations tools/sweep.py runs, in its order: the pad's names of each
-// family (0 is the connected pad's, Xbox without one).
-static const char *kCombos[] = {"padnames=0", "padnames=2", "padnames=3"};
+// family (0 is the connected pad's, Xbox without one), and the green plasma on the chosen preset.
+static const char *kCombos[] = {"padnames=0", "padnames=2", "padnames=3", "greencurrent=1"};
 
 static const char *kPages[] = {
     "Options", "Preset", "Language and interface", "Display and graphics", "Sound",
@@ -332,6 +332,18 @@ static void Check(std::vector<std::string> *found) {
                 found->push_back(
                     Fmt("pitch: %s is %d tall, not 50", Repr(pr[i]->label).c_str(), pr[i]->y1 - pr[i]->y0));
     }
+    // The Preset page names the chosen preset with "(current)", on that row alone (EPmager,
+    // 2026-11-11: the green plasma alone read like a second cursor).
+    if (!strcmp(Menu_PageName(), "Preset")) {
+        int marked = 0, presets = 0;  // no preset rows while the Classic question is up
+        for (int i = 0; i < n; i++) {
+            const size_t len = strlen(rows[i].label);
+            presets += !strncmp(rows[i].label, "Modern", 6) || !strncmp(rows[i].label, "Classic", 7);
+            marked += len > 10 && !strcmp(rows[i].label + len - 10, " (current)");
+        }
+        if (presets && marked != 1)
+            found->push_back(Fmt("current: %d rows on Preset say (current), not 1", marked));
+    }
     // At most one current-value plasma in a pane.
     for (size_t p = 0; p < paneNames.size(); p++) {
         const std::vector<const DrawnRow *> &pr = panes[paneNames[p]];
@@ -633,7 +645,9 @@ struct Walker {
     }
     bool MoveTo(const char *label) {
         for (int i = 0; i < 24; i++) {
-            if (!strcmp(Menu_CursorLabel(), label))
+            // The chosen preset reads "Modern (current)": the name is enough to find it.
+            const std::string here = Menu_CursorLabel(), marked = std::string(label) + " (current)";
+            if (here == label || here == marked)
                 return true;
             Key("down");
         }

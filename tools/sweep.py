@@ -41,7 +41,7 @@ MORE_OPTIONS_GROUPS = [22, 9, 7, 3, 2]
 MORE_OPTIONS_PAGE = "More options"
 
 # The same as selftest.cpp kCombos: the pad's names of each family.
-COMBOS = ["padnames=0", "padnames=2", "padnames=3"]
+COMBOS = ["padnames=0", "padnames=2", "padnames=3", "greencurrent=1"]
 
 def parse_combo(spec):
     return {k: int(v) for k, v in (part.split("=") for part in spec.split(","))}
@@ -282,6 +282,12 @@ def check(state):
         n = sum(r["fill"] == "current" for r in rows)
         if n > 1:
             problems.append(f"current: {n} current-value rows in the {pane} pane")
+    # The Preset page names the chosen preset with "(current)", on that row alone.
+    if state["page"] == "Preset":
+        presets = [r for r in state["rows"] if r["label"].startswith(("Modern", "Classic"))]
+        marked = sum(r["label"].endswith(" (current)") for r in presets)
+        if presets and marked != 1:
+            problems.append(f"current: {marked} rows on Preset say (current), not 1")
     # Every setting row shows its value.
     for r in state["rows"]:
         if r["setting"] and not r["value"]:

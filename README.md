@@ -143,6 +143,7 @@ own keys:
 | --- | --- |
 | F1 | this list on screen (switch `overlay`) |
 | F2 | the next screen size; Shift+F2 the previous (see Screen sizes) |
+| F3 | the green current-value plasma on the chosen preset, besides its "(current)" (switch `greencurrent`, off at start) |
 | F11 | the pad's names: the connected pad's / Xbox / PlayStation / Nintendo (switch `padnames`) |
 
 Two more switches have no key: `keyboard` 0 plays as a console before a key is

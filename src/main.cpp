@@ -403,6 +403,8 @@ int Lba2Main(int argc, char *argv[]) {
         // The prototype's own keys.
         if (Host_Pressed(KEY_F1))
             Menu_SetSwitch("overlay", !Menu_GetSwitch("overlay"));
+        if (Host_Pressed(KEY_F3))
+            Menu_SetSwitch("greencurrent", !Menu_GetSwitch("greencurrent"));
         if (Host_Pressed(KEY_F11))
             Menu_SetSwitch("padnames", Menu_GetSwitch("padnames") + 1);
         if (Host_Pressed(KEY_F2))

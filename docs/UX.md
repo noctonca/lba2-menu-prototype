@@ -149,7 +149,10 @@ is no pointer, so the cost of a target is the number of key presses to it.
 they know: the 1997 menus, and every console game's menu.
 - 1997: Return to previous menu on top of a one-column sub-page; the plasma
   cursor; the current-value plasma on the entry in use; Enter opens; Esc goes
-  back.
+  back. The entry in use also says "(current)" after its name, and the green
+  plasma is off unless switch `greencurrent` (F3) is on: green beside the
+  blue cursor read as a second cursor (EPmager, 2026-11-11). **[self test,
+  sweep: current]**
 - Consoles: A confirms and B goes back; Left and Right change a value;
   Tab (View) switches device; the prompts name the buttons of the pad in hand.
 - The legend lists exactly the keys the selected row takes, by the name of
