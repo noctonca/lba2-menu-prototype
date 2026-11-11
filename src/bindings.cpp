@@ -932,8 +932,16 @@ static void DrawWideControls() {
             y += ROW_PITCH;
         }
     } else {
-        S32 atop = Ui_Title(x0, x1, top, kGroups[CurrentGroup()].name);
-        DrawActions(x0, x1, atop, Menu_WideRowsLimit(), "bindings-right");
+        // The title and the actions as one block, centred between the top margin and the
+        // band, so a short group (Movement's five) does not leave a gap above the band
+        // (EPmager, 2026-11-11). A group that scrolls fills the room from the top as before.
+        const S32 limit = Menu_WideRowsLimit();
+        S32 fit = (limit - (top + 56) + ROW_GAP) / ROW_PITCH, n = GroupCount(CurrentGroup());
+        S32 shown = n < fit ? n : fit;
+        S32 block = 56 + shown * ROW_PITCH - ROW_GAP;
+        S32 y = top + (limit - top - block > 0 ? (limit - top - block) / 2 : 0);
+        S32 atop = Ui_Title(x0, x1, y, kGroups[CurrentGroup()].name);
+        DrawActions(x0, x1, atop, limit, "bindings-right");
     }
 
     const char *keys[4], *words[4];
@@ -979,8 +987,13 @@ static void DrawColumnControls() {
         Menu_DrawDialogue(keys, words, nk);
         return;
     }
-    // The actions page: column heads, the rows, and the voice below (it asks for the key).
-    DrawActions(x0, x1, 6, Menu_DialogueTop() - 16, "column");
+    // The actions page: column heads, the rows, and the voice below (it asks for the key),
+    // centred above the dialogue window as the one column's pages are when they fit.
+    const S32 limit = Menu_DialogueTop() - 16;
+    S32 fit = (limit - (6 + 22) + ROW_GAP) / ROW_PITCH, n = GroupCount(CurrentGroup());
+    S32 shown = n < fit ? n : fit;
+    S32 block = 22 + shown * ROW_PITCH - ROW_GAP;
+    DrawActions(x0, x1, 6 + (limit - 6 - block > 0 ? (limit - 6 - block) / 2 : 0), limit, "column");
     const char *keys[4], *words[4];
     int nk;
     Legend(keys, words, &nk);
