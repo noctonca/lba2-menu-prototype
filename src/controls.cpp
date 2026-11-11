@@ -656,7 +656,7 @@ static void Say() {
         } else {
             char start[16];
             Controls_StartSaid(start, sizeof start);
-            snprintf(buf, sizeof buf, "Press a button, or %s to keep it.", start);
+            snprintf(buf, sizeof buf, Menu_Tr("Press a button, or %s to keep it."), start);
             text = buf;
         }
     } else if (!g_focusRight) {
@@ -670,7 +670,7 @@ static void Say() {
         if (g_swap.action < 0 && FixedChip(a, c)) {
             char start[16];
             Controls_StartSaid(start, sizeof start);
-            snprintf(buf, sizeof buf, "%s always opens the game menu, so it can't be changed.", start);
+            snprintf(buf, sizeof buf, Menu_Tr("%s always opens the game menu, so it can't be changed."), start);
             text = buf;
         } else if (g_swap.action >= 0) {
             const Action &h = kActions[g_swap.holder];
@@ -679,15 +679,15 @@ static void Say() {
             // One pane at a time shows one group: name the other action's when it is not this
             // one. What each answer leaves it with is on the answer rows.
             if (h.group != g_group)
-                snprintf(where, sizeof where, ", in %s", kGroups[h.group].name);
-            snprintf(buf, sizeof buf, "%s is on %s%s.", key, h.name, where);
+                snprintf(where, sizeof where, Menu_Tr(", in %s"), kGroups[h.group].name);
+            snprintf(buf, sizeof buf, Menu_Tr("%s is on %s%s."), key, h.name, where);
             text = buf;
         } else if (other >= 0) {
             char name[32];
             ChipText(a, c, name, sizeof name);
             // One message at a time (switch clash): the note replaces the help.
             if (Menu_GetSwitch("clash"))
-                snprintf(buf, sizeof buf, "%s is also %s.", name, kActions[other].name);
+                snprintf(buf, sizeof buf, Menu_Tr("%s is also %s."), name, kActions[other].name);
             else
                 snprintf(buf, sizeof buf, "%s %s is also %s.", kActions[a].help, name, kActions[other].name);
             text = buf;

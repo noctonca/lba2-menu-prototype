@@ -51,6 +51,8 @@ void Menu_DrawDialogueIn(S32 x0, S32 y0, S32 x1, S32 y1);
 
 // Say a line in the voice, typed or not as the `typing` switch says.
 void Menu_Say(const char *text);
+// A voice text or format in the Text language (lang/help.tsv); English when it has none.
+const char *Menu_Tr(const char *english);
 void Menu_PageEntered();
 
 void Menu_JsonString(FILE *f, const char *s);
@@ -75,5 +77,6 @@ bool Menu_CursorSetting(bool *active);  // the cursor row is a setting; active: 
 const char *Menu_CursorValue();  // the value drawn on the cursor row last frame
 const char *Menu_PresetLabel();
 const char *Menu_Legend();  // the footer's legend as the last draw had it: "[A] Open  [B] Back"
+const char *Menu_PageMark();  // "1/2" while paged help shows (switch pagemark), else empty
 bool Menu_MoreArrow();      // the last draw showed the dialogue's arrow: more help to come
 const char *Menu_ConsoleMode();  // closed, full or read-only  // the preset row as it reads ("Modern settings, changed")

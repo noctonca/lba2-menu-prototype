@@ -256,17 +256,19 @@ screen: one question, then play.
 the row under the cursor. Help that fits one line in English *(review rule 7)*
 is read; help cut off is not. **[self test: help cut off]**
 
-- **Long help pages on** (decided 2026-11-11). Help longer than its window is
-  said a window at a time, as the demo reel pages a dialogue: each window is
-  typed, held for its words (switch `pace`, 300 ms a word, at least 1.5 s),
-  then the next is typed; the last stays. Moving off the row and back says it
-  again from the start. So help is never cut off; a window's worth is still
-  the aim for the Options pages, and the console help on More options
-  is said whole.
-- **A window with more to come shows the dialogue's arrow** (2026-11-11, after
-  playing on the Xbox): sprites.hqr 6 in the window's bottom-right corner, as
-  MESSAGE.CPP marks a full page; in the wide band at the end of the voice,
-  short of the legend. It goes on the last window. **[self test: device]**
+- **Help never pages** (2026-11-12, replaces "long help pages on"). Menu help
+  stays within its budget, so it fits its window in every Text language; the
+  console help on More options is in the table's own status lines, in the
+  8x8 font, two lines above the default and range (switch `exphelp`), whole
+  and in English. The voice there says the group's help. **[self test: help
+  in N windows, table: row help cut off]**
+- **Paged help says where it is** (2026-11-12, replaces the dialogue's arrow,
+  which asks for a key the menu never waits for). Where help still pages
+  (`exphelp` 0, the list view), "1/2" in the 8x8 font sits in the window's
+  bottom-right corner, in the band short of the legend, and the last window
+  keeps "2/2", so a player who looks late sees there was more. Each window is
+  typed and held for its words (switch `pace`), as the demo reel pages a
+  dialogue. Switch `pagemark` 0 brings back the arrow. **[self test: device]**
 
 **Jakob's Law (the player's own device).** The legend names what the player
 holds (2026-11-11): after a pad press the pad's buttons (A Open, B Back), after
@@ -291,8 +293,15 @@ strip at the value edge, which read badly on a TV (switch `slider=0`).
   voice's two lines hold (about 1,130 px at 620 wide). The 1997 game's own
   translations of their sentences run 1.1x English typically and up to 1.5x
   (German) in their longest tenth, so a translation half as long again still
-  fits. Measure with `widths`; once translations exist, the self test should
-  measure each language's real text.
+  fits. Measure with `widths`.
+- **Every language is measured** (2026-11-12). The voice speaks the Text
+  row's language (`lang/help.tsv`, stand-in translations made to measure;
+  row labels and values stay English). The self test fills each text's
+  formats with long names and checks every language in both fonts: two band
+  lines at 620 px, three dialogue lines at 591 px. Measured: translations run
+  a median 1.08 to 1.19 times English and at most 1.6 to 2.0 times, the
+  largest on short texts; every row's help fits, and the two questions and
+  first launch fit after the Classic question was shortened.
 
 ## Keys
 

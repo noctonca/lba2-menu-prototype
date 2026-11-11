@@ -10,6 +10,7 @@
 // binding screen (design card ExperimentalTable); 0 = the game-font list, a page
 // per group (ExperimentalList).
 extern int sw_exptable;
+extern int sw_exphelp;
 
 void Exp_Open();   // from the "More options" row
 void Exp_Close();  // back to Advanced and reset, as it was
@@ -38,6 +39,8 @@ struct ExpTable {
     int count;           // lines drawn
     const ExpLine *lines;
     int total, scroll;   // lines in the table, the first one drawn
+    const char *rowHelp; // the row's help in the status lines (switch exphelp), "" for none
+    bool rowHelpCut;     // it needed more than its two lines
 };
 bool Exp_Table(ExpTable *out);
 const char *Exp_CursorName();  // the console name under the cursor, "" on the list's groups

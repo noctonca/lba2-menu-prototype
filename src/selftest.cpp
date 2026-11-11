@@ -7,6 +7,7 @@
 #include "controls.h"
 #include "engine.h"
 #include "experimental.h"
+#include "lang.h"
 #include "menu.h"
 #include "menu_parts.h"
 #include "trace.h"
@@ -144,6 +145,14 @@ static void Check(std::vector<std::string> *found) {
     if (v.max && v.needed && v.pages != (v.needed + v.max - 1) / v.max)
         found->push_back(Fmt("help pages: %d lines in %d make %d windows, not %d: %s", v.needed, v.max, v.pages,
                              (v.needed + v.max - 1) / v.max, Repr(v.text).c_str()));
+    // Help never pages (2026-11-12): within budget it fits its window, and console help is in
+    // the More options table's status lines. Only with exphelp 0 or the list view may it page.
+    if (v.pages > 1 && Menu_GetSwitch("exphelp") && (Menu_GetSwitch("exptable") || !Exp_Active()))
+        found->push_back(Fmt("help in %d windows: %s", v.pages, Repr(v.text).c_str()));
+    // Console help in the table's status lines is never cut off.
+    ExpTable rt;
+    if (Exp_Table(&rt) && rt.rowHelpCut)
+        found->push_back(Fmt("table: row help cut off: %s", Repr(rt.rowHelp).c_str()));
     bool help = strcmp(v.where, "none") != 0;
     const DrawnRow *rows;
     int n = Menu_DrawnRows(&rows);
@@ -1425,6 +1434,43 @@ struct Walker {
         Binding(twoDevices);
         PadOnly(twoDevices);
         Devices();
+        Languages();
+    }
+
+    // Every voice text in lang/help.tsv fits its window in every Text language and both
+    // fonts (2026-11-12): two lines of the band (620 px) and three of the 640x480 dialogue
+    // window (591 px); first launch's own window, three lines. Formats are filled with long
+    // names; the fragments they are built from (" and ", ", in %s") are not checked alone.
+    void Languages() {
+        if (opt->only)
+            return;
+        static const char *const kFill[] = {"Right Shift", "Behaviour menu", ", in Magic and items"};
+        for (int font = 0; font < 2; font++) {
+            Menu_Set("font", font);
+            for (int i = 0; i < Lang_Count(); i++) {
+                const char *en = Lang_Text(i, 0);
+                if (en[0] == ' ' || en[0] == ',')
+                    continue;
+                const bool first = strstr(en, "later in the Options Menu") != nullptr;
+                for (int lang = 0; lang < LANG_COUNT; lang++) {
+                    std::string t;
+                    int k = 0;
+                    for (const char *p = Lang_Text(i, lang); *p; p++) {
+                        if (p[0] == '%' && p[1] == 's') {
+                            t += kFill[k < 2 ? k : 2], k++, p++;
+                        } else if (p[0] == '%' && p[1] == 'd') {
+                            t += "12", p++;
+                        } else {
+                            t += *p;
+                        }
+                    }
+                    S32 band = Voice_Lines(t.c_str(), 620), dlg = Voice_Lines(t.c_str(), 591);
+                    Expect(!((!first && band > 2) || dlg > 3), Fmt("language %d, font %d: %s needs %d band lines, %d dialogue lines", lang, font,
+                                            Repr(t.c_str()).c_str(), (int)band, (int)dlg));
+                }
+            }
+        }
+        Menu_Set("font", 0);
     }
 
     // The player's device (2026-11-11, after playing on the Xbox): after a pad press the
@@ -1444,17 +1490,29 @@ struct Walker {
             Expect(l.empty() || (l.find("[Esc]") != std::string::npos && l.find("[B]") == std::string::npos),
                    Fmt("device: after a key the legend reads %s", Repr(l.c_str()).c_str()));
 
+            // Paged help says where it is, "1/2" in the corner, and keeps "2/2" on the last
+            // window. Only console help pages, and only when it is said in the voice (exphelp 0).
             Fresh("Advanced and reset");
-            if (MoveTo("More options")) {
-                S32 page = 0, pages = 1;
+            Menu_SetSwitch("exphelp", 0);
+            Open("More options");
+            S32 page = 0, pages = 1;
+            for (int i = 0; i < 60 && pages < 2; i++) {
+                Key("down");
                 Voice_LastPage(&page, &pages);
-                Expect(pages < 2 || Menu_MoreArrow(), Fmt("device: help in %d windows shows no arrow on the first", (int)pages));
+            }
+            // A wider one-column window (768, 1024 wide) holds every console help in three lines.
+            if (pages > 1) {
+                std::string first = Menu_PageMark();
+                Expect(first == Fmt("1/%d", (int)pages), Fmt("device: paged help's first window is marked %s", Repr(first.c_str()).c_str()));
                 Wait(1500);
                 Voice_LastPage(&page, &pages);
-                Expect(page + 1 == pages && !Menu_MoreArrow(),
-                       Fmt("device: help on window %d of %d %s the arrow", (int)page + 1, (int)pages,
-                           Menu_MoreArrow() ? "shows" : "has no"));
+                std::string last = Menu_PageMark();
+                Expect(page + 1 == pages && last == Fmt("%d/%d", (int)pages, (int)pages),
+                       Fmt("device: paged help's last window (%d of %d) is marked %s", (int)page + 1, (int)pages,
+                           Repr(last.c_str()).c_str()));
+                Expect(!Menu_MoreArrow(), "device: paged help shows the arrow with pagemark on");
             }
+            Menu_SetSwitch("exphelp", 1);
         }
         if (Wanted("Keys and buttons")) {
             Menu_SetSwitch("keyboard", 0);

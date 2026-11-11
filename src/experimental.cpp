@@ -14,6 +14,7 @@
 #include <string.h>
 
 int sw_exptable = 1;
+int sw_exphelp = 1;  // the row's help in the table's status lines, not the voice
 
 // ───────────────────────────── The tuning rows ─────────────────────────────
 
@@ -417,8 +418,26 @@ void Exp_Update() {
         Say();
 }
 
+// The row's help as the table shows it: the console's words, "Experimental: " before an
+// experimental row's.
+static const char *RowHelp(int i, char *buf, size_t n) {
+    const char *help = kTuning[i].help;
+    if (!IsExperimental(i))
+        return help;
+    if (!strncmp(help, "Prototype: ", 11))
+        help += 11;  // the console's word for the same thing
+    snprintf(buf, n, "Experimental: %s", help);
+    return buf;
+}
+
 static void Say() {
     int i = CursorTuning();
+    if (Table() && sw_exphelp) {
+        // The row's help is in the table's own status lines, in the 8x8 font (decided
+        // 2026-11-12): the console's English, whole, never paged. The voice keeps the group's.
+        Menu_Say(Wide() || g_colCursor > 0 || i >= 0 ? kGroups[g_group].help : "");
+        return;
+    }
     if (i >= 0 && IsExperimental(i)) {
         char buf[320];
         const char *help = kTuning[i].help;
@@ -440,6 +459,38 @@ static void Say() {
 static ExpLine g_lines[64];
 static int g_lineCount;
 static char g_status[96];
+static char g_helpShown[320];  // the row's help in the status lines, for `state`
+static bool g_helpCut;         // it needed more lines than it had
+
+// Words of the 8x8 font wrapped into at most maxLines lines of width, 10 apart (at 1x).
+// Returns false when the text needed more lines.
+static bool DrawSmallWrapped(S32 x, S32 y, S32 width, int maxLines, const char *text, S32 s) {
+    char line[160] = "";
+    int lines = 0;
+    const char *p = text;
+    while (*p) {
+        while (*p == ' ')
+            p++;
+        size_t w = strcspn(p, " ");
+        if (!w)
+            break;
+        char next[160];
+        snprintf(next, sizeof next, "%s%s%.*s", line, line[0] ? " " : "", (int)w, p);
+        if (line[0] && Ui_SmallWidth(next, s) > width) {
+            if (lines == maxLines - 1)
+                return false;
+            Ui_Small(x, y + lines * 10 * s, line, INK_CONFIG_MENU, s);
+            lines++;
+            snprintf(line, sizeof line, "%.*s", (int)w, p);
+        } else {
+            snprintf(line, sizeof line, "%s", next);
+        }
+        p += w;
+    }
+    if (line[0])
+        Ui_Small(x, y + lines * 10 * s, line, INK_CONFIG_MENU, s);
+    return true;
+}
 static int g_total;  // the table's lines, heads included
 static ExpTable g_table;
 static bool g_tableShown;
@@ -476,7 +527,9 @@ static void DrawTable(S32 px0, S32 px1, S32 py0, S32 py1) {
 
     S32 nameX = px0 + 16;
     S32 valueRight = px1 - 24 - 12 * s;  // the marks after it end 24 in
-    S32 statusTop = py1 - 16 * s;
+    // The status line at the foot, and above it the row's help on two lines when shown there.
+    const int helpLines = sw_exphelp ? 2 * s : 0;  // the 8x8 font at 2x (tablefont 2) holds half a line
+    S32 statusTop = py1 - 16 * s - helpLines * 10 * s;
     S32 bodyTop = py0 + 5 * s;
     int visible = (statusTop - 1 - 9 * s - bodyTop) / pitch + 1;
 
@@ -571,10 +624,21 @@ static void DrawTable(S32 px0, S32 px1, S32 py0, S32 py1) {
     // The status line under a groove, as the 1997 screen's status box.
     Line(px0 + 8, statusTop, px1 - 8, statusTop, COUL_DOWN_BLUE);
     Line(px0 + 8, statusTop + 1, px1 - 8, statusTop + 1, COUL_UP_BLUE);
+    g_helpCut = false;
+    g_helpShown[0] = 0;
+    if (helpLines && g_cursor >= 0 && g_cursor < TUNING_COUNT) {
+        char hb[320];
+        const char *help = RowHelp(g_cursor, hb, sizeof hb);
+        snprintf(g_helpShown, sizeof g_helpShown, "%s", help);
+        g_helpCut = !DrawSmallWrapped(nameX, statusTop + 5 * s, px1 - 24 - nameX, helpLines, help, s);
+    }
+    S32 statusY = statusTop + 5 * s + helpLines * 10 * s;
     StatusText(g_cursor, g_status, sizeof g_status, px1 - 24 - nameX, s);
-    Ui_Small(nameX, statusTop + 5 * s, g_status, INK_CONFIG_HEAD, s);
+    Ui_Small(nameX, statusY, g_status, INK_CONFIG_HEAD, s);
     RestoreClip();
     g_table.status = g_status;
+    g_table.rowHelp = g_helpShown;
+    g_table.rowHelpCut = g_helpCut;
     g_table.statusLeft = nameX;
     g_table.statusRight = nameX + Ui_SmallWidth(g_status, s) - 1;
     g_table.count = g_lineCount;
@@ -772,6 +836,9 @@ void Exp_WriteState(FILE *f) {
     Menu_JsonString(f, i >= 0 ? kTuning[i].name : "");
     fprintf(f, ",\"scroll\":%d,\"visible\":%d,\"total\":%d,\"status\":", g_scroll, g_visible, g_total);
     Menu_JsonString(f, g_status);
+    fprintf(f, ",\"row_help\":");
+    Menu_JsonString(f, g_helpShown);
+    fprintf(f, ",\"row_help_cut\":%s", g_helpCut ? "true" : "false");
     if (g_tableShown) {
         const ExpTable &t = g_table;
         fprintf(f, ",\"table\":{\"rect\":[%d,%d,%d,%d],\"scale\":%d,\"status_top\":%d,\"value_edge\":%d,"

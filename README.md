@@ -132,6 +132,8 @@ own switches are on F1 to F12 and 0 to 9.
 | | `fpsrow` | the Frame rate row on Display and graphics, under Vsync (decided) / on Advanced and reset (no key: `--switch fpsrow=1`) |
 | | `slider` | wide sliders: the 1997 way, the cursor row is the red plasma up to the value (2026-11-11) / a small slider at the value edge on every row |
 | | `keyboard` | 1 a keyboard is there (a desktop) / 0 as a console before a key is typed: no Keyboard view or Tab, the legend names the pad |
+| | `exphelp` | More options' table: the row's help in two status lines in the 8x8 font, never paged (2026-11-12) / said in the voice |
+| | `pagemark` | paged help: "1/2" in the window's corner, kept on the last window (2026-11-12) / the dialogue's arrow while more is to come |
 | | `pace` | how long a window of long help is held before the next, in tenths of a second a word: 3 (decided) / 1 to 9 (no key: `--switch pace=5`) |
 
 Keys 1 to 6 are the composition review of 2026-11-03 (wide and large screens).
@@ -177,6 +179,17 @@ memory like the other settings.
 - Del (Backspace on a Mac keyboard, X on a pad) clears a chip.
 - A key on two actions frames both chips red, and the voice names the other
   action.
+
+## Languages
+
+The voice (help, questions, messages) speaks the language the Text row picks:
+English, Francais, Deutsch, Espanol, Italiano, Portugues. The texts are in
+`lang/help.tsv`, a column per language, looked up by their English; anything
+missing is said in English. Row labels and values stay English. The
+translations are stand-ins, made to measure lengths, not reviewed by native
+speakers. After editing the file run `tools/lang.py`, which writes
+`src/lang_table.inc` in the game font's code page (CP850). The self test
+checks every text in every language and both fonts against its window.
 
 ## Driving it
 

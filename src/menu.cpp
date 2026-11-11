@@ -6,6 +6,7 @@
 #include "experimental.h"
 #include "trace.h"
 #include "menu_parts.h"
+#include "lang.h"
 #include "ui.h"
 #include "twinsun.h"
 #include "vfont.h"
@@ -58,12 +59,12 @@ static const Setting kSettings[S_COUNT] = {
     // as they darken the picture. Twinsun is the holomap's planet turning once in three minutes on
     // stars (src/twinsun.cpp; asked for 2026-11-11). Off is black.
     {"background", "Background", K_CHOICE, 3, {"Picture", "Blue", "Twinsun", "Off"}, 0, 0, false,
-     "What is behind the menu: the 1997 picture, plain blue, Twinsun turning, or nothing."},
+     "The picture behind the menu."},
     // The menu's letters (asked for 2026-11-11): the game font, or Zilla Slab Bold drawn at
     // the screen's resolution (src/vfont.cpp), the face lba2cc's parked HD UI overlay chose.
     // Bold over Medium and the size, decided after play (2026-11-11).
     {"font", "Font", K_CHOICE, 1, {"Game", "Zilla Slab"}, 0, 0, false,
-     "The game's own letters, or Zilla Slab drawn sharp at the screen's size."},
+     "The game's letters, or sharp Zilla Slab."},
     // Not a stored value: the row shows the screen in use and steps it through
     // Engine_SizeAt's list, as F2 does. g_val keeps its fresh value, so presets,
     // Reset settings and their undo leave the screen alone.
@@ -95,7 +96,7 @@ static const Setting kSettings[S_COUNT] = {
     // off skips the outdoor shots that cut once as the hero walks in; held shots and interiors
     // stay. Camera behaviour, not a machine's limit, so it sits with the cameras (2026-11-11).
     {"movie_cam", "Movie camera", K_TOGGLE, 1, {"Off", "On"}, 1, 1, false,
-     "Cuts to the designers' shots as you walk outdoors."},
+     "Cuts to the designers' shots outdoors."},
     {"invert", "Invert camera", K_TOGGLE, 1, {"Off", "On"}, 0, 0, false,
      "Turns the camera the other way. Only with the Auto camera."},
     {"sensitivity", "Camera speed", K_SLIDER, 10, {0}, 5, 5, false,
@@ -128,6 +129,7 @@ static const char *kPresetNames[2] = {"Modern", "Classic"};
 // only, as the plan has it; the self test runs with it off. A real port may leave the
 // screen alone.
 static int sw_presetlook = 1;
+static int sw_pagemark = 1;  // paged help: "1/2" in the corner (1) or the dialogue's arrow (0)
 
 struct LookDef {
     int s;
@@ -358,9 +360,9 @@ static void BuildPages() {
     hub.name = "Options";
     AddRow(hub, R_RETURN, "Return to the game", 0, "Back to where you were.");
     AddRow(hub, R_PRESET_ROW, "", P_PRESET,
-           sw_presetlook ? "Choose how to play: as in 1997, or today's look with the known bugs fixed."
+           sw_presetlook ? "As in 1997, or today's look with bugs fixed."
                          : "Choose how to play: the 1997 rules, or with the known bugs fixed.");
-    AddRow(hub, R_CATEGORY, "Language and interface", P_LANG, "Text, voices, subtitles, the font and the background.");
+    AddRow(hub, R_CATEGORY, "Language and interface", P_LANG, "Text, voices, the font and the background.");
     AddRow(hub, R_CATEGORY, "Display and graphics", P_DISPLAY, "Resolution, window and detail.");
     AddRow(hub, R_CATEGORY, "Sound", P_SOUND, "Volumes.");
     AddRow(hub, R_CATEGORY, "Controls and camera", P_CONTROLS, "Keys, pad and the camera.");
@@ -372,8 +374,8 @@ static void BuildPages() {
     pr.name = "Preset";
     AddRow(pr, R_RETURN, "Return to previous menu", 0, "");
     if (sw_presetlook) {
-        AddRow(pr, R_PRESET_CHOICE, "Modern", 0, "Twinsun, sharp letters, cameras that follow you, bugs fixed.");
-        AddRow(pr, R_PRESET_CHOICE, "Classic", 1, "The 1997 picture, letters, cameras and screen, bugs and all.");
+        AddRow(pr, R_PRESET_CHOICE, "Modern", 0, "Today's look, cameras that follow, bugs fixed.");
+        AddRow(pr, R_PRESET_CHOICE, "Classic", 1, "The 1997 look and cameras, bugs and all.");
     } else {
         AddRow(pr, R_PRESET_CHOICE, "Modern", 0, "The original, with its known bugs fixed. What a fresh install plays.");
         AddRow(pr, R_PRESET_CHOICE, "Classic", 1, "The rules of the 1997 CD release, bugs and all. Nothing else changes.");
@@ -425,8 +427,8 @@ static void BuildPages() {
     // Always offered (decided 2026-11-03): its help carries the warning a switch once did.
     // The page holds every console setting without a row of its own: tuning for finished
     // features and the few unfinished ones, which it marks experimental.
-    AddRow(adv, R_ACTION, "More options", A_EXP,
-           "Fine tuning, experiments and options from 1997, in English. Rows marked experimental may change or go.");
+    // Help within 750 px (2026-11-12); an experimental row's own help says it is experimental.
+    AddRow(adv, R_ACTION, "More options", A_EXP, "Tuning and 1997 extras, in English.");
     if (sw_fpsrow)
         AddSetting(adv, S_FPS);
     // The row's value is the version, so a bug report can name the build from the menu.
@@ -654,7 +656,7 @@ static const char *HelpFor(const Row *r) {
                 strncat(list, Exp_Name(i), sizeof list - strlen(list) - 1);
             }
         }
-        snprintf(buf, sizeof buf, "Puts back what you had: %s.", list);
+        snprintf(buf, sizeof buf, Menu_Tr("Puts back what you had: %s."), list);
         return buf;
     }
     if (r->type == R_BACK_TO_MINE && r->arg == BACK_RESET && ResetBackDiffers()) {
@@ -681,15 +683,15 @@ static const char *HelpFor(const Row *r) {
             char list[200] = "";
             for (int i = 0; i < shown; i++) {
                 if (i)
-                    strncat(list, i + 1 == n ? " and " : ", ", sizeof list - strlen(list) - 1);
+                    strncat(list, i + 1 == n ? Menu_Tr(" and ") : ", ", sizeof list - strlen(list) - 1);
                 strncat(list, names[i], sizeof list - strlen(list) - 1);
             }
             if (shown < n) {
                 char more[24];
-                snprintf(more, sizeof more, " and %d more", n - shown);
+                snprintf(more, sizeof more, Menu_Tr(" and %d more"), n - shown);
                 strncat(list, more, sizeof list - strlen(list) - 1);
             }
-            snprintf(buf, sizeof buf, "Puts back what you had: %s.", list);
+            snprintf(buf, sizeof buf, Menu_Tr("Puts back what you had: %s."), list);
             if (VoiceFits(buf, r))
                 return buf;
         }
@@ -720,12 +722,15 @@ static const char *const kShortHelp[][2] = {
     {"Does what the behaviour does: jump, hit or hide.", "Jumps, hits or hides, by behaviour."},
 };
 
+const char *Menu_Tr(const char *english) { return Lang_Tr(english, g_val[S_TEXT_LANG]); }
+
 void Menu_Say(const char *text) {
     if (sw_short) {
         for (size_t i = 0; i < sizeof kShortHelp / sizeof kShortHelp[0]; i++)
             if (!strcmp(text, kShortHelp[i][0]))
                 text = kShortHelp[i][1];
     }
+    text = Lang_Tr(text, g_val[S_TEXT_LANG]);  // the voice speaks the Text language
     // The game font has no =, ~ or + (each draws as a stray mark); the console help has all three.
     static char said[512];
     size_t o = 0;
@@ -757,6 +762,8 @@ void Menu_PageEntered() { g_pageEntered = true; }
 static void UpdateVoice() {
     const Row *r = CursorRow();
     const char *text = g_confirm ? kQuestions[g_question].voice : HelpFor(r);
+    if (g_confirm && g_question == Q_CLASSIC && sw_presetlook)
+        text = "Play as in 1997? Sound and keys stay as they are.";  // Classic sets the look too
     Menu_Say(text);
 }
 
@@ -1440,14 +1447,28 @@ static void DrawConfirm(const char *pane, S32 x0, S32 x1, S32 y0) {
     }
 }
 
-// Paged help shows the dialogue's arrow while a later window is still to come (MESSAGE.CPP:
-// AffFleche at a full page), as a dialogue does (2026-11-11, after playing on the Xbox).
+// Paged help (help longer than its window) says where it is: "1/2" in the 8x8 font in the
+// window's bottom-right corner, kept on the last window, so a player who looks late still sees
+// there was more (switch pagemark, decided 2026-11-12). pagemark 0: the dialogue's arrow while
+// a later window is to come (MESSAGE.CPP AffFleche), as tried on the Xbox 2026-11-11.
 static bool g_moreArrow;
+static char g_pageMark[8];
 static void DrawMoreArrow(S32 x1, S32 y1) {
     S32 page = 0, pages = 1;
     Voice_LastPage(&page, &pages);
-    g_moreArrow = page + 1 < pages && Engine_DrawMoreArrow(x1, y1);
+    g_moreArrow = false;
+    g_pageMark[0] = 0;
+    if (pages < 2)
+        return;
+    if (!sw_pagemark) {
+        g_moreArrow = page + 1 < pages && Engine_DrawMoreArrow(x1, y1);
+        return;
+    }
+    S32 sc = Wide() ? sw_chip : 1;
+    snprintf(g_pageMark, sizeof g_pageMark, "%d/%d", (int)page + 1, (int)pages);
+    Ui_Small(x1 - 12 - Ui_SmallWidth(g_pageMark, sc) + 1, y1 - 6 - 8 * sc, g_pageMark, INK_CONFIG_MENU, sc);
 }
+const char *Menu_PageMark() { return g_pageMark; }
 bool Menu_MoreArrow() { return g_moreArrow; }
 const char *Menu_Legend() { return g_legend; }
 
@@ -1821,10 +1842,10 @@ static const SwitchDef kSwitches[] = {
     {"sheet", &sw_sheet, 0, 1, 1},         {"legend", &sw_legend, 0, 1, 1},       {"bg", &sw_bg, 0, 1, 1},       {"bgres", &sw_bgres, 0, 3, 3},       {"vfsize", &sw_vfsize, 60, 160, 100},
     {"scale", &sw_scale, 0, 1, 1},         {"bandshade", &sw_bandshade, 0, 15, 15}, {"panes", &sw_panes, 0, 1, 1},
     {"clash", &sw_clash, 0, 1, 1},       {"short", &sw_short, 0, 1, 1},
-    {"narrow", &sw_narrow, 0, 1, 1},     {"exptable", &sw_exptable, 0, 1, 1},
+    {"narrow", &sw_narrow, 0, 1, 1},     {"exptable", &sw_exptable, 0, 1, 1}, {"exphelp", &sw_exphelp, 0, 1, 1},
     {"fpsrow", &sw_fpsrow, 0, 1, 0},     {"slider", &sw_slider, 0, 1, 1},     {"pace", &sw_pace, 1, 9, 3},
     {"tstilt", &sw_tstilt, 0, 4095, 3328}, {"tssize", &sw_tssize, 50, 200, 140},
-    {"presetlook", &sw_presetlook, 0, 1, 1},
+    {"presetlook", &sw_presetlook, 0, 1, 1}, {"pagemark", &sw_pagemark, 0, 1, 1},
 };
 
 bool Menu_SetSwitch(const char *name, int v) {
@@ -2173,7 +2194,8 @@ void Menu_WriteState(FILE *f) {
     fprintf(f, ",\"lines\":%d,\"lines_needed\":%d,\"max_lines\":%d,\"width\":%d,\"page\":%d,\"pages\":%d,\"cut_off\":%s",
             g_voiceLines, g_voiceNeeded, g_voiceMax, g_voiceWidth, (int)page, (int)pages,
             g_voiceNeeded >= VOICE_MAX_LINES ? "true" : "false");
-    fprintf(f, ",\"more_arrow\":%s", g_moreArrow ? "true" : "false");
+    fprintf(f, ",\"more_arrow\":%s,\"page_mark\":", g_moreArrow ? "true" : "false");
+    Menu_JsonString(f, g_pageMark);
     fprintf(f, ",\"rect\":[%d,%d,%d,%d]}", g_helpBox.x0, g_helpBox.y0, g_helpBox.x1, g_helpBox.y1);
     fprintf(f, ",\"legend\":");
     Menu_JsonString(f, g_legend);
