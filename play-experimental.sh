@@ -37,7 +37,7 @@ Steps, the same in each round (the window opens on Options):
   3. Read the help of a few rows. Would you know what each does?
   4. On cam_glide, Del: back to 75. Esc out to the Options.
   5. Read the Settings row: it says "changed". Enter, then Enter on Modern:
-     the tuning goes back to the defaults. Down to Back to my settings and
+     the tuning goes back to the defaults. Down to Undo preset and
      read what it names; Enter puts cam_ease_ms back.
   6. Close the window.
 STEPS

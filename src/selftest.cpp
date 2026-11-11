@@ -856,10 +856,10 @@ struct Walker {
             if (!Expect(p1.find("Classic") != std::string::npos,
                         Fmt("preset: Yes leaves the preset row at %s", Repr(p1.c_str()).c_str())))
                 return;
-            if (!MoveTo("Back to my settings"))
+            if (!MoveTo("Undo preset"))
                 return;
             Key("enter");
-            Expect(Menu_PresetLabel() == p0, Fmt("preset: Back to my settings leaves the preset row at %s, not %s",
+            Expect(Menu_PresetLabel() == p0, Fmt("preset: Undo preset leaves the preset row at %s, not %s",
                                                  Repr(Menu_PresetLabel()).c_str(), Repr(p0.c_str()).c_str()));
         }
         if (Wanted("Advanced and reset")) {
@@ -880,7 +880,7 @@ struct Walker {
     }
 
     // preset: Reset settings, from Classic and a setting changed: the question starts on
-    // No, Esc and No change nothing, Yes resets, and Back to my settings (the row right
+    // No, Esc and No change nothing, Yes resets, and Undo preset (the row right
     // after it) puts the setting and the preset back, then goes.
     void ResetSettings() {
         Fresh("Preset");
@@ -958,7 +958,7 @@ struct Walker {
     // page and Esc comes back to the row; on every row Right and Left change the value and
     // the other key puts it back, and Del puts the default back; Page Down and Page Up go to
     // the ends; a changed value marks the preset changed, Modern and Reset settings put it
-    // back to its default, and Back to my settings names it and puts it back.
+    // back to its default, and Undo preset names it and puts it back.
     bool Table() const { return Menu_GetSwitch("exptable") != 0; }
     void ToRows() {  // the list opens on its groups
         if (!Table())
@@ -1053,7 +1053,7 @@ struct Walker {
             Expect(Exp_CursorName() == first, Fmt("experimental: Page Up stops at %s, not the first row", Exp_CursorName()));
         }
 
-        // Presets: changed, Modern, Back to my settings.
+        // Presets: changed, Modern, Undo preset.
         Fresh(kExpPage);
         ToRows();
         std::string v0 = Exp_CursorValue(), name = Exp_CursorName();
@@ -1065,10 +1065,10 @@ struct Walker {
         Key("enter");
         Expect(std::string(Menu_PresetLabel()).find(", changed") == std::string::npos,
                Fmt("experimental: Modern leaves the preset row at %s", Repr(Menu_PresetLabel()).c_str()));
-        if (!MoveTo("Back to my settings"))
+        if (!MoveTo("Undo preset"))
             return;
         Expect(Voice().find(name) != std::string::npos || Voice().find(" more.") != std::string::npos,
-               Fmt("experimental: Back to my settings does not name %s: %s", name.c_str(), Repr(Voice().c_str()).c_str()));
+               Fmt("experimental: Undo preset does not name %s: %s", name.c_str(), Repr(Voice().c_str()).c_str()));
         if (!OpenAgain(kExpPage))
             return;
         ToRows();
@@ -1076,13 +1076,13 @@ struct Walker {
                                                  Repr(Exp_CursorValue()).c_str(), Repr(v0.c_str()).c_str())))
             return;
         LeaveExp();
-        if (!OpenAgain("Preset") || !MoveTo("Back to my settings"))
+        if (!OpenAgain("Preset") || !MoveTo("Undo preset"))
             return;
         Key("enter");
         if (!OpenAgain(kExpPage))
             return;
         ToRows();
-        if (!Expect(Exp_CursorValue() == v1, Fmt("experimental: Back to my settings leaves %s at %s, not %s", name.c_str(),
+        if (!Expect(Exp_CursorValue() == v1, Fmt("experimental: Undo preset leaves %s at %s, not %s", name.c_str(),
                                                  Repr(Exp_CursorValue()).c_str(), Repr(v1.c_str()).c_str())))
             return;
 

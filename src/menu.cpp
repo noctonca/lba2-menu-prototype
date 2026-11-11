@@ -97,11 +97,11 @@ static const Setting kSettings[S_COUNT] = {
 
 static int g_val[S_COUNT];
 static int g_preset;  // 0 Modern, 1 Classic
-static int g_before[S_COUNT];  // before a preset was chosen: the preset page's Back to my settings
+static int g_before[S_COUNT];  // before a preset was chosen: the preset page's Undo preset
 static int g_beforeExp[EXP_MAX];  // the tuning values then
 static int g_beforePreset;
 static bool g_haveBefore;
-static int g_beforeReset[S_COUNT];  // before Reset settings: the Advanced page's Back to my settings
+static int g_beforeReset[S_COUNT];  // before Reset settings: the Advanced page's Undo reset
 static int g_beforeResetExp[EXP_MAX];
 static int g_beforeResetPreset;
 static bool g_haveBeforeReset;
@@ -277,7 +277,7 @@ static void BuildPages() {
     AddRow(pr, R_PRESET_CHOICE, "Modern", 0, "The original, with its known bugs fixed. What a fresh install plays.");
     AddRow(pr, R_PRESET_CHOICE, "Classic", 1, "The rules of the 1997 CD release, bugs and all. Nothing else changes.");
     if (BackDiffers())
-        AddRow(pr, R_BACK_TO_MINE, "Back to my settings", BACK_PRESET, "Puts back the settings you had before you chose a preset.");
+        AddRow(pr, R_BACK_TO_MINE, "Undo preset", BACK_PRESET, "Puts back the settings you had before you chose a preset.");
 
     Page &lang = g_pages[P_LANG];
     lang.name = "Language and interface";
@@ -926,7 +926,7 @@ void Menu_Update() {
     if (Exp_Active()) {
         Exp_Update();
         if (!Exp_Active())
-            BuildPages();  // a changed tuning value can change the Back to my settings rows
+            BuildPages();  // a changed tuning value can change the Undo rows
         return;
     }
     if (g_console) {
@@ -970,7 +970,7 @@ void Menu_Update() {
                 else
                     ApplyPreset(1);
                 BuildPages();
-                KeepCursorOn(label);  // the page was rebuilt; Back to my settings comes and goes
+                KeepCursorOn(label);  // the page was rebuilt; an Undo row comes and goes
             }
         }
         UpdateVoice();

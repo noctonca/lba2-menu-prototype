@@ -257,7 +257,7 @@ instead.
   back, Page Up and Page Down (the pad's LB and RB) move a window at a time.
   A changed value takes the count colour.
 - A changed value marks the preset changed. Choosing a preset, and Reset
-  settings, put every value back to its default; Back to my settings (after a
+  settings, put every value back to its default; Undo preset (after a
   preset) and Undo reset (after a reset) put them back and name them.
 - The help is the console help, said in the voice. The game font has no `=`,
   `~` or `+`, so the voice says them as `:`, "about" and "and". Eleven console
@@ -340,7 +340,7 @@ walk finds starts with the walk's name:
   on every row Right and Left change the value and the other key puts it back,
   the change marks the preset row, and Del puts the default back; Page Down and
   Page Up stop at the last and first rows; Modern puts a changed value back to
-  its default, Back to my settings names it and puts it back; Reset settings
+  its default, Undo preset names it and puts it back; Reset settings
   and Undo reset do the same, and the cursor stays on Reset settings.
 - `console:` the Console row shows the version; Enter after a key opens the
   full console, which Down and Enter leave open and Esc closes; Enter after a
