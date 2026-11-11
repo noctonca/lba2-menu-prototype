@@ -528,7 +528,8 @@ static void DrawTable(S32 px0, S32 px1, S32 py0, S32 py1) {
 
 static void Legend(const char **keys, const char **words, int *n) {
     *n = 0;
-    keys[*n] = "\x11\x10", words[(*n)++] = "Change";
+    // Enter steps a switch or a choice and leaves a number, so only those name it.
+    keys[*n] = kTuning[Cursor()].kind == T_NUM ? "\x11\x10" : "\x11\x10" CHIP_AND "Enter", words[(*n)++] = "Change";
     keys[*n] = "Del", words[(*n)++] = "Default";
     keys[*n] = "Esc", words[(*n)++] = "Back";
 }
@@ -579,6 +580,7 @@ const char *MoreOptions_CursorGroupHelp() { return kGroups[kTuning[Cursor()].gro
 
 const char *MoreOptions_CursorName() { return kTuning[Cursor()].name; }
 
+bool MoreOptions_CursorIsNumber() { return kTuning[Cursor()].kind == T_NUM; }
 bool MoreOptions_CursorPresetsSet() { return MoreOptions_PresetsSet(Cursor()); }
 
 const char *MoreOptions_CursorValue() {

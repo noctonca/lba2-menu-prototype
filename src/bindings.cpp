@@ -1123,6 +1123,15 @@ void Bindings_WriteState(FILE *f) {
 // button for the menu's fixed keys (host.cpp kPadMenuKeys: A Enter, B Esc,
 // X Del, View Tab). The wait for a key keeps its own names: there B is not Esc.
 const char *Bindings_LegendKey(const char *key) {
+    // Two keys: each named, joined again.
+    if (const char *and_ = strchr(key, CHIP_AND[0])) {
+        static char joined[48];
+        std::string first(key, and_ - key);
+        snprintf(joined, sizeof joined, "%s", Bindings_LegendKey(first.c_str()));
+        strncat(joined, CHIP_AND, sizeof joined - strlen(joined) - 1);
+        strncat(joined, Bindings_LegendKey(and_ + 1), sizeof joined - strlen(joined) - 1);
+        return joined;
+    }
     static char names[4][16];
     static const struct {
         const char *key;

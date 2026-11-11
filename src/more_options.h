@@ -47,6 +47,7 @@ bool MoreOptions_Table(MoreOptionsTable *out);
 const char *MoreOptions_CursorName();  // the console name under the cursor
 const char *MoreOptions_CursorValue();
 const char *MoreOptions_CursorGroupHelp();  // the help of the group the cursor's row is in
+bool MoreOptions_CursorIsNumber();     // the cursor's row is a number (Enter leaves it)
 bool MoreOptions_CursorPresetsSet();  // the cursor's row is a tuning value, which presets set
 
 // Where the cursor is ("Auto camera | cam_ease_ms | 300").

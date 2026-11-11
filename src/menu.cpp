@@ -1222,8 +1222,11 @@ static void LegendFor(const Row *r, const char **keys, const char **words, int *
     if (r) {
         if (r->type == R_SETTING && RowActive(*r)) {
             Kind k = kSettings[r->arg].kind;
-            keys[*n] = "\x11\x10";
-            words[(*n)++] = (k == K_SLIDER || k == K_STEPS) ? "Adjust" : "Change";
+            // A choice or a switch also steps on Enter, so the legend names both (EPmager,
+            // 2026-11-11); a slider or steps take Left and Right only.
+            const bool steps = k == K_SLIDER || k == K_STEPS;
+            keys[*n] = steps ? "\x11\x10" : "\x11\x10" CHIP_AND "Enter";
+            words[(*n)++] = steps ? "Adjust" : "Change";
         } else if (r->type == R_CATEGORY || r->type == R_PRESET_ROW ||
                    (r->type == R_ACTION && (r->arg == A_KEYS || r->arg == A_EXP || r->arg == A_CONSOLE))) {
             keys[*n] = "Enter"; words[(*n)++] = "Open";
@@ -1258,9 +1261,24 @@ static S32 LegendWidth(const char **keys, const char **words, int n, S32 scale) 
     return n ? chipW + 4 * scale + wordW : 0;
 }
 
+// A key as the record writes it: the arrows as <> and ^v, two keys joined by "/".
+static void KeyText(const char *key, char *out, size_t n) {
+    out[0] = 0;
+    for (const char *k = key; k;) {
+        const char *and_ = strchr(k, CHIP_AND[0]);
+        std::string one = and_ ? std::string(k, and_ - k) : std::string(k);
+        const char *shown = one[0] == '\x11' ? "<>" : one[0] == '\x18' ? "^v" : one.c_str();
+        if (out[0])
+            strncat(out, "/", n - strlen(out) - 1);
+        strncat(out, shown, n - strlen(out) - 1);
+        k = and_ ? and_ + 1 : NULL;
+    }
+}
+
 static void LegendRecord(int i, const char *key, const char *word) {
-    char item[48];
-    snprintf(item, sizeof item, "%s[%s] %s", i ? "  " : "", key[0] == '\x11' ? "<>" : key[0] == '\x18' ? "^v" : key, word);
+    char item[64], k[32];
+    KeyText(key, k, sizeof k);
+    snprintf(item, sizeof item, "%s[%s] %s", i ? "  " : "", k, word);
     strncat(g_legend, item, sizeof g_legend - strlen(g_legend) - 1);
 }
 
@@ -1325,6 +1343,22 @@ static void DrawPageMark(S32 x1, S32 y1) {
 }
 const char *Menu_PageMark() { return g_pageMark; }
 const char *Menu_Legend() { return g_legend; }
+
+bool Menu_CursorEnterSteps(bool *isValue) {
+    *isValue = false;
+    if (!g_depth || g_confirm || g_console || Bindings_Active())
+        return false;
+    if (MoreOptions_Active()) {
+        *isValue = true;
+        return !MoreOptions_CursorIsNumber();
+    }
+    const Row *r = CursorRow();
+    if (!r || r->type != R_SETTING || !RowActive(*r))
+        return false;
+    *isValue = true;
+    const Kind k = kSettings[r->arg].kind;
+    return k == K_CHOICE || k == K_TOGGLE;
+}
 
 S32 Menu_DialogueTop() { return (S32)Host_LogicalH() - 1 - 137; }
 
@@ -1951,6 +1985,11 @@ void Menu_WriteState(FILE *f) {
     fprintf(f, ",\"rect\":[%d,%d,%d,%d]}", g_helpBox.x0, g_helpBox.y0, g_helpBox.x1, g_helpBox.y1);
     fprintf(f, ",\"legend\":");
     Menu_JsonString(f, g_legend);
+    {
+        bool isValue;
+        const bool steps = Menu_CursorEnterSteps(&isValue);
+        fprintf(f, ",\"cursor_value\":\"%s\"", !isValue ? "none" : steps ? "enter steps" : "enter leaves");
+    }
     fprintf(f, ",\"console\":\"%s\",\"console_bottom\":%d,\"version\":", g_console == CON_FULL ? "full" : g_console == CON_READONLY ? "read-only" : "closed",
             g_console ? (int)g_consoleBottom : -1);
     Menu_JsonString(f, kVersion);

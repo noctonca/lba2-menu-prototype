@@ -127,6 +127,9 @@ const char *Menu_CursorLabel();  // the cursor row of an Options page; "" elsewh
 bool Menu_CursorSetting(bool *active);  // the cursor row is a setting; active: not dimmed
 const char *Menu_CursorValue();  // the value drawn on the cursor row last frame
 const char *Menu_PresetLabel();
+// Whether the row under the cursor shows a value Left and Right change (*isValue), and
+// whether Enter steps it too (a choice or a switch; not a slider, steps or a number).
+bool Menu_CursorEnterSteps(bool *isValue);
 const char *Menu_Legend();  // the footer's legend as the last draw had it: "[A] Open  [B] Back"
 const char *Menu_PageMark();  // "1/2" while paged help shows, else empty
 const char *Menu_ConsoleMode();  // closed, full or read-only  // the preset row as it reads ("Modern settings, changed")

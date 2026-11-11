@@ -233,10 +233,19 @@ void Ui_Small(S32 x, S32 y, const char *s, U8 colour, S32 scale) {
 }
 
 S32 Ui_ChipWidth(const char *key, S32 scale) {
+    if (const char *and_ = strchr(key, CHIP_AND[0])) {
+        std::string first(key, and_ - key);
+        return Ui_ChipWidth(first.c_str(), scale) + CHIP_AND_GAP * scale + Ui_ChipWidth(and_ + 1, scale);
+    }
     return Ui_SmallWidth(key, scale) + 8 * scale;
 }
 
 S32 Ui_Chip(S32 x, S32 y, const char *key, S32 scale, bool lit) {
+    if (const char *and_ = strchr(key, CHIP_AND[0])) {
+        std::string first(key, and_ - key);
+        S32 w = Ui_Chip(x, y, first.c_str(), scale, lit) + CHIP_AND_GAP * scale;
+        return w + Ui_Chip(x + w, y, and_ + 1, scale, lit);
+    }
     S32 w = Ui_ChipWidth(key, scale), h = 8 * scale + 4 * scale;
     S32 x1 = x + w - 1, y1 = y + h - 1;
     if (lit)

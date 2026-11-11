@@ -76,6 +76,10 @@ void Ui_Small(S32 x, S32 y, const char *s, U8 colour, S32 scale);
 S32 Ui_WordWidth(const char *s, S32 scale);
 void Ui_Word(S32 x, S32 y, const char *s, U8 colour, S32 scale);
 // A key chip: the key name in the 8x8 font inside a frame. Returns its width.
+// A key of two keys, "<one>" CHIP_AND "<two>", is two chips side by side (the
+// legend's "<> / Enter Change": either changes the value).
+#define CHIP_AND "\x1f"
+enum { CHIP_AND_GAP = 3 };  // between the two chips, a step
 S32 Ui_ChipWidth(const char *key, S32 scale);
 S32 Ui_Chip(S32 x, S32 y, const char *key, S32 scale, bool lit = false);
 

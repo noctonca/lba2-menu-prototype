@@ -171,6 +171,10 @@ sits inside the composition, in the band's place.
   Slab rows read as a second style).
 - A row that opens something (a category, the preset row, Keys and buttons)
   takes Enter and shows "Open" in the legend; a setting takes Left and Right.
+  A choice or a switch also steps on Enter, so its legend line shows both
+  chips side by side, "<> Enter Change" ("<> A" on a pad); a slider, steps or
+  a number shows the arrows alone (EPmager, 2026-11-11). **[self test, sweep:
+  legend Enter]**
   The two never look the same: a setting shows a value, an opener does not.
 - Every setting row shows its value. **[self test: value]**
 

@@ -142,6 +142,11 @@ def check(state):
     if v.get("cut_off"):
         problems.append(f"help cut off ({v['lines_needed']} lines in {v['max_lines']}, {v['width']} px): {v['text']!r}")
     hx0, hy0, hx1, hy1 = v["rect"]
+    # A value Enter also steps names Enter beside the arrows; one it leaves does not.
+    cv = state.get("cursor_value", "none")
+    if cv != "none" and state["legend"] and ("[<>/" in state["legend"]) != (cv == "enter steps"):
+        problems.append(f"legend {'leaves out' if cv == 'enter steps' else 'names'} Enter on a value Enter "
+                        f"{'steps' if cv == 'enter steps' else 'leaves'}: {state['legend']!r}")
     for r in state["rows"]:
         x0, y0, x1, y1 = r["rect"]
         if y1 >= H or x1 >= W or x0 < 0:

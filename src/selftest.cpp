@@ -141,6 +141,13 @@ static void Check(std::vector<std::string> *found) {
     MoreOptionsTable rt;
     if (MoreOptions_Table(&rt) && rt.rowHelpCut)
         found->push_back(Fmt("table: row help cut off: %s", Repr(rt.rowHelp).c_str()));
+    // A value Enter also steps names Enter beside the arrows; one it leaves does not
+    // (EPmager, 2026-11-11). Only where a legend is drawn.
+    bool isValue;
+    const bool entersteps = Menu_CursorEnterSteps(&isValue);
+    if (isValue && *Menu_Legend() && (strstr(Menu_Legend(), "[<>/") != NULL) != entersteps)
+        found->push_back(Fmt("legend %s Enter on a value Enter %s: %s", entersteps ? "leaves out" : "names",
+                             entersteps ? "steps" : "leaves", Repr(Menu_Legend()).c_str()));
     bool help = strcmp(v.where, "none") != 0;
     const DrawnRow *rows;
     int n = Menu_DrawnRows(&rows);
