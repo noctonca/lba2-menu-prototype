@@ -61,6 +61,15 @@ asks for the player's game folder and keeps `RESS.HQR`, `SCREEN.HQR`,
 served. Any copy works, the 1997 demo included. The menu loop runs as it does
 on a desktop and hands each frame back to the browser (ASYNCIFY).
 
+The menu fills the page under a thin bar, and its screen is the canvas in the
+display's pixels (CSS size x pixel ratio, so a Retina window is drawn at full
+resolution). Resizing the browser window resizes the screen, as dragging the
+desktop window does; F2 still picks a size from the list, shown with black
+bars. The Fullscreen row and the bar's button put the page's stage in the
+browser's fullscreen; the row's request waits for the release of Enter, as a
+browser allows fullscreen only inside a key or click handler.
+`tools/publish-web.sh` builds and puts `out/web` on the `gh-pages` branch.
+
 ## Play
 
     ./play.sh                      # 640x480, one column

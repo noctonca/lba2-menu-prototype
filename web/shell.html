@@ -5,65 +5,80 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LBA2 menu prototype</title>
 <style>
-  :root { --bg: #10161c; --fg: #e8e4da; --dim: #9aa3ab; --accent: #f0c060; --panel: #1b242d; }
+  :root { --bg: #10161c; --fg: #e8e4da; --dim: #9aa3ab; --accent: #f0c060; --panel: #1b242d; --bar: 40px; }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
-  main { max-width: 980px; margin: 0 auto; padding: 16px; }
-  h1 { font-size: 1.4rem; margin: 0.4em 0; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; overflow: hidden; }
+  #bar { position: fixed; top: 0; left: 0; right: 0; height: var(--bar); display: flex; align-items: center; gap: 8px;
+    padding: 0 12px; background: var(--panel); border-bottom: 1px solid #2a3540; white-space: nowrap; }
+  #bar h1 { font-size: 1rem; margin: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+  #bar .spacer { flex: 1; }
+  /* The stage fills the window under the bar; the menu's screen is its size in device pixels. */
+  #stage { position: fixed; top: var(--bar); left: 0; right: 0; bottom: 0; background: #000; }
+  /* !important: SDL writes an inline size on the canvas at some pixel ratios; the page's layout wins. */
+  canvas { display: block; width: 100% !important; height: 100% !important; outline: none; }
+  .panel { position: absolute; inset: 0; overflow: auto; background: var(--bg); padding: 16px; }
+  .panel > div { max-width: 760px; margin: 0 auto; }
+  #about { background: rgba(16, 22, 28, 0.96); }
+  h2 { font-size: 1.2rem; margin: 0.4em 0; }
   p { margin: 0.5em 0; }
   .dim { color: var(--dim); }
-  #pick { background: var(--panel); padding: 16px; border-radius: 8px; }
   button, label.button { display: inline-block; background: var(--accent); color: #1a1408; border: 0; border-radius: 6px;
     padding: 8px 14px; font: inherit; font-weight: 600; cursor: pointer; margin: 6px 6px 0 0; }
+  #bar button { padding: 3px 10px; margin: 0; font-size: 0.9rem; }
   button.quiet { background: transparent; color: var(--dim); border: 1px solid #3a4652; font-weight: 400; }
   input[type=file], [hidden] { display: none !important; }
-  #stage { display: none; }
-  canvas { display: block; width: 100%; max-width: 960px; aspect-ratio: 4 / 3; margin: 0 auto; background: #000;
-    image-rendering: pixelated; outline: none; }
   #status { min-height: 1.5em; }
   .error { color: #ff8a7a; }
-  details { margin-top: 12px; }
   kbd { background: #2a3540; border-radius: 4px; padding: 0 5px; font-size: 0.9em; }
   a { color: var(--accent); }
   ul { padding-left: 1.2em; margin: 0.3em 0; }
 </style>
 </head>
 <body>
-<main>
+<header id="bar">
   <h1>LBA2 Options menu prototype</h1>
-  <p class="dim">A fan-made prototype of a new Options menu for LBA2 Classic Community. It is not the game, and not
-    affiliated with the game's owners.</p>
+  <span class="spacer"></span>
+  <button id="fullscreen" class="quiet" hidden>Fullscreen</button>
+  <button id="aboutBtn" class="quiet">About</button>
+</header>
 
-  <section id="pick">
+<main id="stage">
+  <canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
+
+  <section id="pick" class="panel"><div>
+    <h2>Your game files</h2>
     <p>The menu draws with the game's own font, picture and palette, so it needs files from your copy of
       Little Big Adventure 2: <b>RESS.HQR</b>, <b>SCREEN.HQR</b> and <b>SPRITES.HQR</b> (<b>HOLOMAP.HQR</b> too for
-      the Twinsun background). Any copy works, the free 1997 demo included.</p>
+      the Twinsun background). Any copy with loose .HQR files works, the free 1997 demo included.</p>
     <p>Choose the game's folder. The files stay in this browser (kept for your next visit); nothing is uploaded.</p>
     <label class="button" for="folder">Choose game folder</label>
     <label class="button" for="files">Or choose the files</label>
     <input id="folder" type="file" webkitdirectory multiple>
     <input id="files" type="file" multiple accept=".hqr,.HQR">
     <p id="status"></p>
-  </section>
+    <p class="dim">See <a href="#" id="aboutLink">About</a> for what this is and its keys.</p>
+  </div></section>
 
-  <section id="stage">
-    <canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
-    <p class="dim">Click the picture first so it takes the keys. <kbd>Esc</kbd> goes back, arrows move,
-      <kbd>Enter</kbd> picks. A gamepad works too.</p>
-    <button id="forget" class="quiet" hidden>Forget saved game files</button>
-  </section>
-
-  <details>
-    <summary>The prototype's own keys</summary>
+  <section id="about" class="panel" hidden><div>
+    <h2>About</h2>
+    <p>A fan-made prototype of a new Options menu for LBA2 Classic Community. It is not the game, and not
+      affiliated with the game's owners. Settings are pretend: nothing is saved.</p>
+    <p><kbd>Esc</kbd> goes back, arrows move, <kbd>Enter</kbd> picks. A gamepad works too. The menu's screen is
+      the size of this window; resize the window to try other sizes.</p>
+    <h2>The prototype's own keys</h2>
     <ul>
-      <li><kbd>F2</kbd> / <kbd>Shift+F2</kbd>: the next or previous pretend screen size</li>
+      <li><kbd>F2</kbd> / <kbd>Shift+F2</kbd>: a pretend screen size from lba2cc's list (shown with black bars);
+        resizing the window goes back to the window's size</li>
       <li><kbd>F1</kbd> overlay, <kbd>F3</kbd> band, <kbd>F4</kbd> typing, <kbd>F8</kbd> help at 640x480 &mdash; switches being tried</li>
       <li><kbd>1</kbd>&ndash;<kbd>0</kbd> and <kbd>Shift</kbd>+them: more switches being tried (see the README)</li>
     </ul>
     <p class="dim">Some browsers keep keys such as F5 (reload), F11 and F12 for themselves.</p>
-  </details>
-  <p class="dim">Source (GPL-2.0, built on <a href="https://github.com/LBALab/lba2-classic-community">LBA2 Classic Community</a>):
-    <a href="https://github.com/noctonca/lba2-menu-prototype">github.com/noctonca/lba2-menu-prototype</a>, build @COMMIT@.</p>
+    <p class="dim">Source (GPL-2.0, built on <a href="https://github.com/LBALab/lba2-classic-community">LBA2 Classic Community</a>):
+      <a href="https://github.com/noctonca/lba2-menu-prototype">github.com/noctonca/lba2-menu-prototype</a>, build @COMMIT@.</p>
+    <button id="forget" class="quiet" hidden>Forget saved game files</button>
+    <button id="aboutClose">Back to the menu</button>
+  </div></section>
 </main>
 
 <script>
@@ -73,6 +88,23 @@
   var DB = 'lba2menu', STORE = 'files';
   var statusEl = document.getElementById('status');
   var forgetBtn = document.getElementById('forget');
+  var fsBtn = document.getElementById('fullscreen');
+  var about = document.getElementById('about');
+  function showAbout(on) {
+    about.hidden = !on;
+    if (!on && started) document.getElementById('canvas').focus();
+  }
+  // Buttons give the focus back, so Enter and Space reach the menu, not the button.
+  function onClick(id, fn) {
+    document.getElementById(id).addEventListener('click', function (e) { e.preventDefault(); this.blur(); fn(); });
+  }
+  onClick('aboutBtn', function () { showAbout(about.hidden); });
+  onClick('aboutLink', function () { showAbout(true); });
+  onClick('aboutClose', function () { showAbout(false); });
+  onClick('fullscreen', function () {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.getElementById('stage').requestFullscreen().catch(function () {});
+  });
 
   function say(text, isError) { statusEl.textContent = text; statusEl.className = isError ? 'error' : ''; }
 
@@ -141,8 +173,8 @@
   function start(files) {
     if (started) return;
     started = true;
-    document.getElementById('pick').style.display = 'none';
-    document.getElementById('stage').style.display = 'block';
+    document.getElementById('pick').hidden = true;
+    fsBtn.hidden = !document.fullscreenEnabled;
     var canvas = document.getElementById('canvas');
     canvas.addEventListener('click', function () { canvas.focus(); });
     var go = function () {
@@ -186,9 +218,9 @@
     printErr: function (t) { console.warn(t); },
     onRuntimeInitialized: function () { Module.ready = true; },
     onExit: function () {
-      var p = document.createElement('p');
-      p.textContent = 'The menu was closed. Reload the page to open it again.';
-      document.getElementById('stage').appendChild(p);
+      var pick = document.getElementById('pick');
+      pick.querySelector('div').innerHTML = '<h2>The menu was closed</h2><p>Reload the page to open it again.</p>';
+      pick.hidden = false;
     }
   };
 })();

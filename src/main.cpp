@@ -209,7 +209,9 @@ int Lba2Main(int argc, char *argv[]) {
         fprintf(stderr, "argument %d: %s\n", i, argv[i]);
 #endif
     std::string data = ExpandHome(getenv("LBA2_GAME_DIR") ? getenv("LBA2_GAME_DIR") : kDefaultData);
-#ifdef LBA2_PROTO_SDL
+#if defined(__EMSCRIPTEN__)
+    U32 w = 0, h = 0, fixedDt = 0;  // the page's canvas, in device pixels
+#elif defined(LBA2_PROTO_SDL)
     U32 w = 640, h = 480, fixedDt = 0;
 #else
     U32 w = 0, h = 0, fixedDt = 0;  // the display's size

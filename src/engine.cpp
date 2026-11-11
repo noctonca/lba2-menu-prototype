@@ -142,6 +142,25 @@ static SDL_Window *TheWindow() {
 
 static int s_winPxW, s_winPxH;  // the window's pixels after the prototype last sized it
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+// The page lays out the canvas (web/shell.html); its CSS box, in CSS pixels.
+EM_JS(int, WebCanvasCssW, (), { var c = document.getElementById('canvas'); return c ? Math.round(c.getBoundingClientRect().width) : 0; });
+EM_JS(int, WebCanvasCssH, (), { var c = document.getElementById('canvas'); return c ? Math.round(c.getBoundingClientRect().height) : 0; });
+// CSS pixels to the display's, as SDL counts them at a high pixel density.
+EM_JS(int, WebCanvasPx, (int css), { return Math.round(css * (window.devicePixelRatio || 1)); });
+
+// Give SDL's window the canvas's CSS size, so its pixels are the page's at the
+// display's pixel ratio. SDL only looks on the browser's resize events, and at
+// a high pixel ratio it once sized the canvas itself; the page decides here.
+static void FitCanvas(SDL_Window *win) {
+    const int cw = WebCanvasCssW(), ch = WebCanvasCssH();
+    int w = 0, h = 0;
+    if (cw > 0 && ch > 0 && SDL_GetWindowSize(win, &w, &h) && (w != cw || h != ch))
+        SDL_SetWindowSize(win, cw, ch);
+}
+#endif
+
 static void NoteWindowPixels(SDL_Window *win) {
     SDL_GetWindowSizeInPixels(win, &s_winPxW, &s_winPxH);
 }
@@ -158,7 +177,14 @@ static void SizeWindow() {
     SDL_Window *win = TheWindow();
     if (!win)
         return;
-    if (s_fullscreen) {  // the window is the display; it is sized on the way out
+#ifdef __EMSCRIPTEN__
+    // In a browser the page sizes the canvas; a screen of another size is
+    // letterboxed into it, as in fullscreen.
+    const bool pageSized = true;
+#else
+    const bool pageSized = false;
+#endif
+    if (s_fullscreen || pageSized) {  // the window is the display; it is sized on the way out
         NoteWindowPixels(win);
         TitleWindow(win);
         return;
@@ -258,13 +284,31 @@ bool Engine_StepScreen(int dir) {
     return Engine_SetScreen(kSizes[next][0], kSizes[next][1], true);
 }
 
-bool Engine_Fullscreen() { return s_fullscreen; }
+#ifdef __EMSCRIPTEN__
+#include <emscripten/html5.h>
+EM_JS(int, WebIsFullscreen, (), { return document.fullscreenElement ? 1 : 0; });
+#endif
+
+bool Engine_Fullscreen() {
+#ifdef __EMSCRIPTEN__
+    if (!s_headless)
+        return WebIsFullscreen() != 0;  // the browser's; Esc leaves it without the menu
+#endif
+    return s_fullscreen;
+}
 
 bool Engine_SetFullscreen(bool on) {
     if (s_headless) {
         s_fullscreen = on;
         return true;
     }
+#ifdef __EMSCRIPTEN__
+    // The page's stage goes fullscreen, as the page's button does; the canvas
+    // follows it (FitCanvas). A browser allows it only inside a key or click
+    // handler, so the request waits for the next one: the release of Enter.
+    const EMSCRIPTEN_RESULT r = on ? emscripten_request_fullscreen("#stage", 1) : emscripten_exit_fullscreen();
+    return r == EMSCRIPTEN_RESULT_SUCCESS || r == EMSCRIPTEN_RESULT_DEFERRED;
+#endif
 #ifdef LBA2_PROTO_SDL
     SDL_Window *win = TheWindow();
     if (!win)
@@ -300,6 +344,9 @@ bool Engine_WindowResized(U32 *w, U32 *h) {
         SizeWindow();
         return false;
     }
+#ifdef __EMSCRIPTEN__
+    FitCanvas(win);
+#endif
     int pw = 0, ph = 0;
     if (!SDL_GetWindowSizeInPixels(win, &pw, &ph) || (pw == s_winPxW && ph == s_winPxH))
         return false;
@@ -330,10 +377,18 @@ bool Engine_Init(const EngineConfig &cfg) {
     }
     s_physW = cfg.physW;
     s_physH = cfg.physH;
-    if (!s_physW || !s_physH) {  // no size given: the display's (a console's TV)
+    if (!s_physW || !s_physH) {  // no size given: the display's (a console's TV, a browser's page)
         uint32_t dw = 0, dh = 0;
+#ifdef __EMSCRIPTEN__
+        // The window is made later (InitGraphics); the canvas is already laid out.
+        dw = (uint32_t)WebCanvasPx(WebCanvasCssW());
+        dh = (uint32_t)WebCanvasPx(WebCanvasCssH());
+        if (dw < 640 || dh < 480)
+            dw = dw < 640 ? 640 : dw, dh = dh < 480 ? 480 : dh;
+#else
         if (!g_platform.window.display_size(&dw, &dh) || dw < 640 || dh < 480)
             dw = 640, dh = 480;
+#endif
         s_physW = dw & ~7u;
         s_physH = dh;
         fprintf(stderr, "screen: the display's, %ux%u\n", (unsigned)s_physW, (unsigned)s_physH);
