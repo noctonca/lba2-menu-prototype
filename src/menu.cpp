@@ -483,14 +483,16 @@ static int g_confirmCursor;
 enum Question { Q_CLASSIC, Q_RESET };
 static Question g_question;
 
-// What a question says in the voice, and its answers: the safe one first.
+// A question's title (in place of the page's, so the screen says it is a question:
+// EPmager, 2026-11-11), what it says in the voice, and its answers: the safe one first.
 struct QuestionText {
+    const char *title;
     const char *voice;
     const char *answers[2];
 };
 static const QuestionText kQuestions[2] = {
-    {"Play as in 1997? Sound and keys stay as they are.", {"No, keep Modern", "Yes, play Classic"}},
-    {"Put every setting back as a fresh install has it?", {"No, keep my settings", "Yes, reset settings"}},
+    {"Confirm Classic preset", "Play as in 1997? Sound and keys stay as they are.", {"No, keep Modern", "Yes, play Classic"}},
+    {"Confirm settings reset", "Put every setting back as a fresh install has it?", {"No, keep my settings", "Yes, reset settings"}},
 };
 
 static void Ask(Question q) {
@@ -1217,6 +1219,7 @@ static void LegendFor(const Row *r, const char **keys, const char **words, int *
     if (g_confirm) {
         keys[*n] = "\x18\x19"; words[(*n)++] = "Choose";
         keys[*n] = "Enter"; words[(*n)++] = "Answer";
+        keys[*n] = "Esc"; words[(*n)++] = "Cancel";  // the safe answer, without moving to it
         return;
     }
     if (r) {
@@ -1447,7 +1450,7 @@ static void DrawWide() {
 
     if (g_confirm) {
         // The question's answers in place of the rows.
-        DrawConfirm("wide", x0, x1, Ui_Title(x0, x1, top, page.name));
+        DrawConfirm("wide", x0, x1, Ui_Title(x0, x1, top, kQuestions[g_question].title));
     } else {
         int shown[PAGE_ROWS_MAX];
         const int n = ShownRows(t.page, shown);

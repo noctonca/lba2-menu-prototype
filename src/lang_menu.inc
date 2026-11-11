@@ -127,3 +127,5 @@
 {"Default", "D\x82""faut", "Standard", "Por defecto", "Predefinito", "Padr\xc6""o"},
 {"Cancel", "Annuler", "Abbrechen", "Cancelar", "Annulla", "Cancelar"},
 {"Reverse stereo", "St\x82""r\x82""o inverse", "Stereo invertieren", "Invertir canales est\x82""reo", "Ribaltare suono stereo", "Est\x82""reo inverso"},
+{"Confirm settings reset", "Confirmer la r\x82""initialisation", "Zur\x81""cksetzen best\x84""tigen", "Confirmar restablecimiento", "Conferma ripristino", "Confirmar reposi\x87""\xc6""o"},
+{"Confirm Classic preset", "Confirmer le pr\x82""r\x82""glage Classique", "Voreinstellung Klassisch best\x84""tigen", "Confirmar preajuste Cl\xa0""sico", "Conferma preimpostazione Classico", "Confirmar predefini\x87""\xc6""o Cl\xa0""ssico"},
