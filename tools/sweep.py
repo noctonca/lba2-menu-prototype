@@ -321,7 +321,7 @@ def check(state):
 # ───────────────────────────── Checking the command lines ─────────────────────────────
 
 # The walks by keys name themselves at the start of each problem they find.
-WALKS = {"esc", "reach", "setting", "preset", "bind", "walk", "more_options"}
+WALKS = {"esc", "reach", "setting", "preset", "bind", "keys", "walk", "more_options"}
 
 def check_again(line, again):
     """None when the command line opens a screen with this problem, else what it showed."""

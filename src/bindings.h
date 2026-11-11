@@ -11,10 +11,21 @@
 //   heads     wide: 1 = the column names inside the first row, above its chips; 0 = a line of heads above the rows
 extern int sw_padnames;
 
-void Bindings_Open();   // from the "Keys and buttons" row
-void Bindings_Close();  // back to the Options, as they were
-bool Bindings_Active();
-void Bindings_Update();
+// The page's place is on the menu's stack (menu_parts.h): the groups page, then a group's page
+// of binding rows, which the menu's loop walks, opens and leaves as any other page. What a
+// binding row has besides is here: the chip along it, the device shown, the wait for a key
+// and the question about a key another action has.
+void Bindings_Open();   // from the "Keys and buttons" row, before its page opens: the device used last
+void Bindings_Close();  // left by other means (`open`): nothing waits or asks
+bool Bindings_Active(); // a Keys and buttons page is on top
+void Bindings_GroupOpened();       // a group's page opened: its first chip
+void Bindings_SwitchDevice();      // Tab
+bool Bindings_StepColumn(int dir); // Left, Right along the chips; false at either end
+void Bindings_Enter();             // Enter on a binding row: wait for a key
+void Bindings_Clear();             // Del on a binding row
+bool Bindings_Busy();              // waiting for a key, or asking
+void Bindings_UpdateBusy();        // while busy: takes every key
+void Bindings_Say();               // the help, or what the wait or the question says
 void Bindings_Draw();
 void Bindings_WriteState(FILE *f);
 

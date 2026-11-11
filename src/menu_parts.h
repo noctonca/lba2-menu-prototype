@@ -7,6 +7,48 @@
 #include <set>
 #include <string>
 
+// ── The page model (docs/plan/MENU_PLAN.md, "The page model") ──
+
+enum RowType { R_RETURN, R_CATEGORY, R_PRESET_ROW, R_SETTING, R_PRESET_CHOICE, R_BACK_TO_MINE, R_ACTION, R_BINDING };
+
+// A check on the menu's state, for the menu plan's "shown when" and "active when".
+typedef bool (*RowCheck)();
+
+// A row of a page. A page's rows never change: a row that comes and goes (Undo preset) has a
+// "shown when" check, asked each time the page is walked or drawn, so the cursor stays on the
+// row it was on.
+struct Row {
+    RowType type;
+    const char *label;  // a setting row's is its setting's (RowLabel)
+    int arg;            // setting, page, preset or action
+    const char *help;   // a setting row's is its setting's (RowHelp)
+    RowCheck shown;     // NULL: always there
+    RowCheck active;    // NULL: always active; else dimmed while false, the help saying `needs`
+    const char *needs;
+};
+
+struct Page {
+    const char *name;
+    const Row *rows;
+    int count;
+};
+
+// The pages: the Options pages, then Keys and buttons (its groups) and a page of each group's
+// actions, which bindings.cpp makes from its tables (Bindings_Pages).
+enum { KEY_GROUPS = 7 };  // bindings.cpp kGroups
+enum {
+    P_HUB, P_PRESET, P_LANG, P_DISPLAY, P_SOUND, P_CONTROLS, P_ADVANCED, P_FIRST, P_ORIGINAL,
+    P_KEYS, P_KEY_GROUP, P_COUNT = P_KEY_GROUP + KEY_GROUPS
+};
+void Bindings_Pages(Page *pages);  // fills pages[P_KEYS] and pages[P_KEY_GROUP + group]
+
+// Where the player is: the page on top of the stack and the row its cursor is on, checked as
+// it is read; and the view's scroll (the first row drawn), which starts again when a page
+// opens or closes or the layout changes.
+int Menu_TopPage();
+int Menu_TopRow();
+int &Menu_Scroll();
+
 // One row as drawn this frame, for `state`.
 struct DrawnRow {
     char label[96];

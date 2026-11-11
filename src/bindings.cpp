@@ -9,6 +9,7 @@
 #include <SVGA/CLIP.H>
 #include <SYSTEM/KEYBOARD_KEYS.H>
 
+#include <assert.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
@@ -285,14 +286,11 @@ static int HolderOf(int action, int column, int code, int *slot) {
 
 // ───────────────────────────── State ─────────────────────────────
 
-static bool g_active;
+// Where the cursor is lives on the menu's stack (Menu_TopPage, Menu_TopRow): the groups page
+// (P_KEYS: its Return row, then a row for each group) or a group's page of actions. The page
+// keeps only what a binding row has besides: the chip along it, and the device it shows.
 static int g_device;      // 0 keyboard, 1 gamepad (one device per view)
-static bool g_focusRight; // wide: the actions; one column: the actions page is open
-static int g_group;       // wide: the left cursor; one column: the groups page cursor - 1
-static int g_colCursor;   // one column, groups page: 0 is the Return row
-static int g_row;         // the action within the group
-static int g_column;      // index into Columns()
-static int g_scroll;
+static int g_column;      // the chip: an index into Columns()
 static bool g_waiting;
 static U32 g_waitStart, g_waitFrame;
 static char g_lastBound[96];
@@ -310,17 +308,6 @@ static struct {
 static bool g_bindingsReady;
 
 static bool Wide() { return Menu_Wide(); }
-
-// The screen can change under the page. Wide keeps the group as g_group alone;
-// the one column's groups page counts its Return row, so put its cursor back on
-// the same group when the layout turns to one column.
-static int g_layoutWide = -1;
-static void SyncLayout() {
-    const int wide = Wide() ? 1 : 0;
-    if (g_layoutWide == 1 && !wide)
-        g_colCursor = g_group + 1;
-    g_layoutWide = wide;
-}
 
 // Wide, the column names sit inside the first row, so the actions start on the top margin
 // level with the groups. The one column keeps its heads above, as 1997's page.
@@ -357,7 +344,37 @@ static int GroupCount(int g) {
     return n;
 }
 
-static int CursorAction() { return GroupFirst(g_group) + g_row; }
+static_assert(GROUP_COUNT == KEY_GROUPS, "menu_parts.h KEY_GROUPS counts kGroups");
+
+static bool OnGroups() { return Menu_TopPage() == P_KEYS; }
+
+// The group whose page is open, or the one under the cursor on the groups page; -1 on its
+// Return row.
+static int CurrentGroup() {
+    const int p = Menu_TopPage();
+    return p >= P_KEY_GROUP ? p - P_KEY_GROUP : Menu_TopRow() - 1;
+}
+
+// The action under the cursor on a group's page; -1 on the groups page.
+static int CursorAction() { return OnGroups() ? -1 : GroupFirst(CurrentGroup()) + Menu_TopRow(); }
+
+// The pages, made from the tables: the groups (a Return row, then one row each, opening the
+// group's page) and each group's actions, a binding row each.
+static Row s_groupRows[1 + GROUP_COUNT];
+static Row s_actionRows[ACTION_COUNT];
+
+void Bindings_Pages(Page *pages) {
+    s_groupRows[0] = {R_RETURN, "Return to previous menu", 0, "", NULL, NULL, NULL};
+    for (int g = 0; g < GROUP_COUNT; g++)
+        s_groupRows[1 + g] = {R_CATEGORY, kGroups[g].name, P_KEY_GROUP + g, kGroups[g].help, NULL, NULL, NULL};
+    pages[P_KEYS] = {"Keys and buttons", s_groupRows, 1 + GROUP_COUNT};
+    for (int a = 0; a < ACTION_COUNT; a++) {
+        assert((a == 0 || kActions[a].group >= kActions[a - 1].group) && "a group's actions are together");
+        s_actionRows[a] = {R_BINDING, kActions[a].name, a, kActions[a].help, NULL, NULL, NULL};
+    }
+    for (int g = 0; g < GROUP_COUNT; g++)
+        pages[P_KEY_GROUP + g] = {kGroups[g].name, &s_actionRows[GroupFirst(g)], GroupCount(g)};
+}
 
 static int CursorColumn() {
     int cols[3];
@@ -369,17 +386,10 @@ static int CursorColumn() {
 
 static const char *DeviceName(int d) { return d ? "Gamepad" : "Keyboard"; }
 
-static void Say();
-
+// From the Keys and buttons row, before the menu opens the page: the device used last.
 void Bindings_Open() {
-    g_active = true;
     g_device = Host_LastInputWasPad() || !Host_KeyboardSeen() ? 1 : 0;
-    g_focusRight = false;
-    g_group = 0;
-    g_colCursor = 1;
-    g_row = 0;
     g_column = 0;
-    g_scroll = 0;
     g_waiting = false;
     g_lastBound[0] = 0;
     g_swap.action = -1;
@@ -387,23 +397,22 @@ void Bindings_Open() {
         ResetBindings();
         g_bindingsReady = true;
     }
-    Say();  // the group's help from the first frame, not the row's that opened the page
     Trace("bindings open device=%s", DeviceName(g_device));
 }
 
+// The page left by other means (`open` another page): nothing waits or asks.
 void Bindings_Close() {
-    if (!g_active)
-        return;
-    g_active = false;
     g_waiting = false;
-    Trace("bindings close");
+    g_swap.action = -1;
 }
 
-bool Bindings_Active() { return g_active; }
+bool Bindings_Active() { return Menu_TopPage() >= P_KEYS; }
+
+void Bindings_GroupOpened() { g_column = 0; }
 
 void Bindings_Reset() {
-    g_active = g_waiting = g_focusRight = false;
-    g_device = g_group = g_colCursor = g_row = g_column = g_scroll = 0;
+    g_waiting = false;
+    g_device = g_column = 0;
     g_lastBound[0] = 0;
     g_swap.action = -1;
     g_bindingsReady = false;
@@ -573,7 +582,7 @@ static void UpdateWaiting() {
     }
 }
 
-static void SwitchDevice() {
+void Bindings_SwitchDevice() {
     if (!Host_KeyboardSeen())  // no keyboard, no Keyboard view
         return;
     g_device ^= 1;
@@ -581,14 +590,42 @@ static void SwitchDevice() {
     Trace("bindings device=%s", DeviceName(g_device));
 }
 
-void Bindings_Update() {
-    SyncLayout();
-    if (g_waiting) {
-        UpdateWaiting();
-        Say();
+bool Bindings_StepColumn(int dir) {
+    int cols[3];
+    const int n = Columns(cols);
+    if (g_column + dir < 0 || g_column + dir >= n)
+        return false;
+    g_column += dir;
+    return true;
+}
+
+void Bindings_Enter() {
+    if (FixedChip(CursorAction(), CursorColumn()))
+        Trace("fixed action=\"%s\"", kActions[CursorAction()].name);
+    else
+        StartWaiting();
+}
+
+void Bindings_Clear() {
+    const int a = CursorAction(), c = CursorColumn();
+    if (FixedChip(a, c)) {
+        Trace("fixed action=\"%s\"", kActions[a].name);
         return;
     }
-    if (g_swap.action >= 0) {
+    if (c < 2)
+        g_bind[a][c] = 0;
+    else
+        g_bind[a][2] = g_bind[a][3] = 0;
+    Trace("clear action=\"%s\" column=\"%s\"", kActions[a].name, ColumnHead(c));
+}
+
+bool Bindings_Busy() { return g_waiting || g_swap.action >= 0; }
+
+// The wait for a key, and the question about a key another action has: each takes every key.
+void Bindings_UpdateBusy() {
+    if (g_waiting) {
+        UpdateWaiting();
+    } else {
         if (Host_Pressed(KEY_UP) || Host_Pressed(KEY_DOWN)) {
             g_swap.answer ^= 1;
             Trace("cursor %s", g_swap.answer ? "Yes" : "No");
@@ -600,82 +637,11 @@ void Bindings_Update() {
             g_swap.action = -1;
             Trace("answer no");
         }
-        Say();
-        return;
     }
-    int cols[3];
-    int ncols = Columns(cols);
-    int nrows = GroupCount(g_group);
-    bool onGroups = !g_focusRight;
-    bool column = !Wide();
-
-    if (Host_Pressed(KEY_TAB))
-        SwitchDevice();
-
-    if (onGroups) {
-        if (column) {
-            int n = GROUP_COUNT + 1;
-            if (Host_Pressed(KEY_UP))
-                g_colCursor = (g_colCursor + n - 1) % n;
-            if (Host_Pressed(KEY_DOWN))
-                g_colCursor = (g_colCursor + 1) % n;
-            if (g_colCursor > 0)
-                g_group = g_colCursor - 1;
-        } else {
-            if (Host_Pressed(KEY_UP))
-                g_group = (g_group + GROUP_COUNT - 1) % GROUP_COUNT;
-            if (Host_Pressed(KEY_DOWN))
-                g_group = (g_group + 1) % GROUP_COUNT;
-        }
-        bool open = Host_Pressed(KEY_ENTER) || (!column && Host_Pressed(KEY_RIGHT));
-        if (open && column && g_colCursor == 0) {
-            Bindings_Close();
-            return;
-        }
-        if (open) {
-            g_focusRight = true;
-            g_row = 0;
-            g_column = 0;
-            g_scroll = 0;
-            Trace("bindings group=%s", kGroups[g_group].name);
-        } else if (Host_Pressed(KEY_ESC)) {
-            Bindings_Close();
-            return;
-        }
-    } else {
-        if (Host_Pressed(KEY_UP))
-            g_row = (g_row + nrows - 1) % nrows;
-        if (Host_Pressed(KEY_DOWN))
-            g_row = (g_row + 1) % nrows;
-        if (Host_Pressed(KEY_RIGHT) && g_column + 1 < ncols)
-            g_column++;
-        if (Host_Pressed(KEY_LEFT)) {
-            if (g_column > 0)
-                g_column--;
-            else if (!column)
-                g_focusRight = false;
-        }
-        bool fixed = FixedChip(CursorAction(), CursorColumn());
-        if (g_focusRight && fixed && (Host_Pressed(KEY_ENTER) || Host_Pressed(KEY_DEL))) {
-            Trace("fixed action=\"%s\"", kActions[CursorAction()].name);
-        } else if (g_focusRight && Host_Pressed(KEY_ENTER)) {
-            StartWaiting();
-        } else if (g_focusRight && Host_Pressed(KEY_DEL)) {
-            int a = CursorAction(), c = CursorColumn();
-            if (c < 2)
-                g_bind[a][c] = 0;
-            else
-                g_bind[a][2] = g_bind[a][3] = 0;
-            Trace("clear action=\"%s\" column=\"%s\"", kActions[a].name, ColumnHead(c));
-        } else if (Host_Pressed(KEY_ESC)) {
-            g_focusRight = false;
-            Trace("bindings back to groups");
-        }
-    }
-    Say();
+    Bindings_Say();
 }
 
-static void Say() {
+void Bindings_Say() {
     static char buf[256];
     const char *text = "";
     if (g_waiting) {
@@ -690,9 +656,9 @@ static void Say() {
             snprintf(buf, sizeof buf, Menu_Tr("Press a button, or %s to keep it."), start);
             text = buf;
         }
-    } else if (!g_focusRight) {
-        if (Wide() || g_colCursor > 0)
-            text = kGroups[g_group].help;
+    } else if (OnGroups()) {
+        if (CurrentGroup() >= 0)
+            text = kGroups[CurrentGroup()].help;
     } else {
         int a = CursorAction(), c = CursorColumn();
         int other = ConflictOf(a, c);
@@ -709,7 +675,7 @@ static void Say() {
             SaidCode(c, g_swap.code, key, sizeof key);
             // One pane at a time shows one group: name the other action's when it is not this
             // one. What each answer leaves it with is on the answer rows.
-            if (h.group != g_group)
+            if (h.group != CurrentGroup())
                 snprintf(where, sizeof where, Menu_Tr(", in %s"), Ui_Tr(kGroups[h.group].name));
             snprintf(buf, sizeof buf, Menu_Tr("%s is on %s%s."), key, Ui_Tr(h.name), where);
             text = buf;
@@ -798,7 +764,7 @@ static void DrawActionRow(int action, S32 x0, S32 y0, S32 x1, S32 y1, const int 
         int c = cols[i];
         char name[32];
         ChipText(action, c, name, sizeof name);
-        bool here = cursorRow && i == g_column && g_focusRight;
+        bool here = cursorRow && i == g_column;
         ChipFill fill = here ? (g_waiting ? CHIP_WAITING : CHIP_CURSOR) : CHIP_SHADE;
         bool red = ConflictOf(action, c) >= 0;
         S32 cy = ChipTop(yc, s);
@@ -869,17 +835,17 @@ static void Legend(const char **keys, const char **words, int *n) {
         keys[*n] = "Enter", words[(*n)++] = "Answer";
         return;
     }
-    if (g_focusRight && !FixedChip(CursorAction(), CursorColumn())) {
+    if (!OnGroups() && !FixedChip(CursorAction(), CursorColumn())) {
         keys[*n] = "Enter", words[(*n)++] = "Change";
         keys[*n] = "Del", words[(*n)++] = "Clear";
-    } else if (!g_focusRight) {
+    } else if (OnGroups()) {
         keys[*n] = "Enter", words[(*n)++] = "Open";
     }
     if (Host_KeyboardSeen()) {
         snprintf(other, sizeof other, "%s", DeviceName(!g_device));
         keys[*n] = "Tab", words[(*n)++] = other;
     }
-    if (!g_focusRight)
+    if (OnGroups())
         keys[*n] = "Esc", words[(*n)++] = "Back";
 }
 
@@ -919,62 +885,52 @@ static void DrawActions(S32 x0, S32 x1, S32 headsTop, S32 limit, const char *pan
     }
     int cols[3];
     int ncols = Columns(cols);
-    int n = GroupCount(g_group);
+    const int g = CurrentGroup(), row = Menu_TopRow();
+    int &scroll = Menu_Scroll();
+    int n = GroupCount(g);
     S32 top = HeadsInRow() ? headsTop : headsTop + 22;
     int visible = (limit - top + ROW_GAP) / ROW_PITCH;
     if (visible > n)
         visible = n;
-    if (g_row < g_scroll)
-        g_scroll = g_row;
-    if (g_row >= g_scroll + visible)
-        g_scroll = g_row - visible + 1;
-    if (!g_focusRight)
-        g_scroll = 0;
+    if (row < scroll)
+        scroll = row;
+    if (row >= scroll + visible)
+        scroll = row - visible + 1;
     if (!HeadsInRow())
         DrawHeads(x0 + 16, x1, cols, ncols, headsTop);  // on the label edge, as the names below
     S32 y = top;
-    int first = GroupFirst(g_group);
-    for (int i = g_scroll; i < g_scroll + visible; i++) {
-        DrawActionRow(first + i, x0, y, x1, y + ROW_H, cols, ncols, i == g_row, pane);
+    int first = GroupFirst(g);
+    for (int i = scroll; i < scroll + visible; i++) {
+        DrawActionRow(first + i, x0, y, x1, y + ROW_H, cols, ncols, i == row, pane);
         y += ROW_PITCH;
     }
     if (HeadsInRow() && visible > 0)
         DrawHeadsInRow(top, x1, cols, ncols);  // the first row shown, scrolled or not
     if (visible < n)
-        Menu_DrawScrollBar(x1 + 9, top, top + visible * ROW_PITCH - ROW_GAP - 1, g_scroll, visible, n);
+        Menu_DrawScrollBar(x1 + 9, top, top + visible * ROW_PITCH - ROW_GAP - 1, scroll, visible, n);
 }
 
 static void DrawWideControls() {
-    // The groups and the column heads start on the top margin, as Options' panes do; seven
-    // groups from 24 end at 410, clear of the band at 430. The actions start under their heads,
-    // or with the heads inside their first row (heads=1), level with the groups.
+    // One pane at a time, centred (decided 2026-11-03): the groups from the top margin (seven
+    // from 24 end at 410, clear of the band at 430), or a group's title and its actions, the
+    // column names inside the first row.
     WideFrame f = Menu_WideFrame();
-    const S32 side = 32, gap = 16;
     const S32 top = f.y0 + 24;
-    S32 inner = f.w - 2 * side - gap;
-    S32 leftW = inner * 304 / 880;
-    S32 lx0 = f.x0 + side, lx1 = lx0 + leftW - 1;
-    S32 rx0 = lx1 + 1 + gap, rx1 = f.x0 + f.w - side - 1;
-    // One pane at a time, centred (decided 2026-11-03).
-    lx0 = rx0 = f.x0 + (f.w - DRILL_W) / 2;
-    lx1 = rx1 = lx0 + DRILL_W - 1;
-    bool drawLeft = !g_focusRight, drawRight = g_focusRight;
-
-    S32 y = top;
-    for (int g = 0; drawLeft && g < GROUP_COUNT; g++) {
-        RowFill fill = FILL_SHADE;
-        if (g == g_group)
-            fill = g_focusRight ? FILL_CURRENT : FILL_CURSOR;
-        Ui_RowBackground(lx0, y, lx1, y + ROW_H, fill);
-        Ui_TextInRoom(lx0 + 16, lx1 - 16, y + ROW_H / 2 - 18, Ui_Tr(kGroups[g].name), INK_WHITE, fill == FILL_CURSOR);
-        DrawnRow &d = Menu_Record("bindings-left", kGroups[g].name, "", fill, lx0, y, lx1, y + ROW_H);
-        d.textLeft = lx0 + 16;
-        d.textRight = lx0 + 16 + Ui_TextWidth(kGroups[g].name);
-        y += ROW_PITCH;
-    }
-    if (drawRight) {
-        S32 atop = Ui_Title(rx0, rx1, top, kGroups[g_group].name);
-        DrawActions(rx0, rx1, atop, Menu_WideRowsLimit(), "bindings-right");
+    const S32 x0 = f.x0 + (f.w - DRILL_W) / 2, x1 = x0 + DRILL_W - 1;
+    if (OnGroups()) {
+        S32 y = top;
+        for (int g = 0; g < GROUP_COUNT; g++) {
+            RowFill fill = g == CurrentGroup() ? FILL_CURSOR : FILL_SHADE;
+            Ui_RowBackground(x0, y, x1, y + ROW_H, fill);
+            Ui_TextInRoom(x0 + 16, x1 - 16, y + ROW_H / 2 - 18, Ui_Tr(kGroups[g].name), INK_WHITE, fill == FILL_CURSOR);
+            DrawnRow &d = Menu_Record("bindings-left", kGroups[g].name, "", fill, x0, y, x1, y + ROW_H);
+            d.textLeft = x0 + 16;
+            d.textRight = x0 + 16 + Ui_TextWidth(kGroups[g].name);
+            y += ROW_PITCH;
+        }
+    } else {
+        S32 atop = Ui_Title(x0, x1, top, kGroups[CurrentGroup()].name);
+        DrawActions(x0, x1, atop, Menu_WideRowsLimit(), "bindings-right");
     }
 
     const char *keys[4], *words[4];
@@ -986,32 +942,34 @@ static void DrawWideControls() {
 static void DrawColumnControls() {
     S32 W = (S32)Host_LogicalW(), H = (S32)Host_LogicalH();
     S32 x0 = W / 2 - 275, x1 = W / 2 + 275;
-    if (!g_focusRight) {
+    if (OnGroups()) {
         // The groups, as a 1997 sub-menu: a Return row, then one row each.
+        const int cursor = Menu_TopRow();
+        int &scroll = Menu_Scroll();
         S32 top = 16, bottom = Menu_DialogueTop() - 16;
         int n = GROUP_COUNT + 1;
         int visible = (bottom - top + ROW_GAP) / ROW_PITCH;
         if (visible > n)
             visible = n;
-        if (g_colCursor < g_scroll)
-            g_scroll = g_colCursor;
-        if (g_colCursor >= g_scroll + visible)
-            g_scroll = g_colCursor - visible + 1;
+        if (cursor < scroll)
+            scroll = cursor;
+        if (cursor >= scroll + visible)
+            scroll = cursor - visible + 1;
         S32 stackH = visible * ROW_PITCH - ROW_GAP;
         S32 y = top + (bottom - top - stackH) / 2;
         S32 y0 = y;
-        for (int i = g_scroll; i < g_scroll + visible; i++) {
+        for (int i = scroll; i < scroll + visible; i++) {
             const char *label = i == 0 ? "Return to previous menu" : kGroups[i - 1].name;
-            RowFill fill = i == g_colCursor ? FILL_CURSOR : FILL_SHADE;
+            RowFill fill = i == cursor ? FILL_CURSOR : FILL_SHADE;
             Ui_RowBackground(x0, y, x1, y + ROW_H, fill);
-            Menu_RowLabelCentred(x0, x1, y + ROW_H / 2, label, INK_WHITE, false, i == g_colCursor);
+            Menu_RowLabelCentred(x0, x1, y + ROW_H / 2, label, INK_WHITE, false, i == cursor);
             DrawnRow &d = Menu_Record("column", label, "", fill, x0, y, x1, y + ROW_H);
             d.textLeft = (x0 + x1) / 2 - Ui_TextWidth(label) / 2;
             d.textRight = (x0 + x1) / 2 + Ui_TextWidth(label) / 2 + 8;
             y += ROW_PITCH;
         }
         if (visible < n)
-            Menu_DrawScrollBar(x1 + 9, y0, y0 + stackH - 1, g_scroll, visible, n);
+            Menu_DrawScrollBar(x1 + 9, y0, y0 + stackH - 1, scroll, visible, n);
         Menu_DrawDialogue();
         return;
     }
@@ -1021,7 +979,6 @@ static void DrawColumnControls() {
 }
 
 void Bindings_Draw() {
-    SyncLayout();
     g_chipCount = g_headCount = 0;
     if (Wide())
         DrawWideControls();
@@ -1071,15 +1028,15 @@ int Bindings_Conflicts(ConflictView *out, int max) {
 }
 
 int Bindings_Where(char *buf, size_t n) {
-    if (!g_focusRight) {
-        const char *row = !Wide() && g_colCursor == 0 ? "Return to previous menu" : kGroups[g_group].name;
-        snprintf(buf, n, "%s | %s", DeviceName(g_device), row);
+    if (OnGroups()) {
+        const int g = CurrentGroup();
+        snprintf(buf, n, "%s | %s", DeviceName(g_device), g < 0 ? "Return to previous menu" : kGroups[g].name);
         return 1;
     }
     char chip[32];
     int a = CursorAction(), c = CursorColumn();
     ChipText(a, c, chip, sizeof chip);
-    snprintf(buf, n, "%s | %s | %s | %s | %s%s", DeviceName(g_device), kGroups[g_group].name, kActions[a].name,
+    snprintf(buf, n, "%s | %s | %s | %s | %s%s", DeviceName(g_device), kGroups[CurrentGroup()].name, kActions[a].name,
              ColumnHead(c), chip, g_waiting ? " | waiting" : g_swap.action < 0 ? "" : g_swap.answer ? " | asking | Yes" : " | asking | No");
     return g_waiting || g_swap.action >= 0 ? 3 : 2;  // Esc takes either back to the chip
 }
@@ -1100,17 +1057,16 @@ bool Bindings_Text(const char *action, int column, char *out, size_t n) {
 }
 
 void Bindings_WriteState(FILE *f) {
-    SyncLayout();
     char buf[32];
-    int a = CursorAction(), c = CursorColumn();
+    const int g = CurrentGroup(), a = CursorAction();
     fprintf(f, "{\"device\":\"%s\",\"pad_names\":\"%s\",\"focus\":\"%s\",\"group\":", DeviceName(g_device),
-            kPadFamilyNames[PadFamily()], g_focusRight ? "actions" : "groups");
-    Menu_JsonString(f, kGroups[g_group].name);
+            kPadFamilyNames[PadFamily()], OnGroups() ? "groups" : "actions");
+    Menu_JsonString(f, g >= 0 ? kGroups[g].name : "");
     fprintf(f, ",\"action\":");
-    Menu_JsonString(f, kActions[a].name);
+    Menu_JsonString(f, a >= 0 ? kActions[a].name : "");
     fprintf(f, ",\"column\":");
-    Menu_JsonString(f, ColumnHead(c));
-    fprintf(f, ",\"waiting\":%s,\"scroll\":%d,\"chips\":[", g_waiting ? "true" : "false", g_scroll);
+    Menu_JsonString(f, a >= 0 ? ColumnHead(CursorColumn()) : "");
+    fprintf(f, ",\"waiting\":%s,\"scroll\":%d,\"chips\":[", g_waiting ? "true" : "false", Menu_Scroll());
     for (int i = 0; i < g_chipCount; i++) {
         const DrawnChip &k = g_chips[i];
         fprintf(f, "%s{\"action\":", i ? "," : "");

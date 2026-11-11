@@ -235,8 +235,9 @@ width and the voice lines the text needs (620 wide unless given). It is how
 the 1997 game's six languages were compared for the help review.
 
 - `state` prints one JSON line: layout, sizes, page, the stack of pages with the
-  row each cursor is on (the same in both layouts), the cursor's place among the
-  rows shown, every row
+  row each cursor is on (the same in both layouts; Keys and buttons and a group's
+  page of actions, named after the group, are pages on it too), the cursor's
+  place among the rows shown, every row
   drawn (label, value, fill, rectangle, dimmed, changed, change marks, whether
   it is a setting, where its text starts and ends: `text_left`, `text_right`,
   and the last pixel column of what it shows on the right, a value, a slider,
@@ -244,8 +245,8 @@ the 1997 game's six languages were compared for the help review.
   with how many letters are typed, which window of it shows of how many
   (`page`, `pages`) and whether it was cut off, the legend, the
   switches and every setting.
-- On the Controls page `state` adds `bindings`: the device, group, action and
-  column under the cursor, whether it waits for a key, every chip drawn
+- On the Controls page `state` adds `bindings`: the device, the group under the
+  cursor or open, and on a group's page the action and column under the cursor, whether it waits for a key, every chip drawn
   (name, rectangle, fill, conflict, whether the name fits), the column heads
   (`heads`: text and rectangle; inside the first row wide, above the actions
   in the one column),
@@ -398,6 +399,10 @@ walk finds starts with the walk's name:
   they were; Del clears it. On the pad, Start leaves the wait as Esc does, and
   Game menu's chip neither waits nor clears. Also: Forward's Key 2 put in
   Key 1 leaves Key 2 empty, and the wait gives up after 5 s.
+- `keys:` the Keys and buttons pages go where their keys say: each group says
+  its own help; a group opens on its first chip, whatever chip the group before
+  was left on; Tab switches the device on a group's page too; wide, Right opens
+  a group and Left from the first chip goes back to it (the one column: neither).
 - `padonly:` with pad buttons only, every pad binding is offered Start (which
   keeps it, never asks) and then cleared; Game menu still has Start, and B
   leaves Keys and buttons and A opens it again.
@@ -454,7 +459,8 @@ that differs and which pictures differ, and exits 1 if any run does.
 - `--context N` prints the N keys before the first difference and the page
   each one left.
 - `--rename old=new` compares a state field renamed on purpose (its path from
-  the top, as `bindings.heads`); `--ignore` leaves fields out by name.
+  the top, as `bindings.heads`); `--ignore` leaves fields out by name at any
+  depth, `--ignore-path` by their path from the top.
 - The scripts are made from the first build recorded, into
   `.runs/baseline/scripts.json`; `scripts` makes them again (needed when a
   change moves where an Esc closes the menu, which the walks avoid).

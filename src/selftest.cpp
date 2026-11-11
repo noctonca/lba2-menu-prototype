@@ -1358,6 +1358,55 @@ struct Walker {
                Fmt("bind: 5 s on, the wait %s (chip %s)", Waiting() ? "goes on" : "ended", Repr(ChipText().c_str()).c_str()));
     }
 
+    // keys: the Keys and buttons pages go where their keys say, as the Options pages do. Each
+    // group says its own help; a group opens on its first chip, whatever chip the group before
+    // was left on; Tab switches the device on a group's page too; wide, Right opens a group as
+    // Enter does and Left from the first chip goes back to it (the one column: neither).
+    void KeysPages() {
+        if (!Wanted("Keys and buttons"))
+            return;
+        const int groups = (int)(sizeof kGroupFirst / sizeof kGroupFirst[0]);
+        const bool wide = !strcmp(Menu_Layout(), "wide");
+        Fresh("Keys and buttons");
+        std::set<std::string> said;
+        for (int g = 0; g < groups; g++) {
+            std::string v = Voice();
+            Expect(!v.empty() && !said.count(v), Fmt("keys: on %s the voice says %s", Repr(BindingsWhere().c_str()).c_str(),
+                                                     Repr(v.c_str()).c_str()));
+            said.insert(v);
+            Key("down");
+        }
+
+        Fresh("Keys and buttons");
+        Key("enter");
+        Key("right");  // Key 2
+        Key("esc");
+        Key("down");
+        Key("enter");
+        Expect(BindingsWhere().find("| Key 1 |") != std::string::npos,
+               Fmt("keys: a group opened after Key 2 of another opens on %s", Repr(BindingsWhere().c_str()).c_str()));
+        Key("tab");
+        Expect(BindingsWhere().find("Gamepad") == 0,
+               Fmt("keys: Tab on a group's page leaves %s", Repr(BindingsWhere().c_str()).c_str()));
+
+        Fresh("Keys and buttons");
+        Key("down");
+        const std::string group = BindingsWhere();
+        Key("right");
+        if (!Expect(InActions() == wide, Fmt("keys: %s Right on %s %s", wide ? "wide," : "in the one column,",
+                                             Repr(group.c_str()).c_str(), InActions() ? "opens it" : "does not open it")))
+            return;
+        if (!wide)
+            Key("enter");
+        Key("left");
+        if (wide)
+            Expect(BindingsWhere() == group, Fmt("keys: wide, Left from the first chip goes to %s, not %s",
+                                                 Repr(BindingsWhere().c_str()).c_str(), Repr(group.c_str()).c_str()));
+        else
+            Expect(InActions(), Fmt("keys: in the one column, Left from the first chip leaves the group (now %s)",
+                                    Repr(BindingsWhere().c_str()).c_str()));
+    }
+
     // The swap question: No (first) changes nothing; Yes gives Forward J and Jetpack Forward's
     // key, with no key on two actions; swapping back puts both back. Onto an empty chip the
     // Yes answer says what Jetpack is left with.
@@ -1469,6 +1518,7 @@ struct Walker {
         MoreOptions();
         Console();
         Binding();
+        KeysPages();
         PadOnly();
         Devices();
         Languages();

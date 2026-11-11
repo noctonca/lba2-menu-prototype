@@ -3,7 +3,8 @@
 meant to move code without changing what a player sees.
 
     tools/baseline.py record OUTDIR [--bin build/lba2menu] [--scripts FILE] [--jobs N]
-    tools/baseline.py diff A B [--ignore key,key] [--rename old=new,...] [--max N] [--context N]
+    tools/baseline.py diff A B [--ignore name,...] [--ignore-path path,...] [--rename old=new,...]
+                         [--max N] [--context N]
     tools/baseline.py scripts [--bin build/lba2menu] [--out FILE] [--jobs N]
 
 record runs 28 scripts headless under a fixed clock: at each of four screen
@@ -21,7 +22,8 @@ the closed note) is made an Enter, until no run quits on that build.
 
 diff prints, per run, the first state that differs, field by field, and which
 pictures differ; exit 1 if any run differs. --ignore leaves out fields with
-that name at any depth; --rename compares A's field old (its path from the
+that name at any depth, --ignore-path the field at that path from the top
+(`page`, `bindings.action`) and what is under it; --rename compares A's field old (its path from the
 top, as `bindings` or `bindings.heads`) as if it were new, for a state field
 renamed on purpose. --context N prints the N keys before the first
 difference with the page and row each left, from A and B.
@@ -235,6 +237,7 @@ def context(a, n, i, back):
 
 def cmd_diff(a):
     ignore = set(filter(None, (a.ignore or "").split(",")))
+    ignore_paths = tuple(filter(None, (a.ignore_path or "").split(",")))
     renames = dict(r.split("=", 1) for r in filter(None, (a.rename or "").split(",")))
     names = sorted(n[: -len(".states")] for n in os.listdir(a.A) if n.endswith(".states"))
     same = differ = states = 0
@@ -249,7 +252,8 @@ def cmd_diff(a):
             fx = {renamed(k, renames): v for k, v in flat(json.loads(x))}
             fy = dict(flat(json.loads(y)))
             keys = [k for k in sorted(set(fx) | set(fy)) if fx.get(k) != fy.get(k)
-                    and not ignore & {p.split("[")[0] for p in k.split(".")}]
+                    and not ignore & {p.split("[")[0] for p in k.split(".")}
+                    and not any(k == q or k.startswith((q + ".", q + "[")) for q in ignore_paths)]
             if keys:
                 first = (i, keys, fx, fy)
                 break
@@ -292,6 +296,7 @@ def main():
     d.add_argument("A")
     d.add_argument("B")
     d.add_argument("--ignore")
+    d.add_argument("--ignore-path")
     d.add_argument("--rename")
     d.add_argument("--max", type=int, default=12)
     d.add_argument("--context", type=int, default=0)

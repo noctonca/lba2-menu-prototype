@@ -311,35 +311,9 @@ static void ResetSettings() {
 
 // ───────────────────────────── Pages as data ─────────────────────────────
 
-enum RowType { R_RETURN, R_CATEGORY, R_PRESET_ROW, R_SETTING, R_PRESET_CHOICE, R_BACK_TO_MINE, R_ACTION };
-
-// A check on the menu's state, for the menu plan's "shown when" and "active when".
-typedef bool (*RowCheck)();
-
-// A row of a page, as the menu plan's page model has it. A page's rows never change: a row
-// that comes and goes (Undo preset) has a "shown when" check, asked each time the page is
-// walked or drawn, so the cursor stays on the row it was on.
-struct Row {
-    RowType type;
-    const char *label;  // a setting row's is its setting's (RowLabel)
-    int arg;            // setting, page or preset
-    const char *help;   // a setting row's is its setting's (RowHelp)
-    RowCheck shown;     // NULL: always there
-    RowCheck active;    // NULL: always active; else dimmed while false, the help saying `needs`
-    const char *needs;
-};
-
 enum { A_KEYS, A_RESET, A_EXP, A_CONSOLE };  // R_ACTION: opens Keys and buttons, asks to reset, opens More
                                               // options, opens the console
 enum { BACK_PRESET, BACK_RESET };  // R_BACK_TO_MINE: undoes a preset, or a reset
-
-enum { P_HUB, P_PRESET, P_LANG, P_DISPLAY, P_SOUND, P_CONTROLS, P_ADVANCED, P_FIRST, P_ORIGINAL, P_COUNT };
-
-struct Page {
-    const char *name;
-    const Row *rows;
-    int count;
-};
 
 // Switches (prototype aids; every review switch was pruned 2026-11-12, keeping what was decided).
 static int sw_overlay = 0;
@@ -443,8 +417,9 @@ static const Row kOriginalRows[] = {
     {R_ACTION, "Controls", 0, "", NULL, NULL, NULL},
 };
 
+// The Options pages; Keys and buttons and its groups are filled in from bindings.cpp's tables.
 #define PAGE(name, rows) {name, rows, (int)(sizeof rows / sizeof rows[0])}
-static const Page kPages[P_COUNT] = {
+static Page g_pages[P_COUNT] = {
     PAGE("Options", kHubRows),
     PAGE("Preset", kPresetRows),
     PAGE("Language and interface", kLangRows),
@@ -572,7 +547,7 @@ enum { PAGE_ROWS_MAX = 16 };
 
 // The rows a page shows, in order: their indices in its table.
 static int ShownRows(int page, int *out) {
-    const Page &p = kPages[page];
+    const Page &p = g_pages[page];
     int n = 0;
     for (int i = 0; i < p.count && n < PAGE_ROWS_MAX; i++)
         if (RowShown(p, i))
@@ -593,7 +568,7 @@ static int Position(int page, int row) {
 // A row the cursor can be on: the row itself when shown, else the next one shown, else the
 // one before (an undo row that went, after the undo).
 static int ResolveRow(int page, int row) {
-    const Page &p = kPages[page];
+    const Page &p = g_pages[page];
     if (row >= 0 && row < p.count && RowShown(p, row))
         return row;
     for (int i = row + 1; i < p.count; i++)
@@ -610,7 +585,7 @@ static int ResolveRow(int page, int row) {
 static Place &Top() {
     Place &t = g_stack[g_depth - 1];
     t.row = ResolveRow(t.page, t.row);
-    assert(RowShown(kPages[t.page], t.row) && "the cursor is on a row its page shows");
+    assert(RowShown(g_pages[t.page], t.row) && "the cursor is on a row its page shows");
     return t;
 }
 
@@ -618,8 +593,12 @@ static const Row *CursorRow() {
     if (g_confirm)
         return NULL;
     const Place &t = Top();
-    return &kPages[t.page].rows[t.row];
+    return &g_pages[t.page].rows[t.row];
 }
+
+int Menu_TopPage() { return TopPage(); }
+int Menu_TopRow() { return Top().row; }
+int &Menu_Scroll() { return g_scroll; }
 
 static void LegendFor(const Row *r, const char **keys, const char **words, int *n);
 static S32 LegendWidth(const char **keys, const char **words, int n, S32 scale);
@@ -731,6 +710,10 @@ void Menu_Say(const char *text) { Say(text, true); }
 void Menu_SayAsIs(const char *text) { Say(text, false); }
 
 static void UpdateVoice() {
+    if (Bindings_Active()) {
+        Bindings_Say();
+        return;
+    }
     const Row *r = CursorRow();
     const char *text = g_confirm ? kQuestions[g_question].voice : HelpFor(r);
     if (text == g_helpBuf)
@@ -744,7 +727,7 @@ static void Push(int page) {
     g_stack[g_depth].row = ResolveRow(page, 0);  // the first row shown: 1997's sub-menus open on their Return row
     g_depth++;
     g_scroll = 0;
-    Trace("open page=%s", kPages[page].name);
+    Trace("open page=%s", g_pages[page].name);
 }
 
 // The layout the view was last made in. The place is the same in every layout; only the
@@ -761,12 +744,12 @@ static void SyncView() {
         return;
     g_scroll = 0;
     const Place &t = Top();
-    Trace("layout %s page=%s cursor=%d", wide ? "wide" : "column", kPages[t.page].name, Position(t.page, t.row));
+    Trace("layout %s page=%s cursor=%d", wide ? "wide" : "column", g_pages[t.page].name, Position(t.page, t.row));
 }
 
 static void Pop() {
     if (g_depth > 1) {
-        Trace("close page=%s", kPages[TopPage()].name);
+        Trace("close page=%s", g_pages[TopPage()].name);
         g_depth--;
         g_scroll = 0;
     } else {
@@ -780,6 +763,7 @@ void Menu_Init(bool firstLaunch) {
     for (int s = 0; s < S_COUNT; s++)
         g_val[s] = FreshValue(s);
     g_preset = 0;
+    Bindings_Pages(g_pages);
     g_first = firstLaunch;
     g_depth = 1;
     g_stack[0].page = g_first ? P_FIRST : P_HUB;
@@ -835,6 +819,11 @@ static void Activate(const Row &r) {
     case R_CATEGORY:
     case R_PRESET_ROW:
         Push(r.arg);
+        if (r.arg >= P_KEY_GROUP)
+            Bindings_GroupOpened();
+        break;
+    case R_BINDING:
+        Bindings_Enter();  // waits for a key, or says the chip is fixed
         break;
     case R_SETTING:
         if (kSettings[r.arg].kind == K_CHOICE || kSettings[r.arg].kind == K_TOGGLE)
@@ -869,8 +858,11 @@ static void Activate(const Row &r) {
             g_console = Host_LastInputWasPad() ? CON_READONLY : CON_FULL;
             Trace("open console mode=%s", g_console == CON_READONLY ? "read-only" : "full");
         }
-        else
+        else {
             Bindings_Open();
+            Push(P_KEYS);
+            Top().row = 1;  // on its first group, not its Return row
+        }
         break;
     }
 }
@@ -889,7 +881,7 @@ static void Move(int dir) {
 // The cursor on the top page's row of that kind, as Enter on it leaves it.
 static void PutCursorOn(RowType type, int arg) {
     Place &t = g_stack[g_depth - 1];
-    const Page &p = kPages[t.page];
+    const Page &p = g_pages[t.page];
     for (int i = 0; i < p.count; i++) {
         if (p.rows[i].type == type && p.rows[i].arg == arg) {
             t.row = i;
@@ -900,8 +892,8 @@ static void PutCursorOn(RowType type, int arg) {
 
 void Menu_Update() {
     SyncView();
-    if (Bindings_Active()) {
-        Bindings_Update();
+    if (Bindings_Busy()) {  // waiting for a key, or asking about one another action has
+        Bindings_UpdateBusy();
         return;
     }
     if (MoreOptions_Active()) {
@@ -952,6 +944,8 @@ void Menu_Update() {
         return;
     }
 
+    if (Bindings_Active() && Host_Pressed(KEY_TAB))
+        Bindings_SwitchDevice();
     if (Host_Pressed(KEY_UP))
         Move(-1);
     if (Host_Pressed(KEY_DOWN))
@@ -963,21 +957,31 @@ void Menu_Update() {
             ChangeSetting(r->arg, -1);
         if (Host_Pressed(KEY_RIGHT))
             ChangeSetting(r->arg, +1);
-    } else if (Wide() && !g_first && g_depth == 1 && Host_Pressed(KEY_RIGHT) && r) {
-        Activate(*r);  // wide, Right opens a hub row as Enter does
+    } else if (r && r->type == R_BINDING) {
+        // Left and Right go along the row's chips; wide, Left from the first goes back.
+        if (Host_Pressed(KEY_RIGHT))
+            Bindings_StepColumn(+1);
+        if (Host_Pressed(KEY_LEFT) && !Bindings_StepColumn(-1) && Wide())
+            Pop();
+    } else if (Wide() && !g_first && r && (r->type == R_CATEGORY || r->type == R_PRESET_ROW) &&
+               Host_Pressed(KEY_RIGHT)) {
+        Activate(*r);  // wide, Right opens what Enter opens: a category, the preset page, a group
     }
     r = CursorRow();
     if (r && Host_Pressed(KEY_ENTER) && RowActive(*r))
         Activate(*r);
+    r = CursorRow();
+    if (r && r->type == R_BINDING && Host_Pressed(KEY_DEL))
+        Bindings_Clear();
 
     if (Host_Pressed(KEY_ESC)) {
         if (g_first)
-            Activate(kPages[P_FIRST].rows[0]);  // Escape answers Modern
+            Activate(g_pages[P_FIRST].rows[0]);  // Escape answers Modern
         else
             Pop();
     }
 
-    if (!Bindings_Active() && !MoreOptions_Active())  // a page just opened: its help, not this row's
+    if (!MoreOptions_Active())  // More options just opened says its own help
         UpdateVoice();
 }
 
@@ -1325,7 +1329,7 @@ void Menu_DrawDialogueIn(S32 x0, S32 y0, S32 x1, S32 y1) {
 static void DrawColumn() {
     S32 W = (S32)Host_LogicalW(), H = (S32)Host_LogicalH();
     const Place &t = Top();
-    const Page &p = kPages[t.page];
+    const Page &p = g_pages[t.page];
     int shown[PAGE_ROWS_MAX];
     const int count = ShownRows(t.page, shown);
     const int cursor = Position(t.page, t.row);
@@ -1387,7 +1391,7 @@ static void DrawWide() {
     const S32 top = f.y0 + 24;
     const S32 x0 = f.x0 + (f.w - DRILL_W) / 2, x1 = x0 + DRILL_W - 1;
     const Place &t = Top();
-    const Page &page = kPages[t.page];
+    const Page &page = g_pages[t.page];
 
     if (g_confirm) {
         // The question's answers in place of the rows.
@@ -1644,7 +1648,8 @@ bool Menu_Open(const char *name) {
     if (!strcmp(name, "Keys and buttons")) {
         Menu_Open("Controls and camera");
         PutCursorOn(R_ACTION, A_KEYS);  // as Enter on it leaves it
-        Bindings_Open();
+        Activate(*CursorRow());
+        UpdateVoice();
         return true;
     }
     if (!strcmp(name, "More options")) {
@@ -1662,13 +1667,13 @@ bool Menu_Open(const char *name) {
     g_console = CON_CLOSED;
     Bindings_Close();
     MoreOptions_Close();
-    for (int p = 0; p < P_COUNT; p++) {
-        if (strcmp(kPages[p].name, name) != 0)
+    for (int p = 0; p < P_KEYS; p++) {  // Keys and buttons opens from its row, above
+        if (strcmp(g_pages[p].name, name) != 0)
             continue;
         // Esc comes back to the page's own row on the hub, as after Enter on it.
         int hubRow = 0;
-        for (int i = 0; i < kPages[P_HUB].count; i++)
-            if (kPages[P_HUB].rows[i].type != R_RETURN && kPages[P_HUB].rows[i].arg == p)
+        for (int i = 0; i < g_pages[P_HUB].count; i++)
+            if (g_pages[P_HUB].rows[i].type != R_RETURN && g_pages[P_HUB].rows[i].arg == p)
                 hubRow = i;
         g_first = false;
         g_confirm = false;
@@ -1744,11 +1749,9 @@ bool Menu_WantsQuit() { return g_quit; }
 const char *Menu_Layout() { return g_closed ? "closed" : g_first ? "first-launch" : Wide() ? "wide" : "column"; }
 
 const char *Menu_PageName() {
-    if (Bindings_Active())
-        return "Keys and buttons";
     if (MoreOptions_Active())
         return "More options";
-    return kPages[Top().page].name;
+    return g_pages[Top().page].name;
 }
 
 // One for the hub; each page opened and a question add one.
@@ -1760,7 +1763,7 @@ static int Depth() {
 
 const char *Menu_CursorLabel() {
     static char buf[160];
-    const Row *r = Bindings_Active() || MoreOptions_Active() || g_closed ? NULL : CursorRow();
+    const Row *r = MoreOptions_Active() || g_closed ? NULL : CursorRow();
     if (!r)
         return "";
     return r->type == R_PRESET_ROW ? PresetRowLabel(buf, sizeof buf) : RowLabel(*r);
@@ -1772,10 +1775,11 @@ int Menu_Where(char *buf, size_t n) {
         return 0;
     }
     if (Bindings_Active()) {
+        // One name for the page and its groups' pages, which the inner part names.
         char inner[200];
         int d = Bindings_Where(inner, sizeof inner);
-        snprintf(buf, n, "%s | %s", Menu_PageName(), inner);
-        return Depth() + d;
+        snprintf(buf, n, "%s | %s", g_pages[P_KEYS].name, inner);
+        return Depth() + (d == 3 ? 1 : 0);  // waiting for a key or asking: one more than its page
     }
     if (MoreOptions_Active()) {
         char inner[200];
@@ -1795,7 +1799,7 @@ int Menu_Where(char *buf, size_t n) {
 }
 
 bool Menu_CursorSetting(bool *active) {
-    const Row *r = Bindings_Active() || MoreOptions_Active() || g_closed ? NULL : CursorRow();
+    const Row *r = MoreOptions_Active() || g_closed ? NULL : CursorRow();
     if (!r || r->type != R_SETTING)
         return false;
     *active = RowActive(*r);
@@ -1856,8 +1860,8 @@ void Menu_WriteMeasure(FILE *f) {
                 st.id, st.label, Ui_TextWidth(st.label), vmax, Ui_TextWidth(st.help));
     }
     fprintf(f, "],\"hub\":[");
-    for (int i = 0; i < kPages[P_HUB].count; i++) {
-        const Row &r = kPages[P_HUB].rows[i];
+    for (int i = 0; i < g_pages[P_HUB].count; i++) {
+        const Row &r = g_pages[P_HUB].rows[i];
         char label[160];
         if (r.type == R_PRESET_ROW) {
             FormatPresetRow(label, sizeof label, "Classic", true);
@@ -1883,16 +1887,16 @@ void Menu_WriteState(FILE *f) {
     const Place &top = Top();
     fprintf(f, ",\"stack\":[");
     for (int i = 0; i < g_depth; i++) {
-        const Row &r = kPages[g_stack[i].page].rows[g_stack[i].row];
+        const Row &r = g_pages[g_stack[i].page].rows[g_stack[i].row];
         fprintf(f, "%s{\"page\":", i ? "," : "");
-        Menu_JsonString(f, kPages[g_stack[i].page].name);
+        Menu_JsonString(f, g_pages[g_stack[i].page].name);
         fprintf(f, ",\"row\":");
         Menu_JsonString(f, r.type == R_PRESET_ROW ? PresetRowLabel(buf, sizeof buf) : RowLabel(r));
         fprintf(f, "}");
     }
     fprintf(f, "],\"cursor\":%d,\"scroll\":%d,\"confirm\":%s", Position(top.page, top.row), g_scroll,
             g_confirm ? "true" : "false");
-    const Row *r = Bindings_Active() || MoreOptions_Active() ? NULL : CursorRow();
+    const Row *r = MoreOptions_Active() ? NULL : CursorRow();
     fprintf(f, ",\"cursor_row\":");
     Menu_JsonString(f, r ? (r->type == R_PRESET_ROW ? PresetRowLabel(buf, sizeof buf) : RowLabel(*r)) : "");
     fprintf(f, ",\"preset\":\"%s\",\"preset_changed\":%s,\"preset_row\":", kPresetNames[g_preset],
