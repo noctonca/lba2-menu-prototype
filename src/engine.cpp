@@ -444,9 +444,14 @@ void Engine_UseMenuPalette() {
     SetVideoPaletteSync(s_palMenu);
 }
 
+// Under a fixed clock, time counts from when it was armed, so the Twinsun's turn and anything
+// else drawn from the time repeats from run to run; lba2cc seeds its virtual clock from the
+// wall clock at that moment.
+static U32 s_timeOrigin;
+
 U32 Engine_TimeMs() {
     ManageTime();
-    return TimerSystemHR;
+    return TimerSystemHR - s_timeOrigin;
 }
 
 static bool s_injected[KEY_COUNT];
@@ -476,8 +481,10 @@ const char *Engine_KeyName(UiKey k) { return kKeyNames[k]; }
 
 void Engine_SetFixedDt(U32 dtMs) {
     s_fixedDt = dtMs;
-    if (dtMs)
+    if (dtMs) {
         Timer_EnableFixedDt(dtMs);
+        s_timeOrigin = TimerSystemHR;  // the virtual clock's seed
+    }
 }
 
 U32 Engine_Frame() { return s_frame; }
