@@ -1251,7 +1251,7 @@ static const char *LegendWord(const char *w) {
 static S32 LegendWidth(const char **keys, const char **words, int n, S32 scale) {
     S32 chipW = 0, wordW = 0;
     for (int i = 0; i < n; i++) {
-        S32 c = Ui_ChipWidth(keys[i], scale), t = Ui_SmallWidth(LegendWord(words[i]), scale);
+        S32 c = Ui_ChipWidth(keys[i], scale), t = Ui_WordWidth(LegendWord(words[i]), scale);
         chipW = c > chipW ? c : chipW;
         wordW = t > wordW ? t : wordW;
     }
@@ -1279,7 +1279,7 @@ static void DrawLegendStacked(S32 x, S32 y0, const char **keys, const char **wor
         S32 y = y0 + i * pitch;
         S32 c = Ui_ChipWidth(keys[i], scale);
         Ui_Chip(x + chipW - c, y, keys[i], scale);
-        Ui_Small(x + chipW + 4 * scale, y + chipH / 2 - 4 * scale, LegendWord(words[i]), INK_CONFIG_MENU, scale);
+        Ui_Word(x + chipW + 4 * scale, y + chipH / 2 - 4 * scale, LegendWord(words[i]), INK_CONFIG_MENU, scale);
         LegendRecord(i, keys[i], words[i]);
     }
 }

@@ -40,6 +40,10 @@ S32 ScreenFont_Advance(U8 c);
 
 // Queue text at logical (x, y), the top of the game font's cell, in palette colour `ink`.
 void ScreenFont_Text(S32 x, S32 y, const char *s, U8 ink);
+// The small size, for the legend's words: capitals cap logical pixels tall, the
+// baseline cap below y (the top of an 8x8 cell at the same step).
+S32 ScreenFont_SmallWidth(const char *s, S32 cap);
+void ScreenFont_SmallText(S32 x, S32 y, const char *s, U8 ink, S32 cap);
 // One letter; returns its advance.
 S32 ScreenFont_Char(S32 x, S32 y, U8 c, U8 ink);
 

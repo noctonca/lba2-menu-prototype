@@ -85,6 +85,9 @@ static float WidthF(const char *s) {
     return w;
 }
 
+// The small size: capitals cap logical pixels tall, as the 8x8 font's are 7 a step.
+static float SmallScale(S32 cap) { return (float)cap / GAME_CAP; }
+
 S32 ScreenFont_Width(const char *s) { return (S32)ceilf(WidthF(s)); }
 
 S32 ScreenFont_InkWidth(const char *s) {
@@ -111,6 +114,8 @@ enum { MAX_ITEMS = 512, MAX_LEN = 160 };
 struct Item {
     S32 x, y;
     U8 ink;
+    float scale;    // 1, or the small size's (capitals scale x 22 tall)
+    S32 baseline;   // below y
     S32 cx0, cy0, cx1, cy1;  // the clip when queued, logical, inclusive
     S32 bx0, by0, bx1, by1;  // the canvas box checked for overdraw
     U32 sum;
@@ -132,13 +137,16 @@ static U32 CanvasSum(S32 x0, S32 y0, S32 x1, S32 y1) {
     return h;
 }
 
-static void Queue(S32 x, S32 y, const char *s, U8 ink, S32 width) {
+static void Queue(S32 x, S32 y, const char *s, U8 ink, S32 width, float scale = 1.0f,
+                  S32 baseline = GAME_BASELINE, S32 cellH = CELL_H) {
     if (s_count >= MAX_ITEMS || !*s)
         return;
     Item &it = s_items[s_count];
     it.x = x;
     it.y = y;
     it.ink = ink;
+    it.scale = scale;
+    it.baseline = baseline;
     it.cx0 = ClipXMin;
     it.cy0 = ClipYMin;
     it.cx1 = ClipXMax;
@@ -148,7 +156,7 @@ static void Queue(S32 x, S32 y, const char *s, U8 ink, S32 width) {
     it.bx0 = x > it.cx0 ? x : it.cx0;
     it.by0 = y > it.cy0 ? y : it.cy0;
     it.bx1 = x + width < it.cx1 ? x + width : it.cx1;
-    it.by1 = y + CELL_H < it.cy1 ? y + CELL_H : it.cy1;
+    it.by1 = y + cellH < it.cy1 ? y + cellH : it.cy1;
     if (it.bx0 > it.bx1 || it.by0 > it.by1)
         return;  // clipped away
     it.sum = CanvasSum(it.bx0, it.by0, it.bx1, it.by1);
@@ -156,6 +164,13 @@ static void Queue(S32 x, S32 y, const char *s, U8 ink, S32 width) {
 }
 
 void ScreenFont_Text(S32 x, S32 y, const char *s, U8 ink) { Queue(x, y, s, ink, ScreenFont_Width(s)); }
+
+S32 ScreenFont_SmallWidth(const char *s, S32 cap) { return (S32)ceilf(WidthF(s) * SmallScale(cap)); }
+
+void ScreenFont_SmallText(S32 x, S32 y, const char *s, U8 ink, S32 cap) {
+    // Descenders reach about a third of the capitals' height below the baseline.
+    Queue(x, y, s, ink, ScreenFont_SmallWidth(s, cap), SmallScale(cap), cap, cap + cap / 2);
+}
 
 S32 ScreenFont_Char(S32 x, S32 y, U8 c, U8 ink) {
     S32 a = ScreenFont_Advance(c);
@@ -169,31 +184,46 @@ S32 ScreenFont_Char(S32 x, S32 y, U8 c, U8 ink) {
 // ---------------------------------------------------------------------------
 // Painting.
 
-// Glyphs rasterised at the current screen scale, by face and CP850 code.
+// Glyphs rasterised at the current screen scale, by size (a few sizes kept) and CP850 code.
 struct Glyph {
     unsigned char *bmp;
     int w, h, xo, yo;
     bool done;
 };
-static Glyph s_glyphs[1][256];
+enum { GLYPH_SIZES = 4 };
+static Glyph s_glyphs[GLYPH_SIZES][256];
+static float s_glyphScale[GLYPH_SIZES];
 static U32 s_glyphK;
 static int s_glyphPercent;
 
-static const Glyph &GetGlyph(int f, U8 c, U32 k) {
+static void ForgetSize(int i) {
+    for (int j = 0; j < 256; j++) {
+        if (s_glyphs[i][j].bmp)
+            stbtt_FreeBitmap(s_glyphs[i][j].bmp, NULL);
+        memset(&s_glyphs[i][j], 0, sizeof(Glyph));
+    }
+    s_glyphScale[i] = 0;
+}
+
+static const Glyph &GetGlyph(int f, U8 c, U32 k, float scale) {
     if (k != s_glyphK || s_sizePercent != s_glyphPercent) {
-        for (int i = 0; i < 1; i++)
-            for (int j = 0; j < 256; j++) {
-                if (s_glyphs[i][j].bmp)
-                    stbtt_FreeBitmap(s_glyphs[i][j].bmp, NULL);
-                memset(&s_glyphs[i][j], 0, sizeof(Glyph));
-            }
+        for (int i = 0; i < GLYPH_SIZES; i++)
+            ForgetSize(i);
         s_glyphK = k;
         s_glyphPercent = s_sizePercent;
     }
-    Glyph &g = s_glyphs[f][c];
+    int slot = 0;
+    while (slot < GLYPH_SIZES && s_glyphScale[slot] != 0 && s_glyphScale[slot] != scale)
+        slot++;
+    if (slot == GLYPH_SIZES) {  // more sizes than kept: start the last one again
+        slot = GLYPH_SIZES - 1;
+        ForgetSize(slot);
+    }
+    s_glyphScale[slot] = scale;
+    Glyph &g = s_glyphs[slot][c];
     if (!g.done) {
-        g.bmp = stbtt_GetCodepointBitmap(&s_font[f], k * s_unit[f], k * s_unit[f], Unicode(c), &g.w, &g.h,
-                                         &g.xo, &g.yo);
+        const float px = k * s_unit[f] * scale;
+        g.bmp = stbtt_GetCodepointBitmap(&s_font[f], px, px, Unicode(c), &g.w, &g.h, &g.xo, &g.yo);
         g.done = true;
     }
     return g;
@@ -217,10 +247,10 @@ void ScreenFont_Paint(U32 *argb, U32 pitch, U32 w, U32 h, const U8 *palette) {
         const S32 sx1 = bx + (it.cx1 + 1) * (S32)k, sy1 = by + (it.cy1 + 1) * (S32)k;
         const U8 *rgb = palette + it.ink * 3;
         const U32 cr = rgb[0], cg = rgb[1], cb = rgb[2];
-        const S32 base = by + (it.y + GAME_BASELINE) * (S32)k;
+        const S32 base = by + (it.y + it.baseline) * (S32)k;
         float pen = (float)(bx + it.x * (S32)k);
         for (const U8 *p = (const U8 *)it.s; *p; p++) {
-            const Glyph &g = GetGlyph(f, *p, k);
+            const Glyph &g = GetGlyph(f, *p, k, it.scale);
             const S32 gx = (S32)floorf(pen + 0.5f) + g.xo, gy = base + g.yo;
             for (int j = 0; j < g.h; j++) {
                 const S32 y = gy + j;
@@ -240,7 +270,7 @@ void ScreenFont_Paint(U32 *argb, U32 pitch, U32 w, U32 h, const U8 *palette) {
                     dst[x] = 0xff000000u | r << 16 | gg << 8 | b;
                 }
             }
-            pen += Advance(f, *p, p[1]) * k;
+            pen += Advance(f, *p, p[1]) * k * it.scale;
         }
     }
 }

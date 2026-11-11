@@ -165,7 +165,10 @@ sits inside the composition, in the band's place.
 **Law of Similarity** (what looks alike is taken to work alike).
 - One style per role: labels white in the game font; values in a column on the
   right; help in the voice; keys in the 8x8 font in chips. *(review rule 1,
-  three registers)*
+  three registers)* The legend's words beside the chips are in the menu's
+  face: Zilla Slab at the 8x8 font's size when the menu draws in Zilla Slab,
+  the 8x8 font with the game font (EPmager, 2026-11-11: 8x8 words beside Zilla
+  Slab rows read as a second style).
 - A row that opens something (a category, the preset row, Keys and buttons)
   takes Enter and shows "Open" in the legend; a setting takes Left and Right.
   The two never look the same: a setting shows a value, an opener does not.

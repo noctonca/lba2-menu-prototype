@@ -70,6 +70,11 @@ void Ui_Steps(S32 xRight, S32 yCentre, S32 count, S32 lit, S32 *outLeft);
 // 8x8 font, drawn at a whole-step scale.
 S32 Ui_SmallWidth(const char *s, S32 scale);
 void Ui_Small(S32 x, S32 y, const char *s, U8 colour, S32 scale);
+// A legend word: in the menu's face at the 8x8 font's size (capitals 7 a step) when the
+// menu draws in Zilla Slab, else in the 8x8 font, the game's own small letters. The
+// key chips stay 8x8 either way (EPmager, 2026-11-11: the words clashed with Zilla Slab).
+S32 Ui_WordWidth(const char *s, S32 scale);
+void Ui_Word(S32 x, S32 y, const char *s, U8 colour, S32 scale);
 // A key chip: the key name in the 8x8 font inside a frame. Returns its width.
 S32 Ui_ChipWidth(const char *key, S32 scale);
 S32 Ui_Chip(S32 x, S32 y, const char *key, S32 scale, bool lit = false);
