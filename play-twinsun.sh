@@ -1,5 +1,5 @@
 #!/bin/bash
-# Play test: the Background row's Twinsun, the holomap's planet turning once in two minutes on stars.
+# Play test: the Background row's Twinsun, the holomap's planet turning once in three minutes on stars.
 #   ./play-twinsun.sh [--size 1920x1080]
 # Writes .runs/twinsun/<time>/trace.log for reading back.
 set -euo pipefail
@@ -16,7 +16,7 @@ cp "$here/build/lba2menu" "$run/lba2menu"
 cat <<'STEPS'
 Steps (the window opens on Language and interface at 1920x1080, cursor on
 Background, Twinsun picked):
-  1. Watch it turn for a while. One turn in two minutes: right, too slow, too fast?
+  1. Watch it turn for a while. One turn in three minutes: right, too slow, too fast?
   2. Shift+7 steps the tilt (the note at the bottom right says "tstilt = N"):
      3328 looking up at the south pole (the start), then 0 edge on, 256 and 512
      from above, the north pole on top, 3840 a little below the equator, 3584.

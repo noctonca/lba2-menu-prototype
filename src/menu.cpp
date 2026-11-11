@@ -55,7 +55,7 @@ static const Setting kSettings[S_COUNT] = {
      "Shows what is said while the voices play."},
     // What the menu is drawn over (asked for 2026-11-11). Blue is menu palette 181, the
     // picture's second most common colour (picked over 196); rows and the band darken it
-    // as they darken the picture. Twinsun is the holomap's planet turning once in two minutes on
+    // as they darken the picture. Twinsun is the holomap's planet turning once in three minutes on
     // stars (src/twinsun.cpp; asked for 2026-11-11). Off is black.
     {"background", "Background", K_CHOICE, 3, {"Picture", "Blue", "Twinsun", "Off"}, 0, 0, false,
      "What is behind the menu: the 1997 picture, plain blue, Twinsun turning, or nothing."},

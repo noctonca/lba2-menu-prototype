@@ -24,8 +24,8 @@
 #define HQR_TWINSUN_HMT 1
 #define HQR_TWINSUN_HMG 2
 
-// One turn in two minutes: a minute was a bit fast at 140% (play test, 2026-11-11).
-#define TURN_MS 120000
+// One turn in three minutes: one and two were too fast at 140% (play tests, 2026-11-11).
+#define TURN_MS 180000
 // The holomap's own tilt is wherever FindAngleIsland lands for the island; this
 // looks up at the south pole, the cloud belt a halo above it (play test, 2026-11-11).
 #define VIEW_ALPHA 3328

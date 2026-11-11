@@ -122,7 +122,7 @@ own switches are on F1 to F12 and 0 to 9.
 | 4 | `scale` | screens 3:2 or wider take the 960x540 composition at the largest whole step it fits, others the one column / the plan's rule |
 | 5 | `panes` | wide: one pane at a time, centred, the page's name as a title / two panes side by side |
 | 6 | `bandshade` | the band darkened to level 15 / 11 |
-| Shift+7 / Shift+8 | `tstilt` / `tssize` | the Twinsun background (Background row): the view's tilt, 3840 (a little below the equator) / 3584 / 3328 (up at the south pole, the start) / 0 (edge on) / 256 / 512 (from above, the north pole); its size 80 / 100 (the holomap's) / 120 / 140 (the start) percent. One turn in two minutes |
+| Shift+7 / Shift+8 | `tstilt` / `tssize` | the Twinsun background (Background row): the view's tilt, 3840 (a little below the equator) / 3584 / 3328 (up at the south pole, the start) / 0 (edge on) / 256 / 512 (from above, the north pole); its size 80 / 100 (the holomap's) / 120 / 140 (the start) percent. One turn in three minutes |
 | 7 | `clash` | a key clash's note alone in the voice / added after the action's help |
 | 8 | `short` | the shorter help, for translation, and a dimmed row saying why it is dimmed / the help as first written |
 | | `keyrule` | a key another action has asks first, No (keep) or Yes (swap), as Options' questions (decided 2026-11-11) / taken, both chips red |
