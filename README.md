@@ -440,6 +440,25 @@ start at that size shows on the same row: seven pages (Keys and buttons and
 More options among them) from four sizes to nine, compared through `state`,
 and F2 round the list and back (253 runs).
 
+`tools/baseline.py` checks a change meant to move code without changing what a
+player sees. `record DIR` runs 28 scripts under a fixed clock (seeded walks of
+400 keys at four sizes, with now and then a pad button, a size change or an
+`open`, and the sweep's layout walk) and keeps a `state` after every key and a
+hash of a picture every 25 keys; `diff A B` prints, per run, the first state
+that differs and which pictures differ, and exits 1 if any run does.
+
+    $ tools/baseline.py record .runs/before    # on the commit before
+    $ tools/baseline.py record .runs/after     # after the change, built
+    $ tools/baseline.py diff .runs/before .runs/after --context 6
+
+- `--context N` prints the N keys before the first difference and the page
+  each one left.
+- `--rename old=new` compares a state field renamed on purpose; `--ignore`
+  leaves fields out.
+- The scripts are made from the first build recorded, into
+  `.runs/baseline/scripts.json`; `scripts` makes them again (needed when a
+  change moves where an Esc closes the menu, which the walks avoid).
+
 ## Checked against the game
 
 `open original` draws today's Options page as lba2cc's boot menu does. Against
