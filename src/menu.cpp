@@ -1037,7 +1037,7 @@ DrawnRow &Menu_Record(const char *pane, const char *label, const char *value, Ro
 
 // Centred text clipped to the row, the original's way (DrawOneChoice).
 void Menu_RowLabelCentred(S32 x0, S32 x1, S32 yc, const char *s, U8 colour, bool asIs, bool cursor) {
-    MemoClip();
+    const ClipSave clip;
     SetClip(x0 + 1, yc - 25, x1 - 1, yc + 25);
     if (!asIs)
         s = Ui_Tr(s);
@@ -1045,7 +1045,7 @@ void Menu_RowLabelCentred(S32 x0, S32 x1, S32 yc, const char *s, U8 colour, bool
         Ui_TextInRoom(x0 + 8, x1 - 8, yc - 18, s, colour, cursor);  // 1997: x0 + 8, swinging
     else
         Ui_TextAsIs((x0 + x1) / 2 - Ui_TextWidthAsIs(s) / 2, yc - 18, s, colour);
-    RestoreClip();
+    clip.Restore();
 }
 
 // One column: the 1997 row, "Label: Value" in one string, sliders as fills.
@@ -1184,11 +1184,11 @@ static void DrawWideRow(const char *pane, const Row &r, S32 x0, S32 y0, S32 x1, 
         d.valueRight = valueRight;
     }
     // The label last, in the room the value leaves (the 1997 swing when it is wider).
-    MemoClip();
+    const ClipSave clip;
     SetClip(x0 + 1, y0, x1 - 1, y1);
     Ui_TextInRoom(x0 + 16, valueLeft ? valueLeft - 17 - 8 - 1 : x1 - 16, yc - 18, Ui_Tr(label),
                   active ? INK_WHITE : INK_DISABLED, fill == FILL_CURSOR);
-    RestoreClip();
+    clip.Restore();
 }
 
 void Menu_DrawScrollBar(S32 x0, S32 y0, S32 y1, int first, int visible, int total) {
@@ -1320,10 +1320,10 @@ static void DrawConfirm(const char *pane, S32 x0, S32 x1, S32 y0) {
             Menu_RowLabelCentred(x0, x1, yc, answers[i], INK_WHITE, false, i == g_confirmCursor);
             d.textLeft = (x0 + x1) / 2 - Ui_TextWidth(answers[i]) / 2;
         } else {
-            MemoClip();
+            const ClipSave clip;
             SetClip(x0 + 1, ry0, x1 - 1, ry0 + ROW_H);
             Ui_TextInRoom(x0 + 16, x1 - 16, yc - 18, Ui_Tr(answers[i]), INK_WHITE, i == g_confirmCursor);
-            RestoreClip();
+            clip.Restore();
             d.textLeft = x0 + 16;
             d.textRight = x0 + 16 + Ui_TextWidth(answers[i]);
         }
@@ -2037,6 +2037,7 @@ void Menu_WriteState(FILE *f) {
         const bool steps = Menu_CursorEnterSteps(&isValue);
         fprintf(f, ",\"cursor_value\":\"%s\"", !isValue ? "none" : steps ? "enter steps" : "enter leaves");
     }
+    fprintf(f, ",\"clip\":[%d,%d,%d,%d]", (int)ClipXMin, (int)ClipYMin, (int)ClipXMax, (int)ClipYMax);
     fprintf(f, ",\"console\":\"%s\",\"console_bottom\":%d,\"version\":", g_console == CON_FULL ? "full" : g_console == CON_READONLY ? "read-only" : "closed",
             g_console ? (int)g_consoleBottom : -1);
     Menu_JsonString(f, kVersion);

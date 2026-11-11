@@ -132,10 +132,10 @@ S32 Ui_TextInRoom(S32 x, S32 right, S32 y, const char *s, U8 colour, bool swing)
         S32 d = (S32)((Host_TimeMs() - s_swingStart) * SWING_PX_PER_S / 1000) % (2 * travel);
         off = d <= travel ? -d : -(2 * travel - d);
     }
-    MemoClip();
+    const ClipSave clip;
     SetClip(x > ClipXMin ? x : ClipXMin, ClipYMin, right < ClipXMax ? right : ClipXMax, ClipYMax);
     Ui_TextAsIs(x + off, y, s, colour);
-    RestoreClip();
+    clip.Restore();
     return w;
 }
 
@@ -285,10 +285,10 @@ bool Ui_KeyChip(S32 x, S32 y, S32 w, const char *name, S32 scale, ChipFill fill,
     S32 tw = Ui_SmallWidth(text, scale);
     S32 tx = tw <= inner ? x + w / 2 - tw / 2 : x + 4 * scale;
     U8 ink = fill != CHIP_SHADE ? INK_WHITE : empty ? INK_DISABLED : INK_CONFIG_MENU;
-    MemoClip();
+    const ClipSave clip;
     SetClip(x + 2, y + 1, x1 - 2, y1 - 1);
     Ui_Small(tx, y + 2 * scale, text, ink, scale);
-    RestoreClip();
+    clip.Restore();
     return tw <= inner;
 }
 

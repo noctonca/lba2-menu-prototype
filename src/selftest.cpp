@@ -141,6 +141,10 @@ static void Check(std::vector<std::string> *found) {
     MoreOptionsTable rt;
     if (MoreOptions_Table(&rt) && rt.rowHelpCut)
         found->push_back(Fmt("table: row help cut off: %s", Repr(rt.rowHelp).c_str()));
+    // Every clip set while drawing is put back: a clip left on hides what is drawn after it.
+    if (ClipXMin != 0 || ClipYMin != 0 || ClipXMax != W - 1 || ClipYMax != H - 1)
+        found->push_back(Fmt("clip left on after the frame: [%d, %d, %d, %d]", (int)ClipXMin, (int)ClipYMin,
+                             (int)ClipXMax, (int)ClipYMax));
     // A value Enter also steps names Enter beside the arrows; one it leaves does not
     // (EPmager, 2026-11-11). Only where a legend is drawn.
     bool isValue;

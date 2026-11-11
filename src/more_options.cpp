@@ -448,7 +448,7 @@ static void DrawTable(S32 px0, S32 px1, S32 py0, S32 py1) {
             tagX = w;
     }
     tagX += nameX + 16 * s;
-    MemoClip();
+    const ClipSave clip;
     SetClip(px0 + 1, py0 + 1, px1 - 1, py1 - 1);
     for (int k = scroll; k < scroll + visible; k++) {
         S32 y = bodyTop + (k - scroll) * pitch;
@@ -513,7 +513,7 @@ static void DrawTable(S32 px0, S32 px1, S32 py0, S32 py1) {
     S32 statusY = statusTop + 5 * s + helpLines * 10 * s;
     StatusText(cursorRow, g_status, sizeof g_status, px1 - 24 - nameX, s);
     Ui_Small(nameX, statusY, g_status, INK_CONFIG_HEAD, s);
-    RestoreClip();
+    clip.Restore();
     g_table.status = g_status;
     g_table.rowHelp = g_helpShown;
     g_table.rowHelpCut = g_helpCut;

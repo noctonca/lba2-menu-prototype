@@ -2,6 +2,7 @@
 #pragma once
 
 #include <SYSTEM/ADELINE_TYPES.H>
+#include <SVGA/CLIP.H>
 
 #include <set>
 #include <string>
@@ -111,3 +112,12 @@ S32 Voice_Draw(const Voice &v, S32 x0, S32 y0, S32 width, S32 maxLines, S32 *nee
 // How long a window is held: this many ms for each word in it, and at least 1.5 s.
 // The window the last Voice_Draw showed (0 is the first) and how many there are.
 void Voice_LastPage(S32 *page, S32 *pages);
+
+// The clip as it is, put back by Restore. LIB386's MemoClip keeps one clip, so a MemoClip
+// inside another's pair (Ui_TextInRoom inside a row's clip) lost the outer one, and the
+// row's clip stayed on: a German answer too wide for its row hid everything drawn after it
+// (2026-11-11). Each pair keeps its own here.
+struct ClipSave {
+    S32 x0 = ClipXMin, y0 = ClipYMin, x1 = ClipXMax, y1 = ClipYMax;
+    void Restore() const { SetClip(x0, y0, x1, y1); }
+};

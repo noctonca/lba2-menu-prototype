@@ -142,6 +142,9 @@ def check(state):
     if v.get("cut_off"):
         problems.append(f"help cut off ({v['lines_needed']} lines in {v['max_lines']}, {v['width']} px): {v['text']!r}")
     hx0, hy0, hx1, hy1 = v["rect"]
+    # Every clip set while drawing is put back.
+    if "clip" in state and state["clip"] != [0, 0, W - 1, H - 1]:
+        problems.append(f"clip left on after the frame: {state['clip']}")
     # A value Enter also steps names Enter beside the arrows; one it leaves does not.
     cv = state.get("cursor_value", "none")
     if cv != "none" and state["legend"] and ("[<>/" in state["legend"]) != (cv == "enter steps"):

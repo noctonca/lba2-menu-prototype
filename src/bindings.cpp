@@ -751,10 +751,10 @@ static void DrawActionRow(int action, S32 x0, S32 y0, S32 x1, S32 y1, const int 
     S32 cx[3], cw[3];
     ChipLayout(x1, cols, ncols, cx, cw);
     // The name up to 8 before the first chip; wider, it swings while the row has the cursor.
-    MemoClip();
+    const ClipSave clip;
     SetClip(x0 + 1, y0, x1 - 1, y1);
     Ui_TextInRoom(x0 + 16, cx[0] - 8 - 1, yc - 18, Ui_Tr(kActions[action].name), INK_WHITE, cursorRow);
-    RestoreClip();
+    clip.Restore();
 
     S32 s = ChipScale(), ch = Ui_KeyChipHeight(s);
     DrawnRow &d = Menu_Record(pane, kActions[action].name, "", FILL_SHADE, x0, y0, x1, y1);
@@ -871,10 +871,10 @@ static void DrawSwapAnswers(S32 x0, S32 x1, S32 top, const char *pane) {
             d.textLeft = (x0 + x1) / 2 - Ui_TextWidthAsIs(shown) / 2;
             d.textRight = d.textLeft + Ui_TextWidthAsIs(shown);
         } else {
-            MemoClip();
+            const ClipSave clip;
             SetClip(x0 + 1, y0, x1 - 1, y0 + ROW_H);
             Ui_TextInRoom(x0 + 16, x1 - 16, yc - 18, shown, INK_WHITE, i == g_swap.answer);
-            RestoreClip();
+            clip.Restore();
             d.textLeft = x0 + 16;
             d.textRight = x0 + 16 + Ui_TextWidthAsIs(shown);
         }
