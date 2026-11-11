@@ -23,14 +23,19 @@
 struct Group {
     const char *name;
     const char *help;
+    // The player's settings, which no preset changes (the menu plan's "What a preset leaves
+    // alone": how the mouse and pad feel, the filters, the 1997 rows). The other rows are
+    // tuning values, which a preset puts back to their defaults. A field, not the page: every
+    // row here is on More options, and that says nothing about what a preset does to it.
+    bool player;
 };
 
 static const Group kGroups[] = {
-    {"Auto camera", "The Auto camera's timings, zones and HD framing."},
-    {"Mouse", "How the mouse turns the camera."},
-    {"Gamepad", "The right stick's camera and the stick deadzone."},
-    {"Graphics", "Shading, and the filters on the picture."},
-    {"From 1997", "For the machines of 1997. Today's machines play best as they are."},
+    {"Auto camera", "The Auto camera's timings, zones and HD framing.", false},
+    {"Mouse", "How the mouse turns the camera.", true},
+    {"Gamepad", "The right stick's camera and the stick deadzone.", true},
+    {"Graphics", "Shading, and the filters on the picture.", true},
+    {"From 1997", "For the machines of 1997. Today's machines play best as they are.", true},
 };
 enum { GROUP_COUNT = sizeof kGroups / sizeof kGroups[0] };
 
@@ -171,15 +176,29 @@ void Exp_Put(const int *in) {
     memcpy(g_val, in, sizeof g_val);
     g_valReady = true;
 }
+bool Exp_PresetsSet(int i) { return !kGroups[kTuning[i].group].player; }
 void Exp_Defaults() {
     for (int i = 0; i < TUNING_COUNT; i++)
         g_val[i] = kTuning[i].def;
     g_valReady = true;
 }
+void Exp_PresetDefaults() {
+    Ready();
+    for (int i = 0; i < TUNING_COUNT; i++)
+        if (Exp_PresetsSet(i))
+            g_val[i] = kTuning[i].def;
+}
 bool Exp_AnyChanged() {
     Ready();
     for (int i = 0; i < TUNING_COUNT; i++)
         if (g_val[i] != kTuning[i].def)
+            return true;
+    return false;
+}
+bool Exp_PresetChanged() {
+    Ready();
+    for (int i = 0; i < TUNING_COUNT; i++)
+        if (Exp_PresetsSet(i) && g_val[i] != kTuning[i].def)
             return true;
     return false;
 }
@@ -584,6 +603,8 @@ bool Exp_Table(ExpTable *out) {
 const char *Exp_CursorGroupHelp() { return kGroups[kTuning[g_cursor].group].help; }
 
 const char *Exp_CursorName() { return kTuning[g_cursor].name; }
+
+bool Exp_CursorPresetsSet() { return Exp_PresetsSet(g_cursor); }
 
 const char *Exp_CursorValue() {
     static char buf[24];

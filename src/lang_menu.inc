@@ -8,6 +8,8 @@
 {"Settings", "R\x82""glages", "Einstellungen", "Ajustes", "Impostazioni", "Defini\x87""\xe4""es"},
 {"Modern", "Moderne", "Modern", "Moderno", "Moderno", "Moderno"},
 {"Classic", "Classique", "Klassisch", "Cl\xa0""sico", "Classico", "Cl\xa0""ssico"},
+{"Modern preset", "Pr\x82""r\x82""glage Moderne", "Voreinstellung Modern", "Preajuste Moderno", "Preimpostazione Moderno", "Predefini\x87""\xc6""o Moderno"},
+{"Classic preset", "Pr\x82""r\x82""glage Classique", "Voreinstellung Klassisch", "Preajuste Cl\xa0""sico", "Preimpostazione Classico", "Predefini\x87""\xc6""o Cl\xa0""ssico"},
 {"Modern, changed", "Moderne, modifi\x82""", "Modern, ge\x84""ndert", "Moderno, cambiado", "Moderno, modificato", "Moderno, alterado"},
 {"Classic, changed", "Classique, modifi\x82""", "Klassisch, ge\x84""ndert", "Cl\xa0""sico, cambiado", "Classico, modificato", "Cl\xa0""ssico, alterado"},
 {"Changed", "Modifi\x82""", "Ge\x84""ndert", "Cambiado", "Modificato", "Alterado"},

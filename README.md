@@ -117,8 +117,8 @@ note at the bottom right says the new size and its logical canvas.
 - The Resolution row on Display and graphics does it as the game would: Left
   and Right step through the same list, and the row shows the screen in use
   (a dragged size too, "1512 x 904"). It is the player's screen, not a preset's
-  choice, so it is never drawn as changed, and presets and Reset settings
-  leave it alone.
+  choice, so it is never drawn as changed; the prototype's presets and Reset
+  settings set it all the same (below).
 - The Fullscreen row turns the window into fullscreen and back, with lba2cc's
   own call. As in the game, fullscreen and the resolution are separate: the
   screen size, the canvas and the place in the menu stay, and the picture is
@@ -299,9 +299,12 @@ instead.
 - Left and Right change a value, Enter turns a switch, Del puts the default
   back, Page Up and Page Down (the pad's LB and RB) move a window at a time.
   A changed value takes the count colour.
-- A changed value marks the preset changed. Choosing a preset, and Reset
-  settings, put every value back to its default; Undo preset (after a
-  preset) and Undo reset (after a reset) put them back and name them.
+- The Auto camera rows are tuning values: a preset puts them back to their
+  defaults, and a changed one marks the preset changed. The mouse, gamepad,
+  graphics and From 1997 rows are player's settings, as the menu plan has
+  them: no preset touches them, and changing one does not mark the preset.
+  Reset settings puts every row back to its default. Undo preset puts back
+  the tuning values, Undo reset every row, and each names what it puts back.
 - The row's help is the console help, whole, in the table's status lines
   (decided 2026-11-12); the voice says the help of the row's group. The self
   test visits every row (see Testing).
@@ -365,17 +368,21 @@ walk finds starts with the walk's name:
   with the Auto camera (a fresh start's) and dimmed with the Classic camera.
 - `preset:` Classic asks first, starting on No, and Esc answers No; Undo
   preset puts the preset row back; changing Fix retail bugs marks the preset
-  changed. With Classic chosen and Vsync (a player's setting) changed, Reset
-  settings asks first, starting on No; Esc and No change nothing; Yes puts the
-  setting and the preset back as a fresh install has them, and an Undo reset
-  row comes right after Reset settings; Enter on it puts back the
-  setting and Classic, and the row goes.
+  changed. Music changed after choosing Classic keeps its value through Undo
+  preset, whose help does not name it. With Classic chosen, Vsync (a player's
+  setting) and Voices changed and Forward's Key 1 cleared, Reset settings asks
+  first, starting on No; Esc and No change nothing; Yes puts the setting, the
+  key and the preset back as a fresh install has them and keeps Text and
+  Voices, and an Undo reset row comes right after Reset settings; Enter on it
+  puts back the setting, the cleared key and Classic, and the row goes.
 - `experimental:` Advanced and reset has the More options row; Enter opens the page and Esc comes back to the row;
   on every row Right and Left change the value and the other key puts it back,
-  the change marks the preset row, and Del puts the default back; Page Down and
-  Page Up stop at the last and first rows; Modern puts a changed value back to
-  its default, Undo preset names it and puts it back; Reset settings
-  and Undo reset do the same, and the cursor stays on Reset settings.
+  the change marks the preset row on a tuning row and not on a player's
+  setting, and Del puts the default back; Page Down and Page Up stop at the
+  last and first rows; Modern puts a changed tuning value back to its default,
+  Undo preset names it and puts it back; Reset settings and Undo reset do the
+  same, and the cursor stays on Reset settings; Reverse stereo, the last row
+  and a player's setting, keeps its value through Classic.
 - `console:` the Console row shows the version; Enter after a key opens the
   full console, which Down and Enter leave open and Esc closes; Enter after a
   pad button opens it read-only, and a pad button, the d-pad or a key closes

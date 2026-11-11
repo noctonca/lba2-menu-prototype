@@ -43,19 +43,25 @@ bool Exp_Table(ExpTable *out);
 const char *Exp_CursorName();  // the console name under the cursor
 const char *Exp_CursorValue();
 const char *Exp_CursorGroupHelp();  // the help of the group the cursor's row is in
+bool Exp_CursorPresetsSet();  // the cursor's row is a tuning value, which presets set
 
 // Where the cursor is ("Auto camera | cam_ease_ms"), and how deep within the page.
 int Exp_Where(char *buf, size_t n);
 // The page closed and every value at its default, as a fresh start has it.
 void Exp_Reset();
 
-// The values, for the presets, Reset settings and their undo: a preset or a reset
-// puts every tuning value back to its default; changing one marks the preset changed.
+// The values, for the presets, Reset settings and their undo. Two kinds of row: tuning
+// values (the Auto camera's), which a preset puts back to their defaults and which mark
+// the preset changed; and the player's settings (mouse, pad, filters, From 1997), which
+// no preset touches. Reset settings puts both back.
 enum { EXP_MAX = 48 };
 int Exp_Count();
 const char *Exp_Name(int i);  // the console name
+bool Exp_PresetsSet(int i);   // a tuning value: presets put it back to its default
 void Exp_Get(int *out);
 void Exp_Put(const int *in);
-void Exp_Defaults();
-bool Exp_AnyChanged();  // a value differs from its default
+void Exp_Defaults();          // every row, as Reset settings does
+void Exp_PresetDefaults();    // the tuning values only, as choosing a preset does
+bool Exp_AnyChanged();        // a value differs from its default
+bool Exp_PresetChanged();     // a tuning value differs from its default
 bool Exp_Set(const char *name, int value);  // `set cam_ease_ms 450`

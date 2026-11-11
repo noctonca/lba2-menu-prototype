@@ -409,6 +409,42 @@ void Controls_Reset() {
     g_bindingsReady = false;
 }
 
+static_assert(ACTION_COUNT * 4 <= CONTROLS_BIND_MAX, "CONTROLS_BIND_MAX holds every binding");
+
+static void BindingsReady() {
+    if (!g_bindingsReady) {
+        ResetBindings();
+        g_bindingsReady = true;
+    }
+}
+
+int Controls_BindingCount() { return ACTION_COUNT * 4; }
+
+void Controls_GetBindings(int *out) {
+    BindingsReady();
+    memcpy(out, g_bind, sizeof g_bind);
+}
+
+void Controls_PutBindings(const int *in) {
+    memcpy(g_bind, in, sizeof g_bind);
+    g_bindingsReady = true;
+}
+
+void Controls_DefaultBindings() {
+    ResetBindings();
+    g_bindingsReady = true;
+}
+
+bool Controls_BindingsAreDefault() {
+    if (!g_bindingsReady)
+        return true;
+    for (int a = 0; a < ACTION_COUNT; a++)
+        if (g_bind[a][0] != kActions[a].key[0] || g_bind[a][1] != kActions[a].key[1] ||
+            g_bind[a][2] != kActions[a].pad[0] || g_bind[a][3] != kActions[a].pad[1])
+            return false;
+    return true;
+}
+
 // ───────────────────────────── Input ─────────────────────────────
 
 static void CodeName(int column, int code, char *out, size_t n) {

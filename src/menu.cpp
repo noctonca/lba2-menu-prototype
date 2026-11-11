@@ -65,8 +65,8 @@ static const Setting kSettings[S_COUNT] = {
     {"font", "Font", K_CHOICE, 1, {"Game", "Zilla Slab"}, 0, 0, false,
      "The game's letters, or sharp Zilla Slab."},
     // Not a stored value: the row shows the screen in use and steps it through
-    // Engine_SizeAt's list, as F2 does. g_val keeps its fresh value, so presets,
-    // Reset settings and their undo leave the screen alone.
+    // Engine_SizeAt's list, as F2 does. g_val keeps its fresh value; the screen is the
+    // engine's, which presets (prototype only, kLook), Reset settings and their undo set.
     {"resolution", "Resolution", K_CHOICE, 9,
      {"640 x 480", "768 x 480", "1024 x 480", "1280 x 720", "1280 x 800", "1920 x 1080", "2400 x 1080", "2560 x 1440", "3440 x 1440", "3840 x 2160"},
      5, 5, false,
@@ -106,16 +106,12 @@ static const Setting kSettings[S_COUNT] = {
 
 static int g_val[S_COUNT];
 static int g_preset;  // 0 Modern, 1 Classic
-static int g_before[S_COUNT];  // before a preset was chosen: the preset page's Undo preset
-static int g_beforeExp[EXP_MAX];  // the tuning values then
-static int g_beforePreset;
-static bool g_haveBefore;
-static int g_beforeReset[S_COUNT];  // before Reset settings: the Advanced page's Undo reset
-static int g_beforeResetExp[EXP_MAX];
-static int g_beforeResetPreset;
-static bool g_haveBeforeReset;
 
 static const char *kPresetNames[2] = {"Modern", "Classic"};
+
+// The languages: Reset settings leaves them as they are (the menu plan), so a player who
+// reads French still reads French after a reset.
+static bool IsLanguage(int s) { return s == S_TEXT_LANG || s == S_VOICE_LANG; }
 
 // A preset also sets the look (asked for 2026-11-12, prototype only), so choosing one shows
 // the difference. Classic: the 1997 picture, the game font, Classic cameras, 640 x 480.
@@ -165,92 +161,151 @@ struct ScreenSize {
     U32 w, h;
 };
 static ScreenSize g_modernScreen = {1920, 1080};
-static ScreenSize g_beforeScreen, g_beforeResetScreen;
 
 static ScreenSize ScreenNow() { return ScreenSize{Engine_PhysW(), Engine_PhysH()}; }
 static bool SameScreen(ScreenSize a, ScreenSize b) { return a.w == b.w && a.h == b.h; }
 static ScreenSize PresetScreen(int preset) { return preset == 1 ? ScreenSize{640, 480} : g_modernScreen; }
 
+static void SyncLayout();
+
+// A preset, Reset settings or an undo can cross between the one column and the wide layout
+// in the middle of a frame: the place is made over for the new layout at once, so what the
+// same frame does next (an undo row going, the cursor kept in range) is done in it. Left to
+// the next draw, the wide page drew a row past its end for a frame after Undo preset.
 static void SetScreenTo(ScreenSize to) {
     if (SameScreen(to, ScreenNow()))
         return;
     if (Engine_SetScreen(to.w, to.h, true))
         Menu_NoteScreen();
+    SyncLayout();
 }
 
 // "Changed": the player's values differ from the chosen preset in a setting presets set,
-// or a tuning value differs from its default (a preset puts every one back). The screen
-// is the player's: choosing another one does not mark the preset changed.
+// or a tuning value differs from its default (a preset puts every one back). The player's
+// settings, on Options or on More options, and the screen do not mark the preset changed.
 static bool PresetChanged() {
     for (int s = 0; s < S_COUNT; s++)
         if (PresetSets(s) && g_val[s] != PresetValue(g_preset, s))
             return true;
-    return Exp_AnyChanged();
+    return Exp_PresetChanged();
 }
 
-// The tuning values that differ between a copy and now.
-static bool ExpDiffers(const int *was) {
+// A settings backup, taken before a preset or Reset settings changes anything, which its
+// undo row puts back. What the undo puts back and what its help names both come from the
+// Covers functions, so the help names exactly what the undo changes (2026-11-11: the help
+// named the five settings presets set while the undo put back every setting).
+//   A preset's backup covers what presets set: their settings, the tuning values, the
+//   preset and (prototype only) the screen. A player's setting changed since stays, as the
+//   menu plan's Undo preset has it.
+//   Reset's covers what Reset changes: every setting but the languages, every More options
+//   row, the bindings, the preset and the screen.
+struct Backup {
+    bool have;
+    bool reset;
+    int val[S_COUNT];
+    int exp[EXP_MAX];
+    int binds[CONTROLS_BIND_MAX];
+    int preset;
+    ScreenSize screen;
+};
+static Backup g_presetBackup;  // the preset page's Undo preset
+static Backup g_resetBackup;   // the Advanced page's Undo reset
+
+static bool CoversSetting(const Backup &b, int s) { return b.reset ? !IsLanguage(s) : PresetSets(s); }
+static bool CoversExp(const Backup &b, int i) { return b.reset || Exp_PresetsSet(i); }
+
+static void TakeBackup(Backup &b, bool reset) {
+    b.have = true;
+    b.reset = reset;
+    memcpy(b.val, g_val, sizeof g_val);
+    Exp_Get(b.exp);
+    Controls_GetBindings(b.binds);
+    b.preset = g_preset;
+    b.screen = ScreenNow();
+}
+
+static const char *const kPresetBackupNames[2] = {"Modern preset", "Classic preset"};
+
+// What the undo would change, in the order its help names it: the preset, the settings
+// (Resolution for the screen), the bindings, the More options rows. Settings in the Text
+// language, More options' rows by their console names. None: the undo row is not offered.
+enum { BACKUP_DIFF_MAX = 1 + S_COUNT + 1 + EXP_MAX };
+static int BackupDiffers(const Backup &b, const char **names) {
+    if (!b.have)
+        return 0;
+    int n = 0;
+    if (b.preset != g_preset)
+        names[n++] = Ui_Tr(kPresetBackupNames[b.preset]);
+    for (int s = 0; s < S_COUNT; s++) {
+        const bool differs = s == S_RESOLUTION ? !SameScreen(b.screen, ScreenNow())
+                                               : CoversSetting(b, s) && b.val[s] != g_val[s];
+        if (differs)
+            names[n++] = Ui_Tr(kSettings[s].label);
+    }
+    if (b.reset) {
+        int now[CONTROLS_BIND_MAX];
+        Controls_GetBindings(now);
+        if (memcmp(b.binds, now, sizeof(int) * Controls_BindingCount()) != 0)
+            names[n++] = Ui_Tr("Keys and buttons");
+    }
     int now[EXP_MAX];
     Exp_Get(now);
-    return memcmp(was, now, sizeof(int) * Exp_Count()) != 0;
+    for (int i = 0; i < Exp_Count(); i++)
+        if (CoversExp(b, i) && b.exp[i] != now[i])
+            names[n++] = Exp_Name(i);
+    return n;
+}
+
+static bool UndoOffered(const Backup &b) {
+    const char *names[BACKUP_DIFF_MAX];
+    return BackupDiffers(b, names) > 0;
+}
+
+static void RestoreBackup(Backup &b) {
+    for (int s = 0; s < S_COUNT; s++)
+        if (CoversSetting(b, s))
+            g_val[s] = b.val[s];
+    int exp[EXP_MAX];
+    Exp_Get(exp);
+    for (int i = 0; i < Exp_Count(); i++)
+        if (CoversExp(b, i))
+            exp[i] = b.exp[i];
+    Exp_Put(exp);
+    if (b.reset)
+        Controls_PutBindings(b.binds);
+    g_preset = b.preset;
+    b.have = false;
+    SetScreenTo(b.screen);
 }
 
 static void ApplyPreset(int p) {
-    if (!g_haveBefore) {
-        memcpy(g_before, g_val, sizeof g_val);
-        Exp_Get(g_beforeExp);
-        g_beforePreset = g_preset;
-        g_beforeScreen = ScreenNow();
-        g_haveBefore = true;
-    }
+    if (!g_presetBackup.have)
+        TakeBackup(g_presetBackup, false);
     g_preset = p;
     for (int s = 0; s < S_COUNT; s++)
         if (PresetSets(s))
             g_val[s] = PresetValue(p, s);
-    Exp_Defaults();
+    Exp_PresetDefaults();  // the tuning values; the player's rows on More options stay
     SetScreenTo(PresetScreen(p));
     Trace("apply preset=%s", kPresetNames[p]);
 }
 
-static bool BackDiffers() {
-    if (!g_haveBefore)
-        return false;
-    for (int s = 0; s < S_COUNT; s++)
-        if (PresetSets(s) && g_before[s] != g_val[s])
-            return true;
-    if (!SameScreen(g_beforeScreen, ScreenNow()))
-        return true;
-    return ExpDiffers(g_beforeExp);
-}
-
-// Reset settings puts every setting and the preset back; its undo covers them all.
-static bool ResetBackDiffers() {
-    if (!g_haveBeforeReset)
-        return false;
-    if (g_beforeResetPreset != g_preset)
-        return true;
-    if (!SameScreen(g_beforeResetScreen, ScreenNow()))
-        return true;
-    return memcmp(g_beforeReset, g_val, sizeof g_val) != 0 || ExpDiffers(g_beforeResetExp);
-}
-
+// Every setting but the languages back as a fresh install has it, every More options row,
+// the bindings and the preset (the menu plan's Reset settings).
 static void ResetSettings() {
-    bool fresh = g_preset == 0 && !Exp_AnyChanged();
+    bool fresh = g_preset == 0 && !Exp_AnyChanged() && Controls_BindingsAreDefault();
     for (int s = 0; s < S_COUNT; s++)
-        fresh = fresh && g_val[s] == FreshValue(s);
+        fresh = fresh && (IsLanguage(s) || g_val[s] == FreshValue(s));
     fresh = fresh && SameScreen(ScreenNow(), g_modernScreen);
-    if (!fresh) {  // a second reset with nothing changed keeps the first one's undo
-        memcpy(g_beforeReset, g_val, sizeof g_val);
-        Exp_Get(g_beforeResetExp);
-        g_beforeResetPreset = g_preset;
-        g_beforeResetScreen = ScreenNow();
-        g_haveBeforeReset = true;
-    }
+    if (!fresh)  // a second reset with nothing changed keeps the first one's undo
+        TakeBackup(g_resetBackup, true);
     for (int s = 0; s < S_COUNT; s++)
-        g_val[s] = FreshValue(s);
+        if (!IsLanguage(s))
+            g_val[s] = FreshValue(s);
     Exp_Defaults();
+    Controls_DefaultBindings();
     g_preset = 0;
-    g_haveBefore = false;
+    g_presetBackup.have = false;
     SetScreenTo(g_modernScreen);
     Trace("reset settings");
 }
@@ -328,7 +383,7 @@ static void BuildPages() {
     AddRow(pr, R_RETURN, "Return to previous menu", 0, "");
     AddRow(pr, R_PRESET_CHOICE, "Modern", 0, "Today's look, cameras that follow, bugs fixed.");
     AddRow(pr, R_PRESET_CHOICE, "Classic", 1, "The 1997 look and cameras, bugs and all.");
-    if (BackDiffers())
+    if (UndoOffered(g_presetBackup))
         AddRow(pr, R_BACK_TO_MINE, "Undo preset", BACK_PRESET, "Puts back the settings you had before you chose a preset.");
 
     Page &lang = g_pages[P_LANG];
@@ -379,7 +434,7 @@ static void BuildPages() {
     // The row's value is the version, so a bug report can name the build from the menu.
     AddRow(adv, R_ACTION, "Console", A_CONSOLE, "Messages, and commands from a keyboard.");
     AddRow(adv, R_ACTION, "Reset settings", A_RESET, "Puts every setting back as a fresh install has it.");
-    if (ResetBackDiffers())
+    if (UndoOffered(g_resetBackup))
         AddRow(adv, R_BACK_TO_MINE, "Undo reset", BACK_RESET, "Puts back what you had before the reset.");
 
     // A fixture: today's Options page from the boot menu, to diff against lba2cc's
@@ -559,47 +614,11 @@ static const char *HelpFor(const Row *r) {
     // One message at a time: a dimmed row says why it is dimmed, not what it does.
     if (r->type == R_SETTING && !RowActive(*r))
         return "Only with the Auto camera.";
-    if (r->type == R_BACK_TO_MINE && r->arg == BACK_PRESET && BackDiffers()) {
-        char list[160] = "";
-        for (int s = 0; s < S_COUNT; s++) {
-            if ((PresetSets(s) && g_before[s] != g_val[s]) ||
-                (s == S_RESOLUTION && !SameScreen(g_beforeScreen, ScreenNow()))) {
-                if (list[0])
-                    strncat(list, ", ", sizeof list - strlen(list) - 1);
-                strncat(list, Ui_Tr(kSettings[s].label), sizeof list - strlen(list) - 1);
-            }
-        }
-        int now[EXP_MAX];
-        Exp_Get(now);
-        for (int i = 0; i < Exp_Count(); i++) {
-            if (g_beforeExp[i] != now[i]) {
-                if (list[0])
-                    strncat(list, ", ", sizeof list - strlen(list) - 1);
-                strncat(list, Exp_Name(i), sizeof list - strlen(list) - 1);
-            }
-        }
-        snprintf(buf, bufSize, Menu_Tr("Puts back what you had: %s."), list);
-        return buf;
-    }
-    if (r->type == R_BACK_TO_MINE && r->arg == BACK_RESET && ResetBackDiffers()) {
-        // Every setting that differs, and the preset; as many named as the voice
-        // holds, the rest counted.
-        const char *names[S_COUNT + 1 + EXP_MAX];
-        char preset[48];
-        int n = 0;
-        if (g_beforeResetPreset != g_preset) {
-            snprintf(preset, sizeof preset, "%s preset", kPresetNames[g_beforeResetPreset]);  // "Classic preset"
-            names[n++] = Ui_Tr(preset);
-        }
-        for (int s = 0; s < S_COUNT; s++)
-            if (g_beforeReset[s] != g_val[s] ||
-                (s == S_RESOLUTION && !SameScreen(g_beforeResetScreen, ScreenNow())))
-                names[n++] = Ui_Tr(kSettings[s].label);
-        int now[EXP_MAX];
-        Exp_Get(now);
-        for (int i = 0; i < Exp_Count(); i++)
-            if (g_beforeResetExp[i] != now[i])
-                names[n++] = Exp_Name(i);
+    if (r->type == R_BACK_TO_MINE) {
+        // What the undo puts back (BackupDiffers, as RestoreBackup does it); as many named
+        // as the voice holds, the rest counted, so the help never pages.
+        const char *names[BACKUP_DIFF_MAX];
+        const int n = BackupDiffers(r->arg == BACK_RESET ? g_resetBackup : g_presetBackup, names);
         for (int shown = n; shown > 0; shown--) {
             char list[200] = "";
             for (int i = 0; i < shown; i++) {
@@ -867,7 +886,7 @@ static void Activate(const Row &r) {
         if (g_first) {
             ApplyPreset(r.arg);
             g_first = false;
-            g_haveBefore = false;
+            g_presetBackup.have = false;
             g_cursor = 1;
             Trace("first launch chose=%s", kPresetNames[r.arg]);
             break;
@@ -880,19 +899,7 @@ static void Activate(const Row &r) {
         }
         break;
     case R_BACK_TO_MINE:
-        if (r.arg == BACK_RESET) {
-            memcpy(g_val, g_beforeReset, sizeof g_val);
-            Exp_Put(g_beforeResetExp);
-            g_preset = g_beforeResetPreset;
-            g_haveBeforeReset = false;
-            SetScreenTo(g_beforeResetScreen);
-        } else {
-            memcpy(g_val, g_before, sizeof g_val);
-            Exp_Put(g_beforeExp);
-            g_preset = g_beforePreset;
-            g_haveBefore = false;
-            SetScreenTo(g_beforeScreen);
-        }
+        RestoreBackup(r.arg == BACK_RESET ? g_resetBackup : g_presetBackup);
         Trace("back to my settings");
         BuildPages();
         if (!Wide() && g_cursor >= g_pages[TopPage()].count)
@@ -1811,8 +1818,8 @@ void Menu_Reset() {
     g_confirmCursor = 0;
     g_closed = false;
     g_console = CON_CLOSED;
-    g_haveBefore = false;
-    g_haveBeforeReset = false;
+    g_presetBackup.have = false;
+    g_resetBackup.have = false;
     g_scroll = 0;
     g_toast[0] = 0;
     g_toastUntil = 0;

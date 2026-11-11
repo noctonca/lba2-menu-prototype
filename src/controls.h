@@ -19,6 +19,13 @@ void Controls_WriteState(FILE *f);
 
 // Bindings back to the defaults and the page closed, as a fresh start has it.
 void Controls_Reset();
+// The bindings as values, for Reset settings and Undo reset (the page stays as it is).
+enum { CONTROLS_BIND_MAX = 256 };
+int Controls_BindingCount();             // values Controls_GetBindings writes
+void Controls_GetBindings(int *out);
+void Controls_PutBindings(const int *in);
+void Controls_DefaultBindings();
+bool Controls_BindingsAreDefault();
 // The chips the last Controls_Draw drew, for the self test.
 struct ChipView {
     const char *action;

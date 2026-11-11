@@ -126,8 +126,8 @@ is no pointer, so the cost of a target is the number of key presses to it.
 - A slider crosses its range in about 16 steps; holding the key does it in
   under 2 s (350 ms, then 90 ms a step).
 - **A row that throws work away asks first, and can be undone:** it is last
-  on its page; its question starts on No and Esc answers No; afterwards Back to
-  my settings puts everything back. Choosing Classic and Reset settings both
+  on its page; its question starts on No and Esc answers No; afterwards its
+  Undo row (Undo preset, Undo reset) puts back what it changed and says what. Choosing Classic and Reset settings both
   work this way (decided 2026-11-03). **[self test: preset]**
 
 **Hick's Law, Choice Overload** (more options, slower decisions).

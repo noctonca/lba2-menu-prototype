@@ -421,14 +421,22 @@ struct Walker {
     std::vector<Switch> switches;  // this combo's
     std::string size, combo, again;  // again: the command line up to --do
     int lang = 0;                    // the Text language the walk draws in
+    U32 physW = 0, physH = 0;        // the screen the run was started at (--size)
     std::vector<std::string> path;   // commands since the last open
     std::map<std::string, std::string> problems;  // line -> the command line that shows it
     int checks;
 
     // ── Steps ──
 
-    // A fresh process's state under this combo, as the again line starts it.
+    // A fresh process's state under this combo, as the again line starts it. Presets set the
+    // screen, so a walk can end at Classic's 640x480: put the run's screen back first, before
+    // Menu_Reset takes it as Modern's (2026-11-11: from the first walk that chose Classic,
+    // every later walk of a --size 1920x1080 run ran at 640x480).
     void Start() {
+        if (Engine_PhysW() != physW || Engine_PhysH() != physH)
+            Engine_SetScreen(physW, physH, false);
+        if (Engine_Fullscreen())
+            Engine_SetFullscreen(false);
         Menu_Reset();
         for (size_t s = 0; s < switches.size(); s++)
             Menu_SetSwitch(switches[s].name.c_str(), switches[s].value);
@@ -872,6 +880,41 @@ struct Walker {
         }
     }
 
+    // preset: Undo preset gives back every value a preset sets and keeps a player's setting
+    // changed since (the menu plan's test); its help names what it puts back, not the
+    // player's setting, in one window.
+    void UndoPreset() {
+        if (!Wanted("Preset"))
+            return;
+        Fresh("Preset");
+        std::string p0 = Menu_PresetLabel();
+        if (!MoveTo("Classic"))
+            return;
+        Key("enter");
+        Key("down");
+        Key("enter");
+        const char *setting = "Music", *page = "Sound";
+        OpenToo(page);
+        if (!MoveTo(setting))
+            return;
+        Key("left");
+        std::string mine = Menu_CursorValue();
+        OpenToo("Preset");
+        if (!MoveTo("Undo preset"))
+            return;
+        Check("Preset");
+        Expect(Voice().find(Ui_Tr(setting)) == std::string::npos,
+               Fmt("preset: Undo preset names %s, a player's setting: %s", setting, Repr(Voice().c_str()).c_str()));
+        Key("enter");
+        Expect(Menu_PresetLabel() == p0, Fmt("preset: Undo preset leaves the preset row at %s, not %s",
+                                             Repr(Menu_PresetLabel()).c_str(), Repr(p0.c_str()).c_str()));
+        OpenToo(page);
+        if (!MoveTo(setting))
+            return;
+        Expect(Menu_CursorValue() == mine, Fmt("preset: Undo preset puts %s, changed since the preset, from %s to %s",
+                                               setting, Repr(mine.c_str()).c_str(), Repr(Menu_CursorValue()).c_str()));
+    }
+
     // preset: Reset settings, from Classic and a setting changed: the question starts on
     // No, Esc and No change nothing, Yes resets, and Undo preset (the row right
     // after it) puts the setting and the preset back, then goes.
@@ -895,6 +938,21 @@ struct Walker {
         Key("right");
         std::string mine = Menu_CursorValue(), pMine = Menu_PresetLabel();
         if (!Expect(mine != v0, Fmt("preset: Right does not change %s", setting)))
+            return;
+        // The languages stay (the menu plan): Voices changed here, Text as the walk set it.
+        OpenToo("Language and interface");
+        if (!MoveTo("Voices"))
+            return;
+        Key("right");
+        std::string voices = Menu_CursorValue();
+        // The bindings go back: Forward's Key 1 cleared here.
+        OpenToo("Keys and buttons");
+        Key("enter");
+        char bound[32], key1[32];
+        Controls_Binding("Forward", 0, key1, sizeof key1);
+        Key("del");
+        Controls_Binding("Forward", 0, bound, sizeof bound);
+        if (!Expect(key1[0] && !bound[0], Fmt("preset: Del on Forward's Key 1 leaves %s", Repr(bound).c_str())))
             return;
         OpenToo("Advanced and reset");
         if (!MoveTo("Reset settings"))
@@ -927,12 +985,22 @@ struct Walker {
                     Fmt("preset: after a reset, the row after Reset settings is %s, not Undo reset",
                         Repr(Menu_CursorLabel()).c_str())))
             return;
+        Check("Advanced and reset");  // its help names what it puts back, in one window
+        Expect(Ui_Lang() == lang, Fmt("preset: Reset settings changes Text from %d to %d", lang, Ui_Lang()));
+        Controls_Binding("Forward", 0, bound, sizeof bound);
+        Expect(!strcmp(bound, key1), Fmt("preset: Reset settings leaves Forward's Key 1 at %s, not %s",
+                                         Repr(bound).c_str(), Repr(key1).c_str()));
         OpenToo(page);
         if (!MoveTo(setting))
             return;
         if (!Expect(Menu_CursorValue() == v0, Fmt("preset: Reset settings leaves %s at %s, not %s", setting,
                                                   Repr(Menu_CursorValue()).c_str(), Repr(v0.c_str()).c_str())))
             return;
+        OpenToo("Language and interface");
+        if (!MoveTo("Voices"))
+            return;
+        Expect(Menu_CursorValue() == voices, Fmt("preset: Reset settings changes Voices from %s to %s",
+                                                 Repr(voices.c_str()).c_str(), Repr(Menu_CursorValue()).c_str()));
         OpenToo("Advanced and reset");
         if (!MoveTo("Undo reset"))
             return;
@@ -940,6 +1008,8 @@ struct Walker {
         Expect(Menu_PresetLabel() == pMine, Fmt("preset: Undo reset after a reset leaves the preset row at %s, not %s",
                                                 Repr(Menu_PresetLabel()).c_str(), Repr(pMine.c_str()).c_str()));
         Expect(!RowDrawn("Undo reset"), "preset: Undo reset stays after it put the settings back");
+        Controls_Binding("Forward", 0, bound, sizeof bound);
+        Expect(!bound[0], Fmt("preset: Undo reset leaves Forward's Key 1 at %s, not cleared", Repr(bound).c_str()));
         OpenToo(page);
         if (!MoveTo(setting))
             return;
@@ -978,9 +1048,15 @@ struct Walker {
                 return;
             Key("left");
         }
-        // Moved off the default now (a fresh page has every value at it): Del puts it back.
-        Expect(Menu_PresetLabel() && std::string(Menu_PresetLabel()).find(", changed") != std::string::npos,
-               Fmt("experimental: %s changed leaves the preset row at %s", name.c_str(), Repr(Menu_PresetLabel()).c_str()));
+        // Moved off the default now (a fresh page has every value at it): a tuning value marks
+        // the preset changed, a player's setting (mouse, pad, filters, From 1997) does not.
+        // Del puts it back.
+        const bool marks = Exp_CursorPresetsSet();
+        const bool changed = std::string(Menu_PresetLabel()).find(", changed") != std::string::npos;
+        Expect(changed == marks, marks ? Fmt("experimental: %s changed leaves the preset row at %s", name.c_str(),
+                                             Repr(Menu_PresetLabel()).c_str())
+                                       : Fmt("experimental: %s, a player's setting, changed makes the preset row %s",
+                                             name.c_str(), Repr(Menu_PresetLabel()).c_str()));
         Key("del");
         Expect(Exp_CursorValue() == v0, Fmt("experimental: Del leaves %s at %s, not its default %s", name.c_str(),
                                             Repr(Exp_CursorValue()).c_str(), Repr(v0.c_str()).c_str()));
@@ -1088,6 +1164,26 @@ struct Walker {
             return;
         Expect(Exp_CursorValue() == v1, Fmt("experimental: Undo reset after a reset leaves %s at %s, not %s",
                                              name.c_str(), Repr(Exp_CursorValue()).c_str(), Repr(v1.c_str()).c_str()));
+
+        // A player's setting (the last row, From 1997's Reverse stereo): a preset leaves it.
+        Fresh(kExpPage);
+        Key("pgdn", 10);
+        std::string mineName = Exp_CursorName();
+        if (!Expect(!Exp_CursorPresetsSet(), Fmt("experimental: %s, the last row, is a tuning value", mineName.c_str())))
+            return;
+        Key("right");
+        std::string mine = Exp_CursorValue();
+        LeaveExp();
+        if (!OpenAgain("Preset") || !MoveTo("Classic"))
+            return;
+        Key("enter");
+        Key("down");
+        Key("enter");
+        if (!OpenAgain(kExpPage))
+            return;
+        Key("pgdn", 10);
+        Expect(Exp_CursorValue() == mine, Fmt("experimental: Classic puts %s, a player's setting, from %s to %s",
+                                              mineName.c_str(), Repr(mine.c_str()).c_str(), Repr(Exp_CursorValue()).c_str()));
     }
 
     // console: the Console row shows the version; Enter opens the full console after a key and
@@ -1366,6 +1462,7 @@ struct Walker {
             Settings(kPages[p]);
         Wake();
         Presets();
+        UndoPreset();
         Experimental();
         Console();
         Binding();
@@ -1458,6 +1555,8 @@ int Selftest_Run(const SelftestOptions &opt, const char *self) {
     Walker w;
     w.opt = &opt;
     w.size = Fmt("%ux%u", (unsigned)Engine_PhysW(), (unsigned)Engine_PhysH());
+    w.physW = Engine_PhysW();
+    w.physH = Engine_PhysH();
     w.checks = 0;
     Ui_ClearMissed();
     // Every walk in every Text language (2026-11-12): the whole menu is drawn in it, so
