@@ -133,7 +133,8 @@ is no pointer, so the cost of a target is the number of key presses to it.
 
 **Hick's Law, Choice Overload** (more options, slower decisions).
 - A value with 2 to 4 options cycles with Left and Right in its row. A value
-  with few steps shows its steps (Detail level: 3 framed steps).
+  with few steps shows its steps (framed steps, as Detail level had before it
+  moved to More options).
   *(review rule 9)*
 - A long list of the same kind (resolutions, languages beyond six) is a
   sub-page or a scroll list, never a value that takes ten presses to cycle.
@@ -192,7 +193,7 @@ second border, no shadow on a framed label. Joins checked at 3x.
 
 **Serial Position Effect.** What the one coming back opens Options for goes
 first: Resolution on Display, Master volume on Sound. What is rarely touched
-and costly goes last: Experimental settings, Reset settings.
+and costly goes last: More options, Reset settings.
 
 **Aesthetic-Usability Effect.** A row a pixel off makes the port feel
 unfinished, and the review's whole aim is that nothing says "port" louder than
@@ -215,11 +216,16 @@ voice. A setting exists only if players really disagree about it.
   the device the view shows. Esc, or 5 s, gives up the wait, and the voice
   says so: "Press a button, or wait to keep it." No pad button is kept back
   for cancelling (decided 2026-11-03).
-- A key already in use is refused: the old key stays and the voice says what
-  to do, "Clear C on Protection spell first." No side effects: a swap would
-  change an action the player is not looking at, and a clash would fire two
-  actions in play (decided 2026-11-03; the 1997 binding screen refuses too).
-  Red stays for a clash that comes in from an edited lba2.cfg.
+- A key already in use asks first, as choosing Classic and Reset settings do:
+  the voice says who has it ("J is on Jetpack, in Magic and items."), and two
+  answers take the actions' place, the safe one first: "No, keep it on
+  Jetpack" and "Yes, Jetpack gets Up" (or "keeps Num 5", or "has no key").
+  Esc answers No (decided 2026-11-11, replacing the refusal of 2026-11-03:
+  "Clear C on Protection spell first." named the action but left the player to
+  find it, clear it and come back; a question in the help alone was not read
+  as something to answer). Still no silent side effects, and never one key on
+  two actions from the page. Red stays for a
+  clash that comes in from an edited lba2.cfg.
 
 **Cognitive Load, Occam's Razor.** Every row earns its place. The voice says
 what a setting does in the player's terms ("Footsteps, doors, magic."), not
@@ -238,6 +244,14 @@ screen: one question, then play.
 **Selective Attention, Banner Blindness.** The voice says one short thing about
 the row under the cursor. Help that fits one line in English *(review rule 7)*
 is read; help cut off is not. **[self test: help cut off]**
+
+- **Long help pages on** (decided 2026-11-11). Help longer than its window is
+  said a window at a time, as the demo reel pages a dialogue: each window is
+  typed, held for its words (switch `pace`, 300 ms a word, at least 1.5 s),
+  then the next is typed; the last stays. Moving off the row and back says it
+  again from the start. So help is never cut off; a window's worth is still
+  the aim for the Options pages, and the console help on More options
+  is said whole.
 
 - **One message at a time** (decided 2026-11-03). When there is something to
   tell about the row (a key clash, a question, the wait for a key, why a row

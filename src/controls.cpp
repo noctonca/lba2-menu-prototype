@@ -219,14 +219,22 @@ static int ConflictOf(int action, int column) {
     return -1;
 }
 
-// Another action that already has this key or button on the same device, or -1.
-static int HolderOf(int action, int column, int code) {
+// Another action that already has this key or button on the same device, or -1;
+// *slot gets which of its slots holds it.
+static int HolderOf(int action, int column, int code, int *slot) {
     int lo = column < 2 ? 0 : 2;
-    for (int a = 0; a < ACTION_COUNT; a++)
-        if (a != action && (g_bind[a][lo] == code || g_bind[a][lo + 1] == code))
-            return a;
+    for (int a = 0; a < ACTION_COUNT; a++) {
+        for (int k = lo; k < lo + 2; k++) {
+            if (a != action && g_bind[a][k] == code) {
+                if (slot)
+                    *slot = k;
+                return a;
+            }
+        }
+    }
     return -1;
 }
+
 
 // ───────────────────────────── State ─────────────────────────────
 
@@ -241,12 +249,16 @@ static int g_scroll;
 static bool g_waiting;
 static U32 g_waitStart, g_waitFrame;
 static char g_lastBound[96];
-// A key refused because another action has it (switch keyrule 0): said in the
-// voice while the cursor stays on the chip it was meant for.
+// A key another action has (switch keyrule 0): the page asks before it moves it,
+// as Options asks before Classic or Reset settings: the voice says who has it, two
+// answer rows take the actions' place, No first. Yes swaps (the other action gets
+// this chip's old key, or nothing); No or Esc keeps both as they were.
 static struct {
-    int action = -1, column, holder;
-    char key[32];
-} g_refused;
+    int action = -1, column;  // the chip the key was meant for
+    int code;                 // the key or button pressed
+    int holder, slot;         // the action that has it, and its slot
+    int answer;               // 0 No (the safe answer, first), 1 Yes
+} g_swap;
 
 static bool g_bindingsReady;
 
@@ -327,7 +339,7 @@ void Controls_Open() {
     g_scroll = 0;
     g_waiting = false;
     g_lastBound[0] = 0;
-    g_refused.action = -1;
+    g_swap.action = -1;
     if (!g_bindingsReady) {
         ResetBindings();
         g_bindingsReady = true;
@@ -352,25 +364,31 @@ void Controls_Reset() {
     g_active = g_waiting = g_focusRight = false;
     g_device = g_group = g_colCursor = g_row = g_column = g_scroll = 0;
     g_lastBound[0] = 0;
-    g_refused.action = -1;
+    g_swap.action = -1;
     g_bindingsReady = false;
 }
 
 // ───────────────────────────── Input ─────────────────────────────
 
+static void CodeName(int column, int code, char *out, size_t n) {
+    if (column < 2)
+        KeyName(code, out, n);
+    else
+        PadName(code, out, n);
+}
+
 static void Bind(int action, int column, int code) {
     char name[32], was[32];
-    // No side effects (decided 2026-11-03): a key another action has is refused,
-    // the old key stays, and the voice says which action has it and what to do.
-    int holder = HolderOf(action, column, code);
+    // Nothing changes without the player's say (decided 2026-11-11, replacing the refusal
+    // of 2026-11-03): a key another action has is offered as a swap, and the voice says
+    // what the other action is left with.
+    int slot;
+    int holder = HolderOf(action, column, code, &slot);
     if (holder >= 0 && Menu_GetSwitch("keyrule") == 0) {
-        if (column < 2)
-            KeyName(code, name, sizeof name);
-        else
-            PadName(code, name, sizeof name);
-        g_refused.action = action, g_refused.column = column, g_refused.holder = holder;
-        snprintf(g_refused.key, sizeof g_refused.key, "%s", name);
-        Trace("bind refused action=\"%s\" column=\"%s\" key=\"%s\" holder=\"%s\"", kActions[action].name,
+        CodeName(column, code, name, sizeof name);
+        g_swap.action = action, g_swap.column = column, g_swap.code = code;
+        g_swap.holder = holder, g_swap.slot = slot, g_swap.answer = 0;
+        Trace("bind asks action=\"%s\" column=\"%s\" key=\"%s\" holder=\"%s\"", kActions[action].name,
               ColumnHead(column), name, kActions[holder].name);
         return;
     }
@@ -393,8 +411,46 @@ static void Bind(int action, int column, int code) {
     snprintf(g_lastBound, sizeof g_lastBound, "%s", name);
 }
 
+// The key or button the chip had before, which the other action gets on a swap.
+static int OldCode(int action, int column) { return g_bind[action][column < 2 ? column : 2]; }
+
+static void Swap() {
+    int a = g_swap.action, c = g_swap.column, h = g_swap.holder, k = g_swap.slot;
+    int old = OldCode(a, c);
+    char name[32], gave[32];
+    CodeName(c, g_swap.code, name, sizeof name);
+    CodeName(c, old, gave, sizeof gave);
+    g_bind[h][k] = old;
+    int other = k ^ 1;  // the holder's other slot on the same device
+    if (old && g_bind[h][other] == old)
+        g_bind[h][k] = 0;  // it had the old key already: one key in both slots says nothing
+    g_swap.action = -1;
+    Bind(a, c, g_swap.code);  // the holder no longer has it, so this goes in
+    Trace("swap action=\"%s\" key=\"%s\" holder=\"%s\" gets=\"%s\"", kActions[a].name, name, kActions[h].name,
+          gave[0] ? gave : "-");
+}
+
+// The question's answers: what each leaves the other action with.
+static void SwapAnswer(int i, char *out, size_t n) {
+    const Action &h = kActions[g_swap.holder];
+    if (i == 0) {
+        snprintf(out, n, "No, keep it on %s", h.name);
+        return;
+    }
+    char old[32], kept[32];
+    int c = g_swap.column;
+    CodeName(c, OldCode(g_swap.action, c), old, sizeof old);
+    CodeName(c, g_bind[g_swap.holder][g_swap.slot ^ 1], kept, sizeof kept);
+    if (old[0])
+        snprintf(out, n, "Yes, %s gets %s", h.name, old);
+    else if (kept[0])
+        snprintf(out, n, "Yes, %s keeps %s", h.name, kept);
+    else
+        snprintf(out, n, "Yes, %s has no key", h.name);
+}
+
 static void StartWaiting() {
-    g_refused.action = -1;
+    g_swap.action = -1;
     g_waiting = true;
     g_waitStart = Engine_TimeMs();
     g_waitFrame = Engine_Frame();
@@ -436,6 +492,21 @@ void Controls_Update() {
     SyncLayout();
     if (g_waiting) {
         UpdateWaiting();
+        Say();
+        return;
+    }
+    if (g_swap.action >= 0) {
+        if (Engine_Pressed(KEY_UP) || Engine_Pressed(KEY_DOWN)) {
+            g_swap.answer ^= 1;
+            Trace("cursor %s", g_swap.answer ? "Yes" : "No");
+        }
+        if (Engine_Pressed(KEY_ENTER) && g_swap.answer) {
+            Trace("answer yes");
+            Swap();
+        } else if (Engine_Pressed(KEY_ENTER) || Engine_Pressed(KEY_ESC)) {
+            g_swap.action = -1;
+            Trace("answer no");
+        }
         Say();
         return;
     }
@@ -524,11 +595,17 @@ static void Say() {
     } else {
         int a = CursorAction(), c = CursorColumn();
         int other = ConflictOf(a, c);
-        if (g_refused.action >= 0 && (g_refused.action != a || g_refused.column != c))
-            g_refused.action = -1;  // the cursor moved on
-        if (g_refused.action >= 0) {
-            const Action &h = kActions[g_refused.holder];
-            snprintf(buf, sizeof buf, "Clear %s on %s first.", g_refused.key, h.name);
+        if (g_swap.action >= 0 && (g_swap.action != a || g_swap.column != c))
+            g_swap.action = -1;  // the cursor moved on
+        if (g_swap.action >= 0) {
+            const Action &h = kActions[g_swap.holder];
+            char key[32], where[64] = "";
+            CodeName(c, g_swap.code, key, sizeof key);
+            // One pane at a time shows one group: name the other action's when it is not this
+            // one. What each answer leaves it with is on the answer rows.
+            if (h.group != g_group)
+                snprintf(where, sizeof where, ", in %s", kGroups[h.group].name);
+            snprintf(buf, sizeof buf, "%s is on %s%s.", key, h.name, where);
             text = buf;
         } else if (other >= 0) {
             char name[32];
@@ -674,6 +751,11 @@ static void Legend(const char **keys, const char **words, int *n) {
         keys[*n] = "Esc", words[(*n)++] = "Cancel";
         return;
     }
+    if (g_swap.action >= 0) {  // as Options' questions
+        keys[*n] = "\x18\x19", words[(*n)++] = "Choose";
+        keys[*n] = "Enter", words[(*n)++] = "Answer";
+        return;
+    }
     if (g_focusRight) {
         keys[*n] = "Enter", words[(*n)++] = "Change";
         keys[*n] = "Del", words[(*n)++] = "Clear";
@@ -690,7 +772,37 @@ static void Legend(const char **keys, const char **words, int *n) {
 
 // The column heads from y top, then rows for the actions of the group 22 below, scrolled
 // to keep the cursor in view; with the heads inside the first row, the rows from y top.
+// The swap question's two answers in place of the actions, as Options draws its
+// questions: wide, labels on the pane's label edge; one column, centred.
+static void DrawSwapAnswers(S32 x0, S32 x1, S32 top, const char *pane) {
+    bool centred = !Wide();
+    for (int i = 0; i < 2; i++) {
+        char label[96];
+        SwapAnswer(i, label, sizeof label);
+        S32 y0 = top + i * ROW_PITCH, yc = y0 + ROW_H / 2;
+        RowFill fill = i == g_swap.answer ? FILL_CURSOR : FILL_SHADE;
+        Ui_RowBackground(x0, y0, x1, y0 + ROW_H, fill);
+        DrawnRow &d = Menu_Record(pane, label, "", fill, x0, y0, x1, y0 + ROW_H);
+        if (centred) {
+            Menu_RowLabelCentred(x0, x1, yc, label, INK_WHITE);
+            d.textLeft = (x0 + x1) / 2 - Ui_TextWidth(label) / 2;
+            d.textRight = d.textLeft + Ui_TextWidth(label);
+        } else {
+            MemoClip();
+            SetClip(x0 + 1, y0, x1 - 1, y0 + ROW_H);
+            Ui_Text(x0 + 16, yc - 18, label, INK_WHITE);
+            RestoreClip();
+            d.textLeft = x0 + 16;
+            d.textRight = x0 + 16 + Ui_TextWidth(label);
+        }
+    }
+}
+
 static void DrawActions(S32 x0, S32 x1, S32 headsTop, S32 limit, const char *pane) {
+    if (g_swap.action >= 0) {
+        DrawSwapAnswers(x0, x1, headsTop, pane);
+        return;
+    }
     int cols[3];
     int ncols = Columns(cols);
     int n = GroupCount(g_group);
@@ -861,8 +973,8 @@ int Controls_Where(char *buf, size_t n) {
     int a = CursorAction(), c = CursorColumn();
     ChipText(a, c, chip, sizeof chip);
     snprintf(buf, n, "%s | %s | %s | %s | %s%s", DeviceName(g_device), kGroups[g_group].name, kActions[a].name,
-             ColumnHead(c), chip, g_waiting ? " | waiting" : "");
-    return g_waiting ? 3 : 2;
+             ColumnHead(c), chip, g_waiting ? " | waiting" : g_swap.action < 0 ? "" : g_swap.answer ? " | asking | Yes" : " | asking | No");
+    return g_waiting || g_swap.action >= 0 ? 3 : 2;  // Esc takes either back to the chip
 }
 
 bool Controls_Binding(const char *action, int column, char *out, size_t n) {

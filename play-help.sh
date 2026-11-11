@@ -34,7 +34,7 @@ Steps, the same in each round (the window opens on Options):
   1. Read the help of the Settings row, then Enter: read Modern and Classic.
      Down to Classic, Enter: read the question. Choose "No, keep Modern".
   2. Esc back. Down to Display and graphics, Enter. Read every row's help,
-     Vsync, Detail level and Image above all. Do you miss what was cut?
+     Vsync and Image above all. Do you miss what was cut?
   3. Esc back, Down to Controls and camera, Enter. Read Outdoors camera, then
      Invert camera and Camera speed (dimmed while Outdoors is Classic).
   4. Enter on Keys and buttons. Down to Actions and read its help. Enter: the

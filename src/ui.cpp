@@ -243,37 +243,86 @@ static S32 Wrap(const char *text, S32 width, const char **starts, S32 *lens, S32
 }
 
 S32 Voice_Lines(const char *text, S32 width) {
-    const char *starts[8];
-    S32 lens[8];
-    return Wrap(text, width, starts, lens, 8);
+    const char *starts[VOICE_MAX_LINES];
+    S32 lens[VOICE_MAX_LINES];
+    return Wrap(text, width, starts, lens, VOICE_MAX_LINES);
+}
+
+static S32 s_msPerWord = 300;
+static S32 s_lastPage, s_lastPages;
+
+void Voice_SetMsPerWord(S32 ms) { s_msPerWord = ms; }
+
+void Voice_LastPage(S32 *page, S32 *pages) {
+    *page = s_lastPage;
+    *pages = s_lastPages;
+}
+
+// Letters are typed one per 20 ms; a letter takes 13 steps of the colour ramp to settle.
+enum { MS_PER_LETTER = 20, RAMP_STEPS = 13, MIN_HOLD_MS = 1500 };
+
+static S32 HoldMs(const char *const *starts, const S32 *lens, S32 first, S32 count) {
+    S32 words = 0;
+    for (S32 l = first; l < first + count; l++)
+        for (S32 i = 0; i < lens[l]; i++)
+            if (starts[l][i] != ' ' && (i == 0 || starts[l][i - 1] == ' '))
+                words++;
+    S32 ms = words * s_msPerWord;
+    return ms < MIN_HOLD_MS ? MIN_HOLD_MS : ms;
 }
 
 S32 Voice_Draw(const Voice &v, S32 x0, S32 y0, S32 width, S32 maxLines, S32 *needed) {
-    const char *starts[8];
-    S32 lens[8];
-    if (maxLines > 8)
-        maxLines = 8;
-    S32 all = Wrap(v.text, width, starts, lens, 8);
+    const char *starts[VOICE_MAX_LINES];
+    S32 lens[VOICE_MAX_LINES];
+    if (maxLines > VOICE_MAX_LINES)
+        maxLines = VOICE_MAX_LINES;
+    if (maxLines < 1)
+        maxLines = 1;
+    S32 all = Wrap(v.text, width, starts, lens, VOICE_MAX_LINES);
     if (needed)
         *needed = all;
-    S32 lines = all < maxLines ? all : maxLines;
 
-    // Letters shown so far: one per 20 ms. Spaces count, as in the dialogue.
+    // Which window is showing, and since when: each is typed (when the voice types),
+    // then held for its words, then the next begins. The last one stays.
+    S32 pages = all > 0 ? (all + maxLines - 1) / maxLines : 1;
+    S32 elapsed = (S32)(Engine_TimeMs() - v.start);
+    S32 page = 0;
+    for (; page + 1 < pages; page++) {
+        S32 first = page * maxLines;
+        S32 count = all - first < maxLines ? all - first : maxLines;
+        S32 letters = 0;
+        for (S32 l = first; l < first + count; l++)
+            letters += lens[l];
+        S32 span = (v.typed ? (letters + RAMP_STEPS) * MS_PER_LETTER : 0) + HoldMs(starts, lens, first, count);
+        if (elapsed < span)
+            break;
+        elapsed -= span;
+    }
+    s_lastPage = page;
+    s_lastPages = pages;
+
+    S32 first = page * maxLines;
+    S32 lines = all - first < maxLines ? all - first : maxLines;
+    if (lines < 0)
+        lines = 0;
+
+    // Letters shown so far in this window: one per 20 ms. Spaces count, as in the dialogue.
     S32 total = 0;
-    for (S32 i = 0; i < lines; i++)
+    for (S32 i = first; i < first + lines; i++)
         total += lens[i];
-    S32 shown = v.typed ? (S32)((Engine_TimeMs() - v.start) / 20) : total + 13;
+    S32 shown = v.typed ? elapsed / MS_PER_LETTER : total + RAMP_STEPS;
 
     S32 index = 0;
     for (S32 l = 0; l < lines; l++) {
         S32 x = x0, y = y0 + l * 38;
-        for (S32 i = 0; i < lens[l]; i++, index++) {
+        const char *line = starts[first + l];
+        for (S32 i = 0; i < lens[first + l]; i++, index++) {
             if (index >= shown)
                 return lines;
-            char c = starts[l][i];
+            char c = line[i];
             S32 age = shown - 1 - index;
-            if (age > 12)
-                age = 12;
+            if (age > RAMP_STEPS - 1)
+                age = RAMP_STEPS - 1;
             if (c != ' ') {
                 ColorFont(INK_BLACK);
                 CarFont(x + 2, y + 4, (U8)c);

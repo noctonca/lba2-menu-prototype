@@ -37,9 +37,9 @@ static const char *kPages[] = {
 
 // Actions per group on the Controls page (controls.cpp kActions).
 static const int kGroupSizes[] = {5, 6, 4, 7, 4, 4, 6};
-// Rows per group on the Experimental settings page (experimental.cpp kTuning).
-static const int kExpGroups[] = {22, 9, 7, 3};
-static const char *kExpPage = "Experimental settings";
+// Rows per group on the More options page (experimental.cpp kTuning).
+static const int kExpGroups[] = {22, 9, 7, 3, 3};
+static const char *kExpPage = "More options";
 
 struct Switch {
     std::string name;
@@ -136,8 +136,13 @@ static void Check(std::vector<std::string> *found) {
     const S32 W = (S32)Engine_LogicalW(), H = (S32)Engine_LogicalH();
     MenuHelp v;
     Menu_Help(&v);
-    if (v.needed > v.max && v.max)
-        found->push_back(Fmt("help cut off (%d lines in %d, %d px): %s", v.needed, v.max, v.width, Repr(v.text).c_str()));
+    // Help longer than its window pages on, a window at a time; it is cut off only past
+    // the most lines the voice wraps.
+    if (v.needed >= VOICE_MAX_LINES)
+        found->push_back(Fmt("help cut off (%d lines or more, %d px): %s", v.needed, v.width, Repr(v.text).c_str()));
+    if (v.max && v.needed && v.pages != (v.needed + v.max - 1) / v.max)
+        found->push_back(Fmt("help pages: %d lines in %d make %d windows, not %d: %s", v.needed, v.max, v.pages,
+                             (v.needed + v.max - 1) / v.max, Repr(v.text).c_str()));
     bool help = strcmp(v.where, "none") != 0;
     const DrawnRow *rows;
     int n = Menu_DrawnRows(&rows);
@@ -190,7 +195,7 @@ static void Check(std::vector<std::string> *found) {
                                      cv[i].column, Repr(cv[i].other).c_str()));
         }
     }
-    // The Experimental settings table: its panel clear of the canvas edge and the help, its
+    // The More options table: its panel clear of the canvas edge and the help, its
     // lines on one strip, the names on the label edge, the values on one trailing edge clear
     // of the names, 10 apart at 1x, inside the panel above the status line, which fits; the
     // cursor's group head shown when the cursor is on the group's first row.
@@ -448,6 +453,15 @@ struct Walker {
                 return true;
         return false;
     }
+    // The label of a drawn row that starts with prefix, or "".
+    std::string RowStarting(const std::string &prefix) const {
+        const DrawnRow *rows;
+        int n = Menu_DrawnRows(&rows);
+        for (int i = 0; i < n; i++)
+            if (!strncmp(rows[i].label, prefix.c_str(), prefix.size()))
+                return rows[i].label;
+        return "";
+    }
     void Fresh(const char *page) {
         Start();
         Open(page);
@@ -503,7 +517,14 @@ struct Walker {
         return Controls_Active() ? Controls_Where(buf, sizeof buf) : 0;
     }
     bool InActions() const { return ControlsDepth() == 2; }
-    bool Waiting() const { return ControlsDepth() == 3; }
+    std::string ControlsWhere() const {
+        char buf[200] = "";
+        if (Controls_Active())
+            Controls_Where(buf, sizeof buf);
+        return buf;
+    }
+    bool Waiting() const { return ControlsWhere().find("| waiting") != std::string::npos; }
+    bool Asking() const { return ControlsWhere().find("| asking") != std::string::npos; }
     // The chip under the cursor, from the last frame drawn.
     bool CursorChip(ChipView *out) const {
         ChipView c[32];
@@ -611,7 +632,7 @@ struct Walker {
         }
     }
 
-    // The Experimental settings page: every row, in the table (exptable=1) or the list.
+    // The More options page: every row, in the table (exptable=1) or the list.
     void ExperimentalPage() {
         if (!Wanted(kExpPage))
             return;
@@ -864,7 +885,7 @@ struct Walker {
                     Fmt("preset: Yes leaves the preset row at %s", Repr(Menu_PresetLabel()).c_str())))
             return;
         // A player's setting, which no preset sets: Reset settings still puts it back.
-        const char *setting = "Videos", *page = "Display and graphics";
+        const char *setting = "Vsync", *page = "Display and graphics";
         OpenToo(page);
         if (!MoveTo(setting))
             return;
@@ -971,9 +992,9 @@ struct Walker {
     void Experimental() {
         if (!Wanted(kExpPage))
             return;
-        const char *row = "Experimental settings";
+        const char *row = "More options";
         Fresh("Advanced and reset");
-        if (!Expect(RowDrawn(row), "experimental: Advanced and reset has no Experimental settings row"))
+        if (!Expect(RowDrawn(row), "experimental: Advanced and reset has no More options row"))
             return;
         if (!MoveTo(row))
             return;
@@ -1151,9 +1172,6 @@ struct Walker {
         Key("esc");
         if (!Expect(!Waiting(), "bind: Esc leaves the wait for a key going"))
             return;
-        if (!Expect(ChipText() == before,
-                    Fmt("bind: Esc changed the chip to %s (was %s)", Repr(ChipText().c_str()).c_str(), Repr(before.c_str()).c_str())))
-            return;
 
         // The other device's input does not bind.
         Key("enter");
@@ -1167,19 +1185,29 @@ struct Walker {
         char want[32];
         Controls_Binding(partner, pad ? 2 : 0, want, sizeof want);
         if (Menu_GetSwitch("keyrule") == 0) {
-            // A key another action has is refused: the chip keeps its key, nothing
-            // goes red, and the help names the action that has it.
+            // A key another action has asks first, as Options' questions do: the voice names
+            // the action that has it, the answers take the actions' place, No first, and Esc
+            // keeps both as they were.
             std::string kept = ChipText();
             Key("enter");
             Press(pad ? "pad:a" : "J");
-            if (!Expect(!Waiting() && ChipText() == kept,
-                        Fmt("bind: %s, another action's, replaced %s (chip %s)", Repr(want).c_str(), Repr(kept.c_str()).c_str(),
-                            Repr(ChipText().c_str()).c_str())))
+            if (!Expect(Asking() && EndsWith(ControlsWhere(), "| No"),
+                        Fmt("bind: %s, another action's, did not ask on No first (%s)", Repr(want).c_str(),
+                            Repr(ControlsWhere().c_str()).c_str())))
                 return;
             Check();
-            Expect(!ChipRed() && !Clashes(partner), Fmt("bind: a refused %s left a clash", Repr(want).c_str()));
-            Expect(Voice() == std::string("Clear ") + want + " on " + partner + " first.",
-                   Fmt("bind: the help does not say %s has it: %s", partner, Repr(Voice().c_str()).c_str()));
+            std::string q = Voice();
+            Expect(q.find(std::string(want) + " is on " + partner) == 0,
+                   Fmt("bind: the question does not say %s has %s: %s", partner, Repr(want).c_str(), Repr(q.c_str()).c_str()));
+            Expect(RowDrawn((std::string("No, keep it on ") + partner).c_str()) && !RowStarting("Yes, ").empty(),
+                   "bind: the question's answers are not drawn");
+            Key("esc");
+            char still[32];
+            Controls_Binding(partner, pad ? 2 : 0, still, sizeof still);
+            if (!Expect(!Asking() && InActions() && ChipText() == kept && !strcmp(still, want) && !Clashes(partner),
+                        Fmt("bind: Esc on the question changed something (chip %s, %s has %s)", Repr(ChipText().c_str()).c_str(),
+                            partner, Repr(still).c_str())))
+                return;
             Key("del");
             Expect(ChipText().empty(), Fmt("bind: Del leaves %s", Repr(ChipText().c_str()).c_str()));
             return;
@@ -1227,6 +1255,9 @@ struct Walker {
                        Repr(key2).c_str())))
             Expect(!ChipRed(), "bind: a key moved from Key 2 to Key 1 shows a clash");
 
+        if (Menu_GetSwitch("keyrule") == 0)
+            Swap();
+
         // The wait gives up after 5 s and changes nothing.
         ToChip(0, 0, 0);
         std::string before = ChipText();
@@ -1234,6 +1265,57 @@ struct Walker {
         Wait(5000 / 16 + 5);
         Expect(!Waiting() && ChipText() == before,
                Fmt("bind: 5 s on, the wait %s (chip %s)", Waiting() ? "goes on" : "ended", Repr(ChipText().c_str()).c_str()));
+    }
+
+    // The swap question: No (first) changes nothing; Yes gives Forward J and Jetpack Forward's
+    // key, with no key on two actions; swapping back puts both back. Onto an empty chip the
+    // Yes answer says what Jetpack is left with.
+    void Swap() {
+        ToChip(0, 0, 0);
+        std::string mine = ChipText();
+        char theirs[32];
+        Controls_Binding("Jetpack", 0, theirs, sizeof theirs);
+        std::string j = theirs;
+        Key("enter");
+        Press("J");
+        if (!Expect(Asking(), "swap: J, Jetpack's, did not ask"))
+            return;
+        std::string q = Voice();
+        Expect(q == "J is on Jetpack, in Magic and items.", Fmt("swap: the question reads %s", Repr(q.c_str()).c_str()));
+        std::string yes = "Yes, Jetpack gets " + mine;
+        Expect(RowDrawn(yes.c_str()), Fmt("swap: no %s answer (Yes reads %s)", Repr(yes.c_str()).c_str(),
+                                          Repr(RowStarting("Yes, ").c_str()).c_str()));
+        Key("enter");  // on No
+        Controls_Binding("Jetpack", 0, theirs, sizeof theirs);
+        if (!Expect(!Asking() && ChipText() == mine && theirs == j,
+                    Fmt("swap: No left Forward %s and Jetpack %s", Repr(ChipText().c_str()).c_str(), Repr(theirs).c_str())))
+            return;
+        Key("enter");
+        Press("J");
+        Key("down");
+        Key("enter");
+        Controls_Binding("Jetpack", 0, theirs, sizeof theirs);
+        if (!Expect(!Asking() && ChipText() == j && theirs == mine && !ChipRed() && !Clashes("Jetpack"),
+                    Fmt("swap: after Yes Forward has %s and Jetpack %s (want %s and %s)", Repr(ChipText().c_str()).c_str(),
+                        Repr(theirs).c_str(), Repr(j.c_str()).c_str(), Repr(mine.c_str()).c_str())))
+            return;
+        Key("enter");
+        Press(mine == "Num 8" ? "Keypad 8" : "Up");
+        Key("down");
+        Key("enter");
+        Controls_Binding("Jetpack", 0, theirs, sizeof theirs);
+        Expect(ChipText() == mine && theirs == j,
+               Fmt("swap: swapping back left Forward %s and Jetpack %s", Repr(ChipText().c_str()).c_str(), Repr(theirs).c_str()));
+
+        ToChip(0, 0, 1);
+        if (ChipText().empty()) {
+            Key("enter");
+            Press("J");
+            std::string a = RowStarting("Yes, ");
+            Expect(Asking() && (a.find("Yes, Jetpack keeps ") == 0 || a == "Yes, Jetpack has no key"),
+                   Fmt("swap: onto an empty chip Yes reads %s", Repr(a.c_str()).c_str()));
+            Key("esc");
+        }
     }
 
     void Behaviour(bool gameplay, bool twoDevices) {

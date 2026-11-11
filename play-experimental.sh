@@ -1,5 +1,5 @@
 #!/bin/bash
-# Play test: the Experimental settings page, as a dense table and as a list.
+# Play test: the More options page, as a dense table and as a list.
 # Two rounds per size on the same steps, one window each; close the window to
 # go on to the next round.
 #   ./play-experimental.sh                      1920x1080, then 640x480
@@ -29,7 +29,7 @@ fi
 
 cat <<'STEPS'
 Steps, the same in each round (the window opens on Options):
-  1. Down to Advanced and reset, Enter. Down to Experimental settings,
+  1. Down to Advanced and reset, Enter. Down to More options,
      read its help, Enter.
   2. Find cam_ease_ms (Auto camera) and turn it up to 450 with Right.
      Find cam_glide (Mouse) and turn it down to 60. In the table, try

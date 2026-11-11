@@ -71,7 +71,16 @@ struct Voice {
     bool typed;  // false: shown whole
 };
 void Voice_Say(Voice &v, const char *text, bool typed);
+// The most lines the voice wraps a text into.
+enum { VOICE_MAX_LINES = 16 };
 // How many lines of the game font the text wraps into at that width.
 S32 Voice_Lines(const char *text, S32 width);
-// Returns the lines drawn; *needed gets how many the whole text takes.
+// Returns the lines drawn; *needed gets how many the whole text takes. Help longer
+// than maxLines is said a window at a time, as the demo reel pages a dialogue
+// (MESSAGE.CPP Dial under DemoSlide): each window is typed, held long enough to
+// read, then the next one is typed. The last window stays.
 S32 Voice_Draw(const Voice &v, S32 x0, S32 y0, S32 width, S32 maxLines, S32 *needed);
+// How long a window is held: this many ms for each word in it, and at least 1.5 s.
+void Voice_SetMsPerWord(S32 ms);
+// The window the last Voice_Draw showed (0 is the first) and how many there are.
+void Voice_LastPage(S32 *page, S32 *pages);

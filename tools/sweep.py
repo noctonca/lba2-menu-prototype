@@ -36,9 +36,9 @@ PAGES = ["Options", "Preset", "Language and interface", "Display and graphics", 
 # Actions per group on the Controls page (controls.cpp kActions).
 CONTROL_GROUPS = [5, 6, 4, 7, 4, 4, 6]
 
-# Rows per group on the Experimental settings page (experimental.cpp kTuning).
+# Rows per group on the More options page (experimental.cpp kTuning).
 EXP_GROUPS = [22, 9, 7, 3]
-EXP_PAGE = "Experimental settings"
+EXP_PAGE = "More options"
 
 # The same seven as selftest.cpp kCombos: the chosen layouts and their variants
 # (band=0 and devices=0 were not chosen, 2026-11-03; --combo still tests them).
@@ -90,7 +90,7 @@ def controls_lines(columns_kb, columns_pad):
     return lines
 
 def experimental_lines(table):
-    """Every row of the Experimental settings page, in the table or the list."""
+    """Every row of the More options page, in the table or the list."""
     lines = [f"open {EXP_PAGE}", "wait 1", "state"]
     if table:
         for _ in range(sum(EXP_GROUPS)):
@@ -185,7 +185,7 @@ def check(state):
     for a, col, other in controls.get("conflicts", []):
         if other not in clashing:
             problems.append(f"clash one way: {a!r} {col} is also {other!r}, which shows no clash")
-    # The Experimental settings table: its panel clear of the canvas edge and the help, its
+    # The More options table: its panel clear of the canvas edge and the help, its
     # lines on one strip, the names on the label edge, the values on one trailing edge clear
     # of the names, 10 apart at 1x, inside the panel above the status line, which fits; the
     # cursor's group head shown when the cursor is on the group's first row.

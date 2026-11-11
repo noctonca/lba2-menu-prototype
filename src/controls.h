@@ -41,7 +41,8 @@ struct ConflictView {
 };
 int Controls_Conflicts(ConflictView *out, int max);
 // Where the cursor is ("Keyboard | Movement | Forward | Key 1 | Up | waiting"),
-// and how deep within the page: 1 the groups, 2 the actions, 3 waiting for a key.
+// and how deep within the page: 1 the groups, 2 the actions, 3 waiting for a key
+// or asking whether to swap one another action has ("| asking").
 int Controls_Where(char *buf, size_t n);
 // What an action's chip in a column says (0 Key 1, 1 Key 2, 2 the pad).
 bool Controls_Binding(const char *action, int column, char *out, size_t n);

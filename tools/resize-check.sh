@@ -8,7 +8,7 @@
 set -u
 BIN=${1:-build/lba2menu}
 PAGES=("Display and graphics" "Sound" "Controls and camera" "Advanced and reset" "original"
-       "Keys and buttons" "Experimental settings")
+       "Keys and buttons" "More options")
 STARTS=(1280x720 640x480 3840x2160 1280x800)
 TARGETS=(1920x1080 768x480 1024x480 640x480 3440x1440 1280x800 2400x1080 3840x2160 1512x904)
 
@@ -36,7 +36,7 @@ for page in "${PAGES[@]}"; do
             # A page's one-column cursor counts its Return row; wide's does not.
             # Controls and Experimental keep their own cursors, without it.
             case "$page" in
-            "Keys and buttons" | "Experimental settings") downs=2 ;;
+            "Keys and buttons" | "More options") downs=2 ;;
             *) downs=$((2 - COL[$start] + COL[$target])) ;;
             esac
             check pages "" "$page" "$start" "$target" "$downs"
@@ -46,7 +46,7 @@ done
 # The Experimental page as a list of groups, as switch 0 shows it.
 for start in "${STARTS[@]}"; do
     for target in "${TARGETS[@]}"; do
-        check exptable=0 "--switch exptable=0" "Experimental settings" "$start" "$target" 2
+        check exptable=0 "--switch exptable=0" "More options" "$start" "$target" 2
     done
 done
 

@@ -61,6 +61,7 @@ struct MenuHelp {
     const char *where;  // band, help-line, dialogue, or none
     int x0, y0, x1, y1;
     int needed, max, width;
+    int page, pages;  // the window of help showing, of how many (longer help pages on)
     const char *text;
 };
 void Menu_Help(MenuHelp *out);

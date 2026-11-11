@@ -32,6 +32,7 @@ static const Group kGroups[] = {
     {"Mouse", "How the mouse turns the camera."},
     {"Gamepad", "The right stick's camera and the stick deadzone."},
     {"Graphics", "Shading, and the filters on the picture."},
+    {"From 1997", "Settings for the machines of 1997. Today's play best as they are."},
 };
 enum { GROUP_COUNT = sizeof kGroups / sizeof kGroups[0] };
 
@@ -44,7 +45,7 @@ struct Tuning {
     const char *key;   // lba2.cfg key
     TKind kind;
     int def, min, max, step;
-    const char *names[3];
+    const char *names[4];
     const char *help;  // the console help
 };
 
@@ -126,9 +127,31 @@ static const Tuning kTuning[] = {
      "Texture filtering: 0 off, 1 horizontal, 2 bilinear"},
     {3, "gfx_presentfilter", "PresentFilter", T_CHOICE, 0, 0, 2, 1, {"Nearest", "Linear", "Pixel art"},
      "Filter stretching the frame to the window: 0 nearest, 1 linear, 2 pixelart"},
+    // Rows the 1997 Options had for the machines of the day, moved off the Modern pages
+    // (decided 2026-11-11). They have no console name: they keep their game labels, and the
+    // 1997 Options page (the plan's step 10) keeps them where they were.
+    {4, "Detail level", "DetailLevel", T_CHOICE, 3, 0, 3, 1, {"Low", "Medium", "High", "Full"},
+     "For slow machines: each step down takes away animated water, rain, the far scenery, then shadows."},
+    // Named as lba2cc's glossary names it: "Movies at original size / Movies fit to screen".
+    {4, "Movies", "FullScreen", T_CHOICE, 1, 0, 1, 1, {"At original size", "Fit to screen"},
+     "For slow CD drives: the movies fit to the screen, or play at their original size."},
+    {4, "Reverse stereo", "ReverseStereo", T_TOGGLE, 0, 0, 1, 1, {0}, "Swaps the left and right speakers."},
 };
 enum { TUNING_COUNT = sizeof kTuning / sizeof kTuning[0] };
 static_assert(TUNING_COUNT <= EXP_MAX, "EXP_MAX holds every tuning row");
+
+// The rows lba2cc calls experimental (docs/CAMERA.md marks them so, CHANGELOG "experimental
+// and off by default"). The rest tune finished features. The settings tables have no field
+// for it yet: the menu plan's ring field would give it.
+static const char *const kExperimental[] = {"cam_zone_anchor", "cam_world_anchor"};
+
+static bool IsExperimental(int i) {
+    for (size_t k = 0; k < sizeof kExperimental / sizeof kExperimental[0]; k++)
+        if (!strcmp(kTuning[i].name, kExperimental[k]))
+            return true;
+    return false;
+}
+static const char *kTag = "experimental";
 
 static int g_val[TUNING_COUNT];
 static bool g_valReady;
@@ -396,7 +419,14 @@ void Exp_Update() {
 
 static void Say() {
     int i = CursorTuning();
-    if (i >= 0)
+    if (i >= 0 && IsExperimental(i)) {
+        char buf[320];
+        const char *help = kTuning[i].help;
+        if (!strncmp(help, "Prototype: ", 11))
+            help += 11;  // the console's word for the same thing
+        snprintf(buf, sizeof buf, "Experimental: %s", help);
+        Menu_Say(buf);
+    } else if (i >= 0)
         Menu_Say(kTuning[i].help);
     else if (Wide() || g_colCursor > 0)
         Menu_Say(kGroups[g_group].help);
@@ -479,6 +509,14 @@ static void DrawTable(S32 px0, S32 px1, S32 py0, S32 py1) {
     g_table.marksRight = valueRight + 12 * s;
     g_table.total = total;
     g_table.scroll = g_scroll;
+    // The tags line up, two letters clear of the longest name.
+    S32 tagX = 0;
+    for (int i = 0; i < TUNING_COUNT; i++) {
+        S32 w = Ui_SmallWidth(kTuning[i].name, s);
+        if (w > tagX)
+            tagX = w;
+    }
+    tagX += nameX + 16 * s;
     MemoClip();
     SetClip(px0 + 1, py0 + 1, px1 - 1, py1 - 1);
     for (int k = g_scroll; k < g_scroll + visible; k++) {
@@ -518,6 +556,14 @@ static void DrawTable(S32 px0, S32 px1, S32 py0, S32 py1) {
         d.changed = changed;
         d.first = line[k - 1] < 0;
         d.textRight = nameX + Ui_SmallWidth(kTuning[i].name, s) - 1;
+        S32 tx = tagX;
+        if (IsExperimental(i) && tx + Ui_SmallWidth(kTag, s) - 1 + 8 * s < left) {
+            // The tag after the name, in the heads' colour, two letters clear of it; where it
+            // does not fit (the 2x font in the one column), the voice still says it.
+            Ui_Small(tx, y, kTag, INK_CONFIG_HEAD, s);
+            d.textRight = tx + Ui_SmallWidth(kTag, s) - 1;
+            d.experimental = true;
+        }
         d.valueLeft = left;
         d.valueRight = right;
     }
@@ -617,7 +663,7 @@ static void DrawWideExp() {
     WideFrame f = Menu_WideFrame();
     S32 x0 = f.x0 + (f.w - DRILL_W) / 2, x1 = x0 + DRILL_W - 1;
     S32 top = f.y0 + 24, limit = Menu_WideRowsLimit();
-    const char *title = Table() || !g_inGroup ? "Experimental settings" : kGroups[g_group].name;
+    const char *title = Table() || !g_inGroup ? "More options" : kGroups[g_group].name;
     S32 rtop = Ui_Title(x0, x1, top, title);
     Menu_Record("title", title, "", FILL_SHADE, x0, top, x1, top + 38).textLeft =
         (x0 + x1 + 1) / 2 - Ui_TextWidth(title) / 2;
@@ -739,9 +785,9 @@ void Exp_WriteState(FILE *f) {
         Menu_JsonString(f, d.text);
         fprintf(f, ",\"value\":");
         Menu_JsonString(f, d.value);
-        fprintf(f, ",\"head\":%s,\"first\":%s,\"cursor\":%s,\"changed\":%s,\"rect\":[%d,%d,%d,%d],\"text_left\":%d,"
+        fprintf(f, ",\"head\":%s,\"first\":%s,\"experimental\":%s,\"cursor\":%s,\"changed\":%s,\"rect\":[%d,%d,%d,%d],\"text_left\":%d,"
                    "\"text_right\":%d,\"value_left\":%d,\"value_right\":%d}",
-                d.head ? "true" : "false", d.first ? "true" : "false", d.cursor ? "true" : "false", d.changed ? "true" : "false", d.x0, d.y0, d.x1,
+                d.head ? "true" : "false", d.first ? "true" : "false", d.experimental ? "true" : "false", d.cursor ? "true" : "false", d.changed ? "true" : "false", d.x0, d.y0, d.x1,
                 d.y1, d.textLeft, d.textRight, d.valueLeft, d.valueRight);
     }
     fprintf(f, "],\"values\":{");

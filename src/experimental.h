@@ -1,6 +1,7 @@
-// The Experimental settings page: every tuning value of the Experimental ring,
-// generated from a settings table (the menu plan's step 8), behind Show
-// experimental settings. English only, labelled with the console name.
+// The More options page: every console setting with no row of its own in
+// the Options, from lba2cc's settings tables (the menu plan's step 8). Most tune
+// finished features; the few lba2cc calls experimental carry a tag. English only,
+// labelled with the console name.
 #pragma once
 
 #include <stdio.h>
@@ -10,7 +11,7 @@
 // per group (ExperimentalList).
 extern int sw_exptable;
 
-void Exp_Open();   // from the "Experimental settings" row
+void Exp_Open();   // from the "More options" row
 void Exp_Close();  // back to Advanced and reset, as it was
 bool Exp_Active();
 void Exp_Update();
@@ -22,6 +23,7 @@ struct ExpLine {
     char text[40], value[24];
     bool head, cursor, changed;
     bool first;          // the first row of its group
+    bool experimental;   // tagged experimental after its name
     int x0, y0, x1, y1;  // the line's strip (the cursor's plasma when it is the cursor)
     int textLeft, textRight;  // the name
     int valueLeft, valueRight;  // the value, and on the cursor line its marks with it

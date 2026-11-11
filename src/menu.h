@@ -32,7 +32,7 @@ void Menu_Draw();
 //   narrow   (decided 2026-11-03) 1 = one column: key chips 58 wide at 1x (116 at 2x), not 60, so the longest
 //            action name keeps 8 clear of them; 0 = 60
 //   clash    (decided 2026-11-03) 1 = a key clash's note replaces the action's help in the voice; 0 = added after it
-//   exptable (decided 2026-11-03) 1 = the Experimental settings page as one dense table in the 8x8 font; 0 = the game-font list
+//   exptable (decided 2026-11-03) 1 = the More options page as one dense table in the 8x8 font; 0 = the game-font list
 bool Menu_SetSwitch(const char *name, int value);
 // A short note at the bottom right for two seconds, as switches show theirs.
 void Menu_Toast(const char *text);

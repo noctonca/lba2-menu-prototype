@@ -101,10 +101,11 @@ own switches are on F1 to F12 and 0 to 9.
 | 6 | `bandshade` | the band darkened to level 15 / 11 |
 | 7 | `clash` | a key clash's note alone in the voice / added after the action's help |
 | 8 | `short` | the shorter help, for translation, and a dimmed row saying why it is dimmed / the help as first written |
-| | `keyrule` | a key another action has is refused and the help says where to clear it (decided) / taken, both chips red |
+| | `keyrule` | a key another action has asks first, No (keep) or Yes (swap), as Options' questions (decided 2026-11-11) / taken, both chips red |
 | 9 | `narrow` | 640 wide: key chips 116 wide, so "Behaviour action" clears them / 120 |
-| 0 | `exptable` | Experimental settings: one dense table in the 8x8 font (decided) / the game-font list, a page per group |
+| 0 | `exptable` | More options: one dense table in the 8x8 font (decided) / the game-font list, a page per group |
 | | `fpsrow` | the Frame rate row on Display and graphics, under Vsync (decided) / on Advanced and reset (no key: `--switch fpsrow=1`) |
+| | `pace` | how long a window of long help is held before the next, in tenths of a second a word: 3 (decided) / 1 to 9 (no key: `--switch pace=5`) |
 
 Keys 1 to 6 are the composition review of 2026-11-03 (wide and large screens).
 All six are decided and on by default; each key turns its part off to compare.
@@ -171,7 +172,8 @@ the 1997 game's six languages were compared for the help review.
   it is a setting, where its text starts and ends: `text_left`, `text_right`,
   and the last pixel column of what it shows on the right, a value, a slider,
   steps or its last key chip: `value_right`, 0 for nothing), the help text
-  with how many letters are typed and whether it was cut off, the legend, the
+  with how many letters are typed, which window of it shows of how many
+  (`page`, `pages`) and whether it was cut off, the legend, the
   switches and every setting.
 - On the Controls page `state` adds `controls`: the device, group, action and
   column under the cursor, whether it waits for a key, every chip drawn
@@ -185,15 +187,39 @@ the 1997 game's six languages were compared for the help review.
   the same pictures every time. They run with vsync off, as fast as the
   machine draws.
 
-## Experimental settings
+## More options
 
-An Experimental settings row on Advanced and reset opens a page of the 41
-tuning values lba2cc's settings tables give a console name and no row in Options: the Auto camera (22), the mouse (9),
-the gamepad (7) and graphics (3), with their defaults, ranges and console help
-as lba2cc has them. It is the menu plan's step 8, generated from a table rather
+A More options row on Advanced and reset opens a page of the 41
+values lba2cc's settings tables give a console name and no row in Options
+(the Auto camera 22, the mouse 9, the gamepad 7, graphics 3), with their
+defaults, ranges and console help as lba2cc has them, and three rows from
+1997 (below). It is the menu plan's step 8, generated from a table rather
 than made row by row, in English. The row is always there (decided
 2026-11-03, no Show experimental settings switch); its help says the page is
-in English and its settings may change or go.
+in English and the rows marked experimental may change or go.
+
+Most of the 41 tune finished features; two are what lba2cc calls experimental
+(`cam_zone_anchor`, `cam_world_anchor`; docs/CAMERA.md). Those carry an
+"experimental" tag after their name, in one column, and their help starts
+"Experimental:". The page was "Experimental settings" until 2026-11-11, which
+said more than its rows are. "More options" says what it is, the settings of
+the other pages in more depth, and leaves the warning to the rows it is
+about. It says options, not settings, by the rule in lba2cc's glossary: options
+is the place (the menu, Advanced options, a page), settings are the values
+chosen there (Reset settings, Modern settings).
+
+The settings tables have no field saying which rows are experimental yet; the plan's ring field would give it, and the hand list in
+`experimental.cpp` stands in for it.
+
+A fifth group, From 1997, holds three rows the 1997 Options had for the
+machines of the day: Detail level (each step down takes away animated water,
+rain, the far scenery, then shadows), Movies (at original size or fit to
+screen; original size was for slow CD drives) and Reverse stereo. They came off Display and
+Advanced (decided 2026-11-11); they keep their game labels, having no console
+name, and the plan's 1997 Options page keeps them where they were. Movie
+camera (1997's scenario cameras: off skips the outdoor shots that cut once) is
+camera behaviour, not a machine's limit, so it went to Controls and camera
+instead.
 
 - Switch `exptable` (key 0): 1, the default and decided (2026-11-03), is the
   plan's dense table in the 8x8 font, as the 1997 key binding screen: a line per value under its group's
@@ -210,8 +236,8 @@ in English and its settings may change or go.
   back and names them.
 - The help is the console help, said in the voice. The game font has no `=`,
   `~` or `+`, so the voice says them as `:`, "about" and "and". Eleven console
-  helps need three or four lines of the voice; switch `short` gives them shorter
-  lines, which fit two (`short=0` shows them as written, cut).
+  helps need three or four lines of the voice; they page on a window at a time
+  (see the help in [docs/UX.md](docs/UX.md)) and are said as written.
 
 `./play-experimental.sh` plays both forms at 1920x1080 and 640x480 on the
 same steps, with a trace per round. The self test visits every row of it (see
@@ -225,7 +251,7 @@ Testing).
   not kept in lba2.cfg: off at every start. Presets leave it alone. lba2cc
   draws it only in play; here it shows over the menu so the row can be judged.
   On Display it makes seven rows, so at 960x540 the page scrolls (Image is
-  below); on Advanced it makes seven only with Experimental settings and Back
+  below); on Advanced it makes seven only with More options and Back
   to my settings both showing.
 - **Console** (Advanced and reset, above Reset settings) is issue #679's row.
   Its value is the version, `0.13.3-dev 011394f` (lba2cc's version string and
@@ -243,7 +269,7 @@ the same steps, with a trace per round.
 ## Testing
 
 `lba2menu --selftest` visits every row of every page, every chip of the
-Controls page and every row of Experimental settings at one screen size, for each of seven switch combinations, and
+Controls page and every row of More options at one screen size, for each of seven switch combinations, and
 lists what does not fit: help cut off, rows running into the help or off the
 screen, labels running into their values or their key chips, key names cut in
 their chips. On every screen it also checks that exactly one row or chip has
@@ -260,7 +286,7 @@ are 56 apart and 50 tall; `current:` at most one current-value row in a pane;
 further from the help below than rows are from each other, a column head above
 the rows is nearer them than the row above it, and a column head inside a row
 is in its pane's first row, above its own chip, and clear of the action's name.
-On the Experimental settings table the same rules read its lines: the panel
+On the More options table the same rules read its lines: the panel
 clear of the help (and its margins); every line on one strip with its name on
 the label edge (`edge:`); every value ending on one edge and the cursor's marks
 24 in (`trailing:`); no name running into its value (`text spills`); lines 10
@@ -280,12 +306,12 @@ walk finds starts with the walk's name:
   with the Classic camera and wakes with Auto.
 - `preset:` Classic asks first, starting on No, and Esc answers No; Back to my
   settings puts the preset row back; changing Fix retail bugs marks the preset
-  changed. With Classic chosen and Videos (a player's setting) changed, Reset
+  changed. With Classic chosen and Vsync (a player's setting) changed, Reset
   settings asks first, starting on No; Esc and No change nothing; Yes puts the
   setting and the preset back as a fresh install has them, and a Back to my
   settings row comes right after Reset settings; Enter on it puts back the
   setting and Classic, and the row goes.
-- `experimental:` Advanced and reset has the Experimental settings row; Enter opens the page and Esc comes back to the row;
+- `experimental:` Advanced and reset has the More options row; Enter opens the page and Esc comes back to the row;
   on every row Right and Left change the value and the other key puts it back,
   the change marks the preset row, and Del puts the default back; Page Down and
   Page Up stop at the last and first rows; Modern puts a changed value back to
@@ -298,10 +324,15 @@ walk finds starts with the walk's name:
   preset row as it was.
 - `bind:` on the first action of each group, in each column: Enter waits and
   the voice asks for the key; Esc cancels; the other device's input is ignored;
-  a key another action has is refused (the chip keeps its key, nothing goes
-  red, the help says "Clear J on Jetpack first."); with `keyrule=1` it goes
-  in, both chips go red and the help names the other action; Del clears it. Also: Forward's Key 2 put in Key 1 leaves Key 2
+  a key another action has asks first, on No (the voice says "J is on
+  Jetpack, ...", the answers take the actions' place), and Esc keeps both as
+  they were; with
+  `keyrule=1` it goes in, both chips go red and the help names the other
+  action; Del clears it. Also: Forward's Key 2 put in Key 1 leaves Key 2
   empty, and the wait gives up after 5 s.
+- `swap:` No changes nothing; Yes gives Forward J and Jetpack Forward's old
+  key, with no key on two actions; swapping back puts both back; onto an empty
+  chip the Yes answer says what Jetpack is left with.
 
 It runs in one process without drawing to a window (nor drawing the
 background and row shading, which the checks never read), and exits 1 when it
@@ -317,7 +348,7 @@ screen it was found on:
   layouts and their variants; the help line and prompt bar (`band=0`) and all
   key columns side by side (`devices=0`) were not chosen and are left out.
 - `--only PAGE` keeps one page (`"Keys and buttons"` for the Controls page,
-  `"Experimental settings"`). `--combo exptable=0` tests the list form.
+  `"More options"`). `--combo exptable=0` tests the list form.
   The `esc:` and `reach:` walk needs every page, so it runs only without it.
 - `--layout-only` leaves out the walks by keys.
 - Add `--headless` and `; shot x.png` to an `again` line for a picture.

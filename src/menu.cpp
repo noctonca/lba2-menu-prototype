@@ -35,9 +35,9 @@ struct Setting {
 
 enum {
     S_TEXT_LANG, S_VOICE_LANG, S_SUBTITLES,
-    S_RESOLUTION, S_FULLSCREEN, S_VSYNC, S_FPS, S_DETAIL, S_VIDEOS, S_IMAGE,
+    S_RESOLUTION, S_FULLSCREEN, S_VSYNC, S_FPS, S_IMAGE,
     S_MASTER, S_SFX, S_VOICES, S_MUSIC,
-    S_CAM_OUT, S_CAM_IN, S_INVERT, S_SENS,
+    S_CAM_OUT, S_CAM_IN, S_MOVIE_CAM, S_INVERT, S_SENS,
     S_FIXBUGS,
     S_DODGE, S_HINTS,
     S_COUNT
@@ -66,10 +66,8 @@ static const Setting kSettings[S_COUNT] = {
     // Not kept in lba2.cfg: off at every start, as the console's fps and the SPEED code have it.
     {"fps", "Frame rate", K_TOGGLE, 1, {"Off", "On"}, 0, 0, false,
      "Shows the frame rate while you play."},
-    {"detail", "Detail level", K_STEPS, 3, {"Low", "Medium", "High", "Full"}, 3, 3, false,
-     "Rain, shadows and the far islands. Lower it on a slow machine."},
-    {"videos", "Videos", K_CHOICE, 1, {"Full screen", "Original size"}, 0, 0, false,
-     "How the films are shown."},
+    // Detail level and Videos (the films' size) were here: settings for 1997's machines, they
+    // are on More options now, in its From 1997 group (decided 2026-11-11).
     {"image", "Image", K_CHOICE, 1, {"Classic", "Smooth"}, 0, 0, false,
      "Sharp pixels as in 1997, or smoothed when scaled."},
     {"master", "Master volume", K_SLIDER, 127, {0}, 100, 100, false, "Everything at once."},
@@ -80,6 +78,11 @@ static const Setting kSettings[S_COUNT] = {
      "Classic holds still and cuts; Auto turns to follow you."},
     {"cam_in", "Indoors camera", K_CHOICE, 1, {"Classic", "Follow"}, 0, 0, true,
      "Follow keeps Twinsen in view inside houses."},
+    // AllCameras, the 1997 "scenario cameras" (lba2cc's Movie camera, on Advanced options there):
+    // off skips the outdoor shots that cut once as the hero walks in; held shots and interiors
+    // stay. Camera behaviour, not a machine's limit, so it sits with the cameras (2026-11-11).
+    {"movie_cam", "Movie camera", K_TOGGLE, 1, {"Off", "On"}, 1, 1, false,
+     "Cuts to the designers' shots as you walk outdoors."},
     {"invert", "Invert camera", K_TOGGLE, 1, {"Off", "On"}, 0, 0, false,
      "Turns the camera the other way. Only with the Auto camera."},
     {"sensitivity", "Camera speed", K_SLIDER, 10, {0}, 5, 5, false,
@@ -210,6 +213,9 @@ static int sw_band = 1, sw_typing = 0, sw_chip = 2, sw_tablefont = 1, sw_keyrule
 // Composition (2026-11-03 design pass): sheet, legend, bg, scale (scale remakes the canvas).
 static int sw_sheet = 1, sw_legend = 1, sw_bg = 1, sw_scale = 1, sw_bandshade = 15, sw_panes = 1;
 static int sw_clash = 1, sw_short = 1, sw_narrow = 1;
+// How long a window of help is held before the next is typed, in tenths of a second per word
+// (no key): 3 reads at about 200 words a minute. The demo reel holds a second a line.
+static int sw_pace = 3;
 // Where the Frame rate row sits (no key): 0 Display and graphics, under Vsync (decided 2026-11-03);
 // 1 Advanced and reset.
 static int sw_fpsrow = 0;
@@ -282,8 +288,6 @@ static void BuildPages() {
     AddSetting(disp, S_VSYNC);
     if (!sw_fpsrow)
         AddSetting(disp, S_FPS);
-    AddSetting(disp, S_DETAIL);
-    AddSetting(disp, S_VIDEOS);
     AddSetting(disp, S_IMAGE);
 
     Page &snd = g_pages[P_SOUND];
@@ -300,6 +304,7 @@ static void BuildPages() {
     AddRow(ctl, R_ACTION, "Keys and buttons", A_KEYS, "Change which key or button does what.");
     AddSetting(ctl, S_CAM_OUT);
     AddSetting(ctl, S_CAM_IN);
+    AddSetting(ctl, S_MOVIE_CAM);
     AddSetting(ctl, S_INVERT);
     AddSetting(ctl, S_SENS);
 
@@ -308,7 +313,10 @@ static void BuildPages() {
     AddRow(adv, R_RETURN, "Return to previous menu", 0, "");
     AddSetting(adv, S_FIXBUGS);
     // Always offered (decided 2026-11-03): its help carries the warning a switch once did.
-    AddRow(adv, R_ACTION, "Experimental settings", A_EXP, "Unfinished, in English. They may change or go.");
+    // The page holds every console setting without a row of its own: tuning for finished
+    // features and the few unfinished ones, which it marks experimental.
+    AddRow(adv, R_ACTION, "More options", A_EXP,
+           "Fine tuning, experiments and options from 1997, in English. Rows marked experimental may change or go.");
     if (sw_fpsrow)
         AddSetting(adv, S_FPS);
     // The row's value is the version, so a bug report can name the build from the menu.
@@ -593,31 +601,6 @@ static const char *const kShortHelp[][2] = {
     {"Talking, fighting, and the screens you open in play.", "Talking, fighting and the game's screens."},
     {"The game menu, pause, help, saving and loading.", "Game menu, pause, help, save and load."},
     {"Does what the behaviour does: jump, hit or hide.", "Jumps, hits or hides, by behaviour."},
-    // Experimental settings: the console help that needs more than the band's two lines
-    // (English only, so no room is kept for a translation). The range is on the status line.
-    {"Auto cam: eased obstruction clearance in place of the classic search",
-     "Auto cam: ease clear of what hides the hero, not the classic search"},
-    {"Prototype: hold a latching shot's world yaw while the hero is inside its box",
-     "Prototype: hold a latching shot's world yaw while the hero is in its box"},
-    {"Hold the manual camera rotation (free-camera); off = classic auto-recenter drift",
-     "Hold the camera where you turned it; off = the classic recentre drift"},
-    {"Orbit follow-through: % of orbit speed kept per frame after release (0 = stop dead)",
-     "Orbit speed kept each frame after you let go, in % (0 = stop dead)"},
-    {"Auto cam: give a scripted shot's yaw and pitch back when the hero leaves its box",
-     "Auto cam: give a scripted shot's angles back as the hero leaves its box"},
-    {"Cap on recompose strength so tall res converges (0 = pure linear; 70 ~= 816p)",
-     "Caps the HD recompose so tall screens converge (0 = pure linear)"},
-    {"Prototype: hold the camera's world direction while the hero turns (off = it turns with him)",
-     "Prototype: hold the camera's world direction while the hero turns"},
-    {"cam_world_anchor with cam_hold_angle 0: units walked forward that pace the return behind the hero (0 = none)",
-     "cam_world_anchor, cam_hold_angle 0: units walked that pace the return"},
-    {"Auto cam: time constant of the turn behind the hero, ms (0 = per-frame lerp, 300 = retail, 600 = the lerp at "
-     "60 fps)",
-     "Auto cam: time constant of the turn behind the hero, ms (300 = retail)"},
-    {"Auto cam: time constant of the look-at point trailing the hero, ms (0 = pinned to him, 300 = retail)",
-     "Auto cam: time constant of the look-at point trailing the hero, ms (300 = retail)"},
-    {"Auto cam and interior follow: blend into and out of a scripted shot or camera zone over this many ms (0 = cut)",
-     "Blend into and out of a scripted shot or camera zone, ms (0 = cut)"},
 };
 
 void Menu_Say(const char *text) {
@@ -645,6 +628,7 @@ void Menu_Say(const char *text) {
     said[o] = 0;
     text = said;
     bool typed = sw_typing == 0 || (sw_typing == 1 && g_pageEntered);
+    Voice_SetMsPerWord(sw_pace * 100);
     if (strcmp(g_voice.text, text) != 0) {
         Voice_Say(g_voice, text, typed);
         g_pageEntered = false;
@@ -1650,7 +1634,7 @@ static const SwitchDef kSwitches[] = {
     {"scale", &sw_scale, 0, 1, 1},         {"bandshade", &sw_bandshade, 0, 15, 15}, {"panes", &sw_panes, 0, 1, 1},
     {"clash", &sw_clash, 0, 1, 1},       {"short", &sw_short, 0, 1, 1},
     {"narrow", &sw_narrow, 0, 1, 1},     {"exptable", &sw_exptable, 0, 1, 1},
-    {"fpsrow", &sw_fpsrow, 0, 1, 0},
+    {"fpsrow", &sw_fpsrow, 0, 1, 0},     {"pace", &sw_pace, 1, 9, 3},
 };
 
 bool Menu_SetSwitch(const char *name, int v) {
@@ -1701,9 +1685,9 @@ bool Menu_Open(const char *name) {
         Controls_Open();
         return true;
     }
-    if (!strcmp(name, "Experimental settings")) {
+    if (!strcmp(name, "More options")) {
         Menu_Open("Advanced and reset");
-        KeepCursorOn("Experimental settings");  // as Enter on it leaves it
+        KeepCursorOn("More options");  // as Enter on it leaves it
         Exp_Open();
         return true;
     }
@@ -1800,6 +1784,10 @@ void Menu_Help(MenuHelp *h) {
     h->x1 = g_helpBox.x1;
     h->y1 = g_helpBox.y1;
     h->needed = g_voiceNeeded;
+    S32 page, pages;
+    Voice_LastPage(&page, &pages);
+    h->page = page;
+    h->pages = pages;
     h->max = g_voiceMax;
     h->width = g_voiceWidth;
     h->text = g_voice.text;
@@ -1810,7 +1798,7 @@ bool Menu_WantsQuit() { return g_quit; }
 const char *Menu_Layout() { return g_closed ? "closed" : g_first ? "first-launch" : Wide() ? "wide" : "column"; }
 
 const char *Menu_PageName() {
-    return Controls_Active() ? "Keys and buttons" : Exp_Active() ? "Experimental settings" : g_first ? "First launch" : g_pages[Wide() ? RightPage() : TopPage()].name;
+    return Controls_Active() ? "Keys and buttons" : Exp_Active() ? "More options" : g_first ? "First launch" : g_pages[Wide() ? RightPage() : TopPage()].name;
 }
 
 // One for the hub; each page pushed, the wide right pane and a question add one.
@@ -1974,8 +1962,12 @@ void Menu_WriteState(FILE *f) {
     fprintf(f, ",\"typed\":%s,\"letters_shown\":%d,\"letters\":%d,\"where\":", g_voice.typed ? "true" : "false",
             shown, total);
     Menu_JsonString(f, g_helpBox.shown ? g_helpBox.kind : "none");
-    fprintf(f, ",\"lines\":%d,\"lines_needed\":%d,\"max_lines\":%d,\"width\":%d,\"cut_off\":%s", g_voiceLines,
-            g_voiceNeeded, g_voiceMax, g_voiceWidth, g_voiceNeeded > g_voiceMax && g_voiceMax ? "true" : "false");
+    S32 page, pages;
+    Voice_LastPage(&page, &pages);
+    // Help longer than its window pages on; it is cut off only past what the voice wraps.
+    fprintf(f, ",\"lines\":%d,\"lines_needed\":%d,\"max_lines\":%d,\"width\":%d,\"page\":%d,\"pages\":%d,\"cut_off\":%s",
+            g_voiceLines, g_voiceNeeded, g_voiceMax, g_voiceWidth, (int)page, (int)pages,
+            g_voiceNeeded >= VOICE_MAX_LINES ? "true" : "false");
     fprintf(f, ",\"rect\":[%d,%d,%d,%d]}", g_helpBox.x0, g_helpBox.y0, g_helpBox.x1, g_helpBox.y1);
     fprintf(f, ",\"legend\":");
     Menu_JsonString(f, g_legend);
