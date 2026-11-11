@@ -12,13 +12,20 @@ static const char *const kLabels[][LANG_COUNT] = {
 };
 static const int kLabelCount = (int)(sizeof kLabels / sizeof kLabels[0]);
 
-const char *Lang_Tr(const char *english, int lang) {
-    if (lang <= 0 || lang >= LANG_COUNT || !english)
-        return english;
+const char *Lang_Find(const char *english, int lang) {
+    if (lang < 0 || lang >= LANG_COUNT || !english)
+        return nullptr;
     for (int i = 0; i < kCount; i++)
         if (!strcmp(kTable[i][0], english))
             return kTable[i][lang];
-    return english;
+    return nullptr;
+}
+
+const char *Lang_Tr(const char *english, int lang) {
+    if (lang <= 0)
+        return english;
+    const char *t = Lang_Find(english, lang);
+    return t ? t : english;
 }
 
 const char *Lang_Label(const char *english, int lang) {

@@ -193,7 +193,9 @@ made to measure lengths, not reviewed by native speakers. After editing either
 file run `tools/lang.py`, which writes `src/lang_table.inc` and
 `src/lang_menu.inc` in the game font's code page (CP850). The self test runs
 every walk in every language, checks every voice text in both fonts against
-its window, and reports any drawn text that `lang/menu.tsv` lacks.
+its window, and reports any drawn text that `lang/menu.tsv` lacks and any
+spoken text that `lang/help.tsv` lacks. Console help and messages built from
+formats already translated are said as they are, not looked up.
 
 ## Driving it
 

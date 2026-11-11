@@ -33,7 +33,7 @@ static const Group kGroups[] = {
     {"Mouse", "How the mouse turns the camera."},
     {"Gamepad", "The right stick's camera and the stick deadzone."},
     {"Graphics", "Shading, and the filters on the picture."},
-    {"From 1997", "Settings for the machines of 1997. Today's play best as they are."},
+    {"From 1997", "For the machines of 1997. Today's machines play best as they are."},
 };
 enum { GROUP_COUNT = sizeof kGroups / sizeof kGroups[0] };
 
@@ -444,9 +444,9 @@ static void Say() {
         if (!strncmp(help, "Prototype: ", 11))
             help += 11;  // the console's word for the same thing
         snprintf(buf, sizeof buf, "Experimental: %s", help);
-        Menu_Say(buf);
+        Menu_SayAsIs(buf);  // the console's help, English by design
     } else if (i >= 0)
-        Menu_Say(kTuning[i].help);
+        Menu_SayAsIs(kTuning[i].help);
     else if (Wide() || g_colCursor > 0)
         Menu_Say(kGroups[g_group].help);
     else

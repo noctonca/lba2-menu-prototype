@@ -630,8 +630,11 @@ static bool VoiceFits(const char *text, const Row *r) {
     return Voice_Lines(text, BandVoiceWidth(keys, words, nk)) <= 2;  // as Menu_DrawFoot
 }
 
+static char g_helpBuf[256];  // HelpFor's built texts, already in the Text language
+
 static const char *HelpFor(const Row *r) {
-    static char buf[256];
+    char *buf = g_helpBuf;
+    const size_t bufSize = sizeof g_helpBuf;
     if (!r)
         return "";
     // One message at a time: a dimmed row says why it is dimmed, not what it does.
@@ -644,7 +647,7 @@ static const char *HelpFor(const Row *r) {
                 (s == S_RESOLUTION && sw_presetlook && !SameScreen(g_beforeScreen, ScreenNow()))) {
                 if (list[0])
                     strncat(list, ", ", sizeof list - strlen(list) - 1);
-                strncat(list, kSettings[s].label, sizeof list - strlen(list) - 1);
+                strncat(list, Ui_Tr(kSettings[s].label), sizeof list - strlen(list) - 1);
             }
         }
         int now[EXP_MAX];
@@ -656,7 +659,7 @@ static const char *HelpFor(const Row *r) {
                 strncat(list, Exp_Name(i), sizeof list - strlen(list) - 1);
             }
         }
-        snprintf(buf, sizeof buf, Menu_Tr("Puts back what you had: %s."), list);
+        snprintf(buf, bufSize, Menu_Tr("Puts back what you had: %s."), list);
         return buf;
     }
     if (r->type == R_BACK_TO_MINE && r->arg == BACK_RESET && ResetBackDiffers()) {
@@ -668,12 +671,12 @@ static const char *HelpFor(const Row *r) {
         if (g_beforeResetPreset != g_preset) {
             const char *w = sw_word == 0 ? "settings" : kWords[sw_word - 1];
             snprintf(preset, sizeof preset, "%s %c%s", kPresetNames[g_beforeResetPreset], w[0] | 32, w + 1);  // "Classic settings"
-            names[n++] = preset;
+            names[n++] = Ui_Tr(preset);
         }
         for (int s = 0; s < S_COUNT; s++)
             if (g_beforeReset[s] != g_val[s] ||
                 (s == S_RESOLUTION && sw_presetlook && !SameScreen(g_beforeResetScreen, ScreenNow())))
-                names[n++] = kSettings[s].label;
+                names[n++] = Ui_Tr(kSettings[s].label);
         int now[EXP_MAX];
         Exp_Get(now);
         for (int i = 0; i < Exp_Count(); i++)
@@ -691,7 +694,7 @@ static const char *HelpFor(const Row *r) {
                 snprintf(more, sizeof more, Menu_Tr(" and %d more"), n - shown);
                 strncat(list, more, sizeof list - strlen(list) - 1);
             }
-            snprintf(buf, sizeof buf, Menu_Tr("Puts back what you had: %s."), list);
+            snprintf(buf, bufSize, Menu_Tr("Puts back what you had: %s."), list);
             if (VoiceFits(buf, r))
                 return buf;
         }
@@ -724,13 +727,20 @@ static const char *const kShortHelp[][2] = {
 
 const char *Menu_Tr(const char *english) { return Lang_Tr(english, g_val[S_TEXT_LANG]); }
 
-void Menu_Say(const char *text) {
-    if (sw_short) {
-        for (size_t i = 0; i < sizeof kShortHelp / sizeof kShortHelp[0]; i++)
-            if (!strcmp(text, kShortHelp[i][0]))
-                text = kShortHelp[i][1];
+static std::set<std::string> s_voiceMissed;
+const std::set<std::string> &Menu_VoiceMissed() { return s_voiceMissed; }
+
+static void Say(const char *text, bool translate) {
+    if (translate) {
+        if (sw_short) {
+            for (size_t i = 0; i < sizeof kShortHelp / sizeof kShortHelp[0]; i++)
+                if (!strcmp(text, kShortHelp[i][0]))
+                    text = kShortHelp[i][1];
+        }
+        if (g_val[S_TEXT_LANG] > 0 && text[0] && !Lang_Find(text, g_val[S_TEXT_LANG]))
+            s_voiceMissed.insert(text);
+        text = Lang_Tr(text, g_val[S_TEXT_LANG]);  // the voice speaks the Text language
     }
-    text = Lang_Tr(text, g_val[S_TEXT_LANG]);  // the voice speaks the Text language
     // The game font has no =, ~ or + (each draws as a stray mark); the console help has all three.
     static char said[512];
     size_t o = 0;
@@ -757,6 +767,9 @@ void Menu_Say(const char *text) {
     }
 }
 
+void Menu_Say(const char *text) { Say(text, true); }
+void Menu_SayAsIs(const char *text) { Say(text, false); }
+
 void Menu_PageEntered() { g_pageEntered = true; }
 
 static void UpdateVoice() {
@@ -764,7 +777,10 @@ static void UpdateVoice() {
     const char *text = g_confirm ? kQuestions[g_question].voice : HelpFor(r);
     if (g_confirm && g_question == Q_CLASSIC && sw_presetlook)
         text = "Play as in 1997? Sound and keys stay as they are.";  // Classic sets the look too
-    Menu_Say(text);
+    if (text == g_helpBuf)
+        Menu_SayAsIs(text);
+    else
+        Menu_Say(text);
 }
 
 static void Push(int page) {

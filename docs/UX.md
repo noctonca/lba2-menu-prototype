@@ -260,8 +260,9 @@ is read; help cut off is not. **[self test: help cut off]**
   stays within its budget, so it fits its window in every Text language; the
   console help on More options is in the table's own status lines, in the
   8x8 font, two lines above the default and range (switch `exphelp`), whole
-  and in English. The voice there says the group's help. **[self test: help
-  in N windows, table: row help cut off]**
+  and in English. The voice there says the group's help, in the Text
+  language. **[self test: help in N windows, table: row help cut off, voice
+  text with no translation]**
 - **Paged help says where it is** (2026-11-12, replaces the dialogue's arrow,
   which asks for a key the menu never waits for). Where help still pages
   (`exphelp` 0, the list view), "1/2" in the 8x8 font sits in the window's

@@ -4,6 +4,8 @@
 #include "ui.h"
 
 #include <stdio.h>
+#include <set>
+#include <string>
 
 // One row as drawn this frame, for `state`.
 struct DrawnRow {
@@ -50,8 +52,13 @@ S32 Menu_DialogueTop();
 void Menu_DrawDialogue();
 void Menu_DrawDialogueIn(S32 x0, S32 y0, S32 x1, S32 y1);
 
-// Say a line in the voice, typed or not as the `typing` switch says.
+// Say a line in the voice, typed or not as the `typing` switch says, in the Text
+// language; a text lang/help.tsv lacks is said in English and noted (Menu_VoiceMissed).
 void Menu_Say(const char *text);
+// Say a line as it is: a format already filled in the Text language, or the console's
+// help, English by design.
+void Menu_SayAsIs(const char *text);
+const std::set<std::string> &Menu_VoiceMissed();
 // A voice text or format in the Text language (lang/help.tsv); English when it has none.
 const char *Menu_Tr(const char *english);
 void Menu_PageEntered();

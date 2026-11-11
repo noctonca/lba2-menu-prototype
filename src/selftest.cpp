@@ -1589,6 +1589,8 @@ int Selftest_Run(const SelftestOptions &opt, const char *self) {
     }
     for (std::set<std::string>::const_iterator it = Ui_Missed().begin(); it != Ui_Missed().end(); ++it)
         w.problems[Fmt("lang/menu.tsv has no row for %s", Repr(it->c_str()).c_str())] = "tools/lang.py after adding it";
+    for (std::set<std::string>::const_iterator it = Menu_VoiceMissed().begin(); it != Menu_VoiceMissed().end(); ++it)
+        w.problems[Fmt("lang/help.tsv has no row for %s", Repr(it->c_str()).c_str())] = "tools/lang.py after adding it";
     for (std::map<std::string, std::string>::const_iterator it = w.problems.begin(); it != w.problems.end(); ++it) {
         printf("%s\n", it->first.c_str());
         if (opt.again)

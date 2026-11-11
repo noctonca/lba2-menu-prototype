@@ -702,7 +702,10 @@ static void Say() {
             text = kActions[a].help;
         }
     }
-    Menu_Say(text);
+    if (text == buf)
+        Menu_SayAsIs(text);  // built from formats already in the Text language
+    else
+        Menu_Say(text);
 }
 
 // ───────────────────────────── Drawing ─────────────────────────────

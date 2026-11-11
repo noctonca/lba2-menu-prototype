@@ -8,6 +8,8 @@ enum { LANG_COUNT = 6 };  // English, Francais, Deutsch, Espanol, Italiano, Port
 
 // The text in that language, CP850; the English itself when the table has no row for it.
 const char *Lang_Tr(const char *english, int lang);
+// The voice text's row in lang/help.tsv for this language, or null when it has none.
+const char *Lang_Find(const char *english, int lang);
 // A label in that language, CP850; nullptr when lang/menu.tsv has no row for it.
 const char *Lang_Label(const char *english, int lang);
 // The voice table, for the self test: how many texts, and one in a language.
