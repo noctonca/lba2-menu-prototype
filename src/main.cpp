@@ -115,7 +115,7 @@ static bool RunCommand(Runner &r, const char *line) {
             if (!tab)
                 continue;
             *tab = 0;
-            printf("width %s\t%d\t%d\n", buf, (int)Ui_TextWidth(tab + 1), (int)Voice_Lines(tab + 1, voiceW));
+            printf("width %s\t%d\t%d\n", buf, (int)Ui_TextWidthAsIs(tab + 1), (int)Voice_Lines(tab + 1, voiceW));
         }
         fclose(in);
     } else if (!strcmp(cmd, "state")) {

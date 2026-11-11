@@ -1,0 +1,135 @@
+# Menu labels, values, titles, answers and legend words by Text language: en fr de es it pt.
+# One row per English text, tab-separated. Stand-in translations, not reviewed by native speakers.
+Options	Options	Optionen	Opciones	Opzioni	Opções
+Return to previous menu	Retour au menu précédent	Zurück zum vorigen Menü	Volver al menú anterior	Torna al menu precedente	Voltar ao menu anterior
+Return to the game	Retour au jeu	Zurück zum Spiel	Volver al juego	Torna al gioco	Voltar ao jogo
+Options closed.	Options fermées.	Optionen geschlossen.	Opciones cerradas.	Opzioni chiuse.	Opções fechadas.
+<ENTER> opens them again. <ESC> quits.	<ENTER> les rouvre. <ESC> quitte.	<ENTER> öffnet sie wieder. <ESC> beendet.	<ENTER> las vuelve a abrir. <ESC> sale.	<ENTER> le riapre. <ESC> esce.	<ENTER> volta a abri-las. <ESC> sai.
+Preset	Préréglage	Voreinstellung	Preajuste	Preimpostazione	Predefinição
+Settings	Réglages	Einstellungen	Ajustes	Impostazioni	Definições
+Rules	Règles	Regeln	Reglas	Regole	Regras
+Modern	Moderne	Modern	Moderno	Moderno	Moderno
+Classic	Classique	Klassisch	Clásico	Classico	Clássico
+Modern, changed	Moderne, modifié	Modern, geändert	Moderno, cambiado	Moderno, modificato	Moderno, alterado
+Classic, changed	Classique, modifié	Klassisch, geändert	Clásico, cambiado	Classico, modificato	Clássico, alterado
+Modern settings	Réglages Moderne	Moderne Einstellungen	Ajustes Moderno	Impostazioni Moderno	Definições Moderno
+Classic settings	Réglages Classique	Klassische Einstellungen	Ajustes Clásico	Impostazioni Classico	Definições Clássico
+Modern settings, changed	Réglages Moderne, modifiés	Moderne Einstellungen, geändert	Ajustes Moderno, cambiados	Impostazioni Moderno, modificate	Definições Moderno, alteradas
+Classic settings, changed	Réglages Classique, modifiés	Klassische Einstellungen, geändert	Ajustes Clásico, cambiados	Impostazioni Classico, modificate	Definições Clássico, alteradas
+Changed	Modifié	Geändert	Cambiado	Modificato	Alterado
+Undo preset	Annuler le préréglage	Voreinstellung zurücknehmen	Deshacer preajuste	Annulla preimpostazione	Anular predefinição
+Undo reset	Annuler la réinitialisation	Zurücksetzen zurücknehmen	Deshacer restablecer	Annulla ripristino	Anular reposição
+Reset settings	Réinitialiser les réglages	Einstellungen zurücksetzen	Restablecer ajustes	Ripristina impostazioni	Repor definições
+No, keep Modern	Non, garder Moderne	Nein, Modern behalten	No, mantener Moderno	No, tieni Moderno	Não, manter Moderno
+Yes, play Classic	Oui, jouer en Classique	Ja, Klassisch spielen	Sí, jugar en Clásico	Sì, gioca in Classico	Sim, jogar em Clássico
+No, keep my settings	Non, garder mes réglages	Nein, meine Einstellungen behalten	No, mantener mis ajustes	No, tieni le mie impostazioni	Não, manter as minhas definições
+Yes, reset settings	Oui, réinitialiser	Ja, zurücksetzen	Sí, restablecer	Sì, ripristina	Sim, repor
+No, keep it on %s	Non, le laisser à %s	Nein, bei %s lassen	No, dejarla en %s	No, lascialo a %s	Não, deixar em %s
+Yes, %s gets %s	Oui, %s prend %s	Ja, %s nimmt %s	Sí, %s pasa a %s	Sì, %s prende %s	Sim, %s leva %s
+Yes, %s keeps %s	Oui, %s garde %s	Ja, %s behält %s	Sí, %s conserva %s	Sì, %s tiene %s	Sim, %s mantém %s
+Yes, %s has no key	Oui, %s sans touche	Ja, %s hat keine Taste	Sí, %s sin tecla	Sì, %s resta senza tasto	Sim, %s sem tecla
+Language and interface	Langue et interface	Sprache und Oberfläche	Idioma e interfaz	Lingua e interfaccia	Idioma e interface
+Display and graphics	Affichage et graphismes	Anzeige und Grafik	Pantalla y gráficos	Schermo e grafica	Ecrã e gráficos
+Sound	Son	Ton	Sonido	Audio	Som
+Controls and camera	Commandes et caméra	Steuerung und Kamera	Controles y cámara	Comandi e telecamera	Controlos e câmara
+Advanced and reset	Avancé et réinitialisation	Erweitert und Zurücksetzen	Avanzado y restablecer	Avanzate e ripristino	Avançado e reposição
+Gameplay	Jeu	Spielweise	Jugabilidad	Gioco	Jogabilidade
+Text	Texte	Text	Texto	Testo	Texto
+Voices	Voix	Stimmen	Voces	Voci	Vozes
+Subtitles	Sous-titres	Untertitel	Subtítulos	Sottotitoli	Legendas
+Background	Arrière-plan	Hintergrund	Fondo	Sfondo	Fundo
+Font	Police	Schrift	Fuente	Carattere	Tipo de letra
+English	English	English	English	English	English
+Francais	Français	Français	Français	Français	Français
+Deutsch	Deutsch	Deutsch	Deutsch	Deutsch	Deutsch
+Espanol	Español	Español	Español	Español	Español
+Italiano	Italiano	Italiano	Italiano	Italiano	Italiano
+Portugues	Português	Português	Português	Português	Português
+Off	Non	Aus	No	No	Não
+On	Oui	An	Sí	Sì	Sim
+Picture	Image	Bild	Imagen	Immagine	Imagem
+Blue	Bleu	Blau	Azul	Blu	Azul
+Twinsun	Twinsun	Twinsun	Twinsun	Twinsun	Twinsun
+Game	Jeu	Spiel	Juego	Gioco	Jogo
+Zilla Slab	Zilla Slab	Zilla Slab	Zilla Slab	Zilla Slab	Zilla Slab
+Resolution	Résolution	Auflösung	Resolución	Risoluzione	Resolução
+Fullscreen	Plein écran	Vollbild	Pantalla completa	Schermo intero	Ecrã inteiro
+Vsync	Synchro verticale	VSync	Sincronía vertical	Sincronia verticale	Sincronização vertical
+Frame rate	Images par seconde	Bildrate	Imágenes por segundo	Framerate	Imagens por segundo
+Image	Rendu	Darstellung	Imagen	Immagine	Imagem
+Smooth	Lissé	Geglättet	Suavizada	Smussata	Suavizada
+Master volume	Volume général	Gesamtlautstärke	Volumen general	Volume generale	Volume geral
+Sound effects	Effets sonores	Soundeffekte	Efectos de sonido	Effetti sonori	Efeitos sonoros
+Voices volume	Volume des voix	Stimmenlautstärke	Volumen de voces	Volume voci	Volume das vozes
+Music	Musique	Musik	Música	Musica	Música
+Outdoors camera	Caméra extérieure	Kamera draußen	Cámara exterior	Telecamera esterni	Câmara exterior
+Indoors camera	Caméra intérieure	Kamera drinnen	Cámara interior	Telecamera interni	Câmara interior
+Auto	Auto	Auto	Auto	Auto	Auto
+Follow	Suivie	Folgend	Seguir	Segue	Seguir
+Movie camera	Caméra cinéma	Filmkamera	Cámara de cine	Telecamera cinema	Câmara de cinema
+Invert camera	Inverser la caméra	Kamera umkehren	Invertir cámara	Inverti telecamera	Inverter câmara
+Camera speed	Vitesse de la caméra	Kameratempo	Velocidad de cámara	Velocità telecamera	Velocidade da câmara
+Keys and buttons	Touches et boutons	Tasten und Knöpfe	Teclas y botones	Tasti e pulsanti	Teclas e botões
+Fix retail bugs	Corriger les bugs d'origine	Originalfehler beheben	Corregir fallos originales	Correggi bug originali	Corrigir erros originais
+Dodge	Esquive	Ausweichen	Esquivar	Schivata	Esquiva
+Double tap	Double appui	Doppeltippen	Doble toque	Doppio tocco	Toque duplo
+Behaviour hints	Conseils de comportement	Verhaltenstipps	Consejos de modo	Consigli comportamento	Dicas de comportamento
+More options	Plus d'options	Weitere Optionen	Más opciones	Altre opzioni	Mais opções
+Console	Console	Konsole	Consola	Console	Consola
+Help	Aide	Hilfe	Ayuda	Aiuto	Ajuda
+Movement	Déplacement	Bewegung	Movimiento	Movimento	Movimento
+Behaviours	Comportements	Verhalten	Modos	Comportamenti	Comportamentos
+Actions	Actions	Aktionen	Acciones	Azioni	Ações
+Weapons	Armes	Waffen	Armas	Armi	Armas
+Magic and items	Magie et objets	Magie und Gegenstände	Magia y objetos	Magia e oggetti	Magia e objetos
+Camera	Caméra	Kamera	Cámara	Telecamera	Câmara
+Menus	Menus	Menüs	Menús	Menu	Menus
+Forward	Avancer	Vorwärts	Avanzar	Avanti	Avançar
+Turn left	Virer à gauche	Links drehen	Girar izquierda	Gira a sinistra	Virar à esquerda
+Turn right	Virer à droite	Rechts drehen	Girar derecha	Gira a destra	Virar à direita
+Normal	Normal	Normal	Normal	Normale	Normal
+Athletic	Sportif	Sportlich	Deportista	Sportivo	Atlético
+Aggressive	Agressif	Aggressiv	Agresivo	Aggressivo	Agressivo
+Discreet	Discret	Diskret	Discreto	Furtivo	Discreto
+Behaviour menu	Menu des modes	Verhaltensmenü	Menú de modos	Menu modalità	Menu de modos
+Behaviour action	Action spéciale	Spezialaktion	Acción del modo	Azione speciale	Ação especial
+Talk and search	Parler, fouiller	Reden, suchen	Hablar y buscar	Parla e cerca	Falar, procurar
+Use weapon	Utiliser l'arme	Waffe benutzen	Usar arma	Usa arma	Usar arma
+Weapon 1	Arme 1	Waffe 1	Arma 1	Arma 1	Arma 1
+Weapon 2	Arme 2	Waffe 2	Arma 2	Arma 2	Arma 2
+Weapon 3	Arme 3	Waffe 3	Arma 3	Arma 3	Arma 3
+Weapon 4	Arme 4	Waffe 4	Arma 4	Arma 4	Arma 4
+Weapon 5	Arme 5	Waffe 5	Arma 5	Arma 5	Arma 5
+Weapon 6	Arme 6	Waffe 6	Arma 6	Arma 6	Arma 6
+Weapon 7	Arme 7	Waffe 7	Arma 7	Arma 7	Arma 7
+Penguin	Pingouin	Pinguin	Meca-pingüino	Pinguino	Pinguim
+Jetpack	Jetpack	Jetpack	Jetpack	Jetpack	Jetpack
+Lightning spell	Sort de foudre	Blitzzauber	Rayo mágico	Fulmine magico	Raio mágico
+Protection spell	Sort protecteur	Schutzzauber	Escudo mágico	Scudo magico	Escudo mágico
+Turn camera	Tourner caméra	Kamera drehen	Girar cámara	Ruota visuale	Rodar câmara
+Camera up	Caméra haut	Kamera hoch	Cámara arriba	Telecamera su	Câmara acima
+Camera down	Caméra bas	Kamera runter	Cámara abajo	Telecamera giù	Câmara abaixo
+Recentre	Recentrer	Zentrieren	Recentrar	Ricentra	Recentrar
+Game menu	Menu du jeu	Spielmenü	Menú del juego	Menu di gioco	Menu do jogo
+Pause	Pause	Pause	Pausa	Pausa	Pausa
+Inventory	Inventaire	Inventar	Inventario	Inventario	Inventário
+Holomap	Holomap	Holomap	Holomapa	Holomappa	Holomapa
+Save	Sauvegarder	Speichern	Guardar	Salva	Gravar
+Load	Charger	Laden	Cargar	Carica	Carregar
+Action	Action	Aktion	Acción	Azione	Ação
+Key 1	Touche 1	Taste 1	Tecla 1	Tasto 1	Tecla 1
+Key 2	Touche 2	Taste 2	Tecla 2	Tasto 2	Tecla 2
+Gamepad	Manette	Gamepad	Mando	Controller	Comando
+Button	Bouton	Knopf	Botón	Pulsante	Botão
+Keyboard	Clavier	Tastatur	Teclado	Tastiera	Teclado
+Back	Reculer	Rückwärts	Retroceder	Indietro	Recuar
+legend|Back	Retour	Zurück	Atrás	Indietro	Voltar
+Close	Fermer	Schließen	Cerrar	Chiudi	Fechar
+Choose	Choisir	Wählen	Elegir	Scegli	Escolher
+Answer	Répondre	Antworten	Responder	Rispondi	Responder
+Adjust	Régler	Regeln	Ajustar	Regola	Ajustar
+Change	Changer	Ändern	Cambiar	Cambia	Mudar
+Open	Ouvrir	Öffnen	Abrir	Apri	Abrir
+Clear	Effacer	Löschen	Borrar	Cancella	Apagar
+Default	Défaut	Standard	Por defecto	Predefinito	Padrão
+Cancel	Annuler	Abbrechen	Cancelar	Annulla	Cancelar

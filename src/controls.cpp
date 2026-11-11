@@ -488,11 +488,14 @@ static void Swap() {
           gave[0] ? gave : "-");
 }
 
-// The question's answers: what each leaves the other action with.
-static void SwapAnswer(int i, char *out, size_t n) {
+// The question's answers: what each leaves the other action with. shown: in the Text
+// language, as drawn; otherwise English, as recorded.
+static void SwapAnswer(int i, char *out, size_t n, bool shown = false) {
     const Action &h = kActions[g_swap.holder];
+    const char *name = shown ? Ui_Tr(h.name) : h.name;
+#define TR(s) (shown ? Ui_Tr(s) : (s))
     if (i == 0) {
-        snprintf(out, n, "No, keep it on %s", h.name);
+        snprintf(out, n, TR("No, keep it on %s"), name);
         return;
     }
     char old[32], kept[32];
@@ -501,11 +504,12 @@ static void SwapAnswer(int i, char *out, size_t n) {
     CodeName(c, OldCode(g_swap.action, c), old, sizeof old);
     CodeName(c, g_bind[g_swap.holder][g_swap.slot ^ 1], kept, sizeof kept);
     if (old[0])
-        snprintf(out, n, "Yes, %s gets %s", h.name, old);
+        snprintf(out, n, TR("Yes, %s gets %s"), name, old);
     else if (kept[0])
-        snprintf(out, n, "Yes, %s keeps %s", h.name, kept);
+        snprintf(out, n, TR("Yes, %s keeps %s"), name, kept);
     else
-        snprintf(out, n, "Yes, %s has no key", h.name);
+        snprintf(out, n, TR("Yes, %s has no key"), name);
+#undef TR
 }
 
 static void StartWaiting() {
@@ -679,17 +683,20 @@ static void Say() {
             // One pane at a time shows one group: name the other action's when it is not this
             // one. What each answer leaves it with is on the answer rows.
             if (h.group != g_group)
-                snprintf(where, sizeof where, Menu_Tr(", in %s"), kGroups[h.group].name);
-            snprintf(buf, sizeof buf, Menu_Tr("%s is on %s%s."), key, h.name, where);
+                snprintf(where, sizeof where, Menu_Tr(", in %s"), Ui_Tr(kGroups[h.group].name));
+            snprintf(buf, sizeof buf, Menu_Tr("%s is on %s%s."), key, Ui_Tr(h.name), where);
             text = buf;
         } else if (other >= 0) {
             char name[32];
             ChipText(a, c, name, sizeof name);
             // One message at a time (switch clash): the note replaces the help.
             if (Menu_GetSwitch("clash"))
-                snprintf(buf, sizeof buf, Menu_Tr("%s is also %s."), name, kActions[other].name);
-            else
-                snprintf(buf, sizeof buf, "%s %s is also %s.", kActions[a].help, name, kActions[other].name);
+                snprintf(buf, sizeof buf, Menu_Tr("%s is also %s."), name, Ui_Tr(kActions[other].name));
+            else {
+                char note[96];
+                snprintf(note, sizeof note, Menu_Tr("%s is also %s."), name, Ui_Tr(kActions[other].name));
+                snprintf(buf, sizeof buf, "%s %s", Menu_Tr(kActions[a].help), note);
+            }
             text = buf;
         } else {
             text = kActions[a].help;
@@ -786,11 +793,12 @@ static void DrawActionRow(int action, S32 x0, S32 y0, S32 x1, S32 y1, const int 
 }
 
 static void DrawHead(S32 x, S32 y, const char *text, S32 s) {
-    Ui_Small(x, y, text, INK_CONFIG_HEAD, s);
+    const char *shown = Ui_Tr(text);  // the record keeps the English
+    Ui_Small(x, y, shown, INK_CONFIG_HEAD, s);
     if (g_headCount < 4) {
         g_heads[g_headCount].text = text;
         g_heads[g_headCount].x0 = x, g_heads[g_headCount].y0 = y;
-        g_heads[g_headCount].x1 = x + Ui_SmallWidth(text, s) - 1, g_heads[g_headCount].y1 = y + 8 * s - 1;
+        g_heads[g_headCount].x1 = x + Ui_SmallWidth(shown, s) - 1, g_heads[g_headCount].y1 = y + 8 * s - 1;
         g_headCount++;
     }
 }
@@ -857,23 +865,24 @@ static void Legend(const char **keys, const char **words, int *n) {
 static void DrawSwapAnswers(S32 x0, S32 x1, S32 top, const char *pane) {
     bool centred = !Wide();
     for (int i = 0; i < 2; i++) {
-        char label[96];
+        char label[96], shown[128];
         SwapAnswer(i, label, sizeof label);
+        SwapAnswer(i, shown, sizeof shown, true);
         S32 y0 = top + i * ROW_PITCH, yc = y0 + ROW_H / 2;
         RowFill fill = i == g_swap.answer ? FILL_CURSOR : FILL_SHADE;
         Ui_RowBackground(x0, y0, x1, y0 + ROW_H, fill);
         DrawnRow &d = Menu_Record(pane, label, "", fill, x0, y0, x1, y0 + ROW_H);
         if (centred) {
-            Menu_RowLabelCentred(x0, x1, yc, label, INK_WHITE);
-            d.textLeft = (x0 + x1) / 2 - Ui_TextWidth(label) / 2;
-            d.textRight = d.textLeft + Ui_TextWidth(label);
+            Menu_RowLabelCentred(x0, x1, yc, shown, INK_WHITE, true);
+            d.textLeft = (x0 + x1) / 2 - Ui_TextWidthAsIs(shown) / 2;
+            d.textRight = d.textLeft + Ui_TextWidthAsIs(shown);
         } else {
             MemoClip();
             SetClip(x0 + 1, y0, x1 - 1, y0 + ROW_H);
-            Ui_Text(x0 + 16, yc - 18, label, INK_WHITE);
+            Ui_TextAsIs(x0 + 16, yc - 18, shown, INK_WHITE);
             RestoreClip();
             d.textLeft = x0 + 16;
-            d.textRight = x0 + 16 + Ui_TextWidth(label);
+            d.textRight = x0 + 16 + Ui_TextWidthAsIs(shown);
         }
     }
 }

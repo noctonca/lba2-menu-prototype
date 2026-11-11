@@ -187,9 +187,12 @@ static void Check(std::vector<std::string> *found) {
         if (cursors != 1)
             found->push_back(Fmt("%d cursors on the screen", cursors));
     }
-    // A red chip under the cursor says in the help what else has its key.
+    // A red chip under the cursor says in the help what else has its key: the words between
+    // the two names of "%s is also %s.", in the Text language.
+    std::string also = Menu_Tr("%s is also %s.");
+    also = also.substr(2, also.rfind("%s") - 2);
     for (int i = 0; i < nc; i++)
-        if (!strcmp(chips[i].fill, "cursor") && chips[i].conflict && !strstr(v.text, " is also "))
+        if (!strcmp(chips[i].fill, "cursor") && chips[i].conflict && !strstr(v.text, also.c_str()))
             found->push_back(Fmt("red key not explained in the help: %s %s %s", Repr(chips[i].action).c_str(),
                                  chips[i].column, Repr(chips[i].name).c_str()));
     // A clash goes both ways: the other action shows one too.
@@ -429,6 +432,7 @@ struct Walker {
     const SelftestOptions *opt;
     std::vector<Switch> switches;  // this combo's
     std::string size, combo, again;  // again: the command line up to --do
+    int lang = 0;                    // the Text language the walk draws in
     std::vector<std::string> path;   // commands since the last open
     std::map<std::string, std::string> problems;  // line -> the command line that shows it
     int checks;
@@ -443,6 +447,7 @@ struct Walker {
         Menu_SetSwitch("presetlook", 0);
         for (size_t s = 0; s < switches.size(); s++)
             Menu_SetSwitch(switches[s].name.c_str(), switches[s].value);
+        Menu_Set("text_lang", lang);
         // Help shown whole, so a check never depends on how far the typing got.
         Menu_SetSwitch("typing", 2);
         Frame();
@@ -1197,7 +1202,7 @@ struct Walker {
             // Start always opens the game menu: Enter does not wait and Del leaves it, and the
             // voice says why.
             Key("enter");
-            std::string why = std::string(said) + " always opens the game menu, so it can't be changed.";
+            std::string why = Fmt(Menu_Tr("%s always opens the game menu, so it can't be changed."), said);
             Expect(!Waiting() && Voice() == why,
                    Fmt("bind: Game menu's %s waits or reads %s", Repr(start).c_str(), Repr(Voice().c_str()).c_str()));
             Check();
@@ -1208,7 +1213,7 @@ struct Walker {
         Key("enter");
         if (!Expect(Waiting(), "bind: Enter does not wait for a key"))
             return;
-        std::string ask = pad ? std::string("Press a button, or ") + said + " to keep it." : "Press a key, or <ESC> to keep it.";
+        std::string ask = pad ? Fmt(Menu_Tr("Press a button, or %s to keep it."), said) : Menu_Tr("Press a key, or <ESC> to keep it.");
         Expect(Voice() == ask, Fmt("bind: the voice does not ask for the key and say the way out: %s", Repr(Voice().c_str()).c_str()));
         Check();
         Key("esc");
@@ -1250,7 +1255,8 @@ struct Walker {
                 return;
             Check();
             std::string q = Voice();
-            Expect(q.find(Said(want) + " is on " + partner) == 0,
+            std::string on = Fmt(Menu_Tr("%s is on %s%s."), Said(want).c_str(), Ui_Tr(partner), "");
+            Expect(q.find(on.substr(0, on.size() - 1)) == 0,
                    Fmt("bind: the question does not say %s has %s: %s", partner, Repr(want).c_str(), Repr(q.c_str()).c_str()));
             Expect(RowDrawn((std::string("No, keep it on ") + partner).c_str()) && !RowStarting("Yes, ").empty(),
                    "bind: the question's answers are not drawn");
@@ -1275,7 +1281,7 @@ struct Walker {
         Check();
         Expect(ChipRed() && Clashes(partner),
                Fmt("bind: %s is also %s's, and the two chips are not both red", Repr(want).c_str(), partner));
-        Expect(Voice().find(std::string("is also ") + partner) != std::string::npos,
+        Expect(Voice().find(Fmt(Menu_Tr("%s is also %s."), "", Ui_Tr(partner)).substr(1)) != std::string::npos,
                Fmt("bind: the help does not name %s: %s", partner, Repr(Voice().c_str()).c_str()));
 
         Key("del");
@@ -1334,7 +1340,9 @@ struct Walker {
         if (!Expect(Asking(), "swap: J, Jetpack's, did not ask"))
             return;
         std::string q = Voice();
-        Expect(q == "<J> is on Jetpack, in Magic and items.", Fmt("swap: the question reads %s", Repr(q.c_str()).c_str()));
+        std::string where = Fmt(Menu_Tr(", in %s"), Ui_Tr("Magic and items"));
+        Expect(q == Fmt(Menu_Tr("%s is on %s%s."), "<J>", Ui_Tr("Jetpack"), where.c_str()),
+               Fmt("swap: the question reads %s", Repr(q.c_str()).c_str()));
         std::string yes = "Yes, Jetpack gets " + mine;
         Expect(RowDrawn(yes.c_str()), Fmt("swap: no %s answer (Yes reads %s)", Repr(yes.c_str()).c_str(),
                                           Repr(RowStarting("Yes, ").c_str()).c_str()));
@@ -1547,7 +1555,13 @@ int Selftest_Run(const SelftestOptions &opt, const char *self) {
     w.opt = &opt;
     w.size = Fmt("%ux%u", (unsigned)Engine_PhysW(), (unsigned)Engine_PhysH());
     w.checks = 0;
-    for (size_t i = 0; i < specs.size(); i++) {
+    Ui_ClearMissed();
+    // Every walk in every Text language (2026-11-12): the whole menu is drawn in it, so
+    // every label, value and title must fit, and every one drawn must have a translation.
+    for (size_t k = 0; k < LANG_COUNT * specs.size(); k++) {
+        const int lang = (int)(k / specs.size());
+        const size_t i = k % specs.size();
+        w.lang = lang;
         std::vector<Switch> combo;
         if (!ParseCombo(specs[i], &combo)) {
             fprintf(stderr, "bad --combo %s (name=value,name=value with the switch names of `state`)\n", specs[i]);
@@ -1558,7 +1572,9 @@ int Selftest_Run(const SelftestOptions &opt, const char *self) {
         for (size_t s = 0; s < combo.size(); s++)
             w.again += Fmt(" --switch %s=%d", combo[s].name.c_str(), combo[s].value);
         w.again += " --switch typing=2";
-        w.combo = ComboLabel(combo);
+        if (lang)
+            w.again += Fmt(" --do \"set text_lang %d\"", lang);
+        w.combo = ComboLabel(combo) + (lang ? Fmt(" lang=%d", lang) : "");
         w.Start();
         bool twoDevices = ComboValue(combo, "devices", 1) != 0;
         bool gameplay = ComboValue(combo, "gameplay", 0) != 0;
@@ -1571,6 +1587,8 @@ int Selftest_Run(const SelftestOptions &opt, const char *self) {
         if (!opt.layoutOnly)
             w.Behaviour(gameplay, twoDevices);
     }
+    for (std::set<std::string>::const_iterator it = Ui_Missed().begin(); it != Ui_Missed().end(); ++it)
+        w.problems[Fmt("lang/menu.tsv has no row for %s", Repr(it->c_str()).c_str())] = "tools/lang.py after adding it";
     for (std::map<std::string, std::string>::const_iterator it = w.problems.begin(); it != w.problems.end(); ++it) {
         printf("%s\n", it->first.c_str());
         if (opt.again)

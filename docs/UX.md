@@ -294,9 +294,17 @@ strip at the value edge, which read badly on a TV (switch `slider=0`).
   translations of their sentences run 1.1x English typically and up to 1.5x
   (German) in their longest tenth, so a translation half as long again still
   fits. Measure with `widths`.
+- **The Text row changes the whole menu** (2026-11-12, after the maintainer
+  changed the language and saw only the help change). Labels, values, page
+  titles, answers, column heads and the legend's words are in `lang/menu.tsv`,
+  translated where the game font and the legend are drawn, so every width the
+  layout takes is the translated one. Key names stay as the keys read, and More
+  options' tuning rows and their help stay English. Every self test walk runs
+  in all six languages, and a drawn text with no translation is a problem.
+  Shortened to fit the 275 px name column at 640x480: eleven action names (the
+  spells, the behaviour rows, turning) and three answers.
 - **Every language is measured** (2026-11-12). The voice speaks the Text
-  row's language (`lang/help.tsv`, stand-in translations made to measure;
-  row labels and values stay English). The self test fills each text's
+  row's language (`lang/help.tsv`, stand-in translations made to measure). The self test fills each text's
   formats with long names and checks every language in both fonts: two band
   lines at 620 px, three dialogue lines at 591 px. Measured: translations run
   a median 1.08 to 1.19 times English and at most 1.6 to 2.0 times, the

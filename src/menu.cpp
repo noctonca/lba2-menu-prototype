@@ -1173,10 +1173,12 @@ DrawnRow &Menu_Record(const char *pane, const char *label, const char *value, Ro
 }
 
 // Centred text clipped to the row, the original's way (DrawOneChoice).
-void Menu_RowLabelCentred(S32 x0, S32 x1, S32 yc, const char *s, U8 colour) {
+void Menu_RowLabelCentred(S32 x0, S32 x1, S32 yc, const char *s, U8 colour, bool asIs) {
     MemoClip();
     SetClip(x0 + 1, yc - 25, x1 - 1, yc + 25);
-    Ui_Text((x0 + x1) / 2 - Ui_TextWidth(s) / 2, yc - 18, s, colour);
+    if (!asIs)
+        s = Ui_Tr(s);
+    Ui_TextAsIs((x0 + x1) / 2 - Ui_TextWidthAsIs(s) / 2, yc - 18, s, colour);
     RestoreClip();
 }
 
@@ -1368,20 +1370,32 @@ static void LegendFor(const Row *r, const char **keys, const char **words, int *
     words[(*n)++] = g_first ? "Modern" : "Back";
 }
 
+// A legend word in the Text language. "legend|Back" first: the legend's Back (the menu
+// before) is not the Back an action names (walking backwards).
+static const char *LegendWord(const char *w) {
+    if (Ui_Lang() <= 0)
+        return w;
+    char key[48];
+    snprintf(key, sizeof key, "legend|%s", w);
+    if (const char *t = Lang_Label(key, Ui_Lang()))
+        return t;
+    return Ui_Tr(w);
+}
+
 static S32 LegendWidth(const char **keys, const char **words, int n, S32 scale) {
     S32 w = 0;
     if (sw_legend) {
         // Stacked: the widest chip, the gap, the widest word.
         S32 chipW = 0, wordW = 0;
         for (int i = 0; i < n; i++) {
-            S32 c = Ui_ChipWidth(keys[i], scale), t = Ui_SmallWidth(words[i], scale);
+            S32 c = Ui_ChipWidth(keys[i], scale), t = Ui_SmallWidth(LegendWord(words[i]), scale);
             chipW = c > chipW ? c : chipW;
             wordW = t > wordW ? t : wordW;
         }
         return n ? chipW + 4 * scale + wordW : 0;
     }
     for (int i = 0; i < n; i++)
-        w += Ui_ChipWidth(keys[i], scale) + 4 * scale + Ui_SmallWidth(words[i], scale) + (i + 1 < n ? 12 * scale : 0);
+        w += Ui_ChipWidth(keys[i], scale) + 4 * scale + Ui_SmallWidth(LegendWord(words[i]), scale) + (i + 1 < n ? 12 * scale : 0);
     return w;
 }
 
@@ -1397,8 +1411,8 @@ static void DrawLegend(S32 x, S32 yc, const char **keys, const char **words, int
     for (int i = 0; i < n; i++) {
         S32 chipH = 12 * scale;
         x += Ui_Chip(x, yc - chipH / 2, keys[i], scale) + 4 * scale;
-        Ui_Small(x, yc - 4 * scale, words[i], INK_CONFIG_MENU, scale);
-        x += Ui_SmallWidth(words[i], scale) + 12 * scale;
+        Ui_Small(x, yc - 4 * scale, LegendWord(words[i]), INK_CONFIG_MENU, scale);
+        x += Ui_SmallWidth(LegendWord(words[i]), scale) + 12 * scale;
         LegendRecord(i, keys[i], words[i]);
     }
 }
@@ -1417,7 +1431,7 @@ static void DrawLegendStacked(S32 x, S32 y0, const char **keys, const char **wor
         S32 y = y0 + i * pitch;
         S32 c = Ui_ChipWidth(keys[i], scale);
         Ui_Chip(x + chipW - c, y, keys[i], scale);
-        Ui_Small(x + chipW + 4 * scale, y + chipH / 2 - 4 * scale, words[i], INK_CONFIG_MENU, scale);
+        Ui_Small(x + chipW + 4 * scale, y + chipH / 2 - 4 * scale, LegendWord(words[i]), INK_CONFIG_MENU, scale);
         LegendRecord(i, keys[i], words[i]);
     }
 }
@@ -1518,6 +1532,8 @@ static void DrawColumn() {
         int visible = (bottom - top + ROW_GAP) / ROW_PITCH;
         if (visible > p.count)
             visible = p.count;
+        if (g_scroll > p.count - visible)
+            g_scroll = p.count - visible;  // a row went (Undo reset): no rows past the end
         if (g_cursor < g_scroll)
             g_scroll = g_cursor;
         if (g_cursor >= g_scroll + visible)
@@ -1599,6 +1615,8 @@ static void DrawWide() {
         if (visible > n)
             visible = n;
         if (g_focus == F_RIGHT) {
+            if (g_scroll > n - visible)
+                g_scroll = n - visible;  // a row went (Undo reset): no rows past the end
             if (g_cursor < g_scroll)
                 g_scroll = g_cursor;
             if (g_cursor >= g_scroll + visible)
@@ -1784,6 +1802,7 @@ static void SyncBackgroundRes() {
 void Menu_Draw() {
     SyncBackgroundRes();
     VFont_Set(g_val[S_FONT]);  // before the layout: widths follow the font
+    Ui_SetLang(g_val[S_TEXT_LANG]);  // and the language
     VFont_BeginFrame();
     SyncLayout();
     g_drawnCount = 0;
@@ -2012,6 +2031,8 @@ void Menu_Help(MenuHelp *h) {
     h->needed = g_voiceNeeded;
     S32 page, pages;
     Voice_LastPage(&page, &pages);
+    if (!g_helpBox.shown)
+        page = pages = 0;  // no help this frame: the count is the last one drawn, elsewhere
     h->page = page;
     h->pages = pages;
     h->max = g_voiceMax;

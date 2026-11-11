@@ -12,6 +12,11 @@
 #include <SVGA/PLOT.H>
 #include <SVGA/SCREEN.H>
 
+#include "lang.h"
+
+#include <set>
+#include <string>
+#include <stdio.h>
 #include <string.h>
 
 extern "C" U8 Font8x8[256 * 8];
@@ -38,17 +43,63 @@ void Ui_Panel(S32 x0, S32 y0, S32 x1, S32 y1, S32 level) {
     Cadre_Frame(x0, y0, x1, y1);
 }
 
-S32 Ui_TextWidth(const char *s) {
-    return VFont_On() ? VFont_Width(s) : SizeFont((char *)s);
+// The game-font texts are drawn and measured in the Text language: one place, so every
+// width the layout and the checks take is the translated one. A text with letters that
+// lang/menu.tsv lacks is drawn as it is and noted for the self test.
+static int s_lang;
+static std::set<std::string> s_missed;
+
+void Ui_SetLang(int lang) { s_lang = lang; }
+int Ui_Lang() { return s_lang; }
+
+// What a translation has nothing to do with: no letters, or a number first (a
+// resolution, the version).
+static bool HasLetters(const char *s) {
+    if (*s >= '0' && *s <= '9')
+        return false;
+    for (; *s; s++)
+        if ((*s >= 'A' && *s <= 'Z') || (*s >= 'a' && *s <= 'z'))
+            return true;
+    return false;
 }
 
-S32 Ui_TextInkWidth(const char *s) {
+static const char *TrWhole(const char *s) {
+    if (const char *t = Lang_Label(s, s_lang))
+        return t;
+    if (HasLetters(s))
+        s_missed.insert(s);
+    return s;
+}
+
+const char *Ui_Tr(const char *s) {
+    if (s_lang <= 0 || !s)
+        return s;
+    if (const char *t = Lang_Label(s, s_lang))
+        return t;
+    // A one-column row, "Label: Value": each side on its own.
+    const char *colon = strstr(s, ": ");
+    if (!colon)
+        return TrWhole(s);
+    static char ring[8][256];
+    static int next;
+    char *out = ring[next++ & 7];
+    std::string label(s, colon - s);
+    snprintf(out, sizeof ring[0], "%s: %s", TrWhole(label.c_str()), TrWhole(colon + 2));
+    return out;
+}
+
+const std::set<std::string> &Ui_Missed() { return s_missed; }
+void Ui_ClearMissed() { s_missed.clear(); }
+
+S32 Ui_TextWidthAsIs(const char *s) { return VFont_On() ? VFont_Width(s) : SizeFont((char *)s); }
+
+S32 Ui_TextInkWidthAsIs(const char *s) {
     if (VFont_On())
         return VFont_InkWidth(s);
     return s[0] ? SizeFont((char *)s) - InterLeave : 0;
 }
 
-void Ui_Text(S32 x, S32 y, const char *s, U8 colour) {
+void Ui_TextAsIs(S32 x, S32 y, const char *s, U8 colour) {
     if (VFont_On()) {
         VFont_Text(x, y, s, colour);
         return;
@@ -57,15 +108,21 @@ void Ui_Text(S32 x, S32 y, const char *s, U8 colour) {
     Font(x, y, s);
 }
 
+S32 Ui_TextWidth(const char *s) { return Ui_TextWidthAsIs(Ui_Tr(s)); }
+S32 Ui_TextInkWidth(const char *s) { return Ui_TextInkWidthAsIs(Ui_Tr(s)); }
+void Ui_Text(S32 x, S32 y, const char *s, U8 colour) { Ui_TextAsIs(x, y, Ui_Tr(s), colour); }
+
 void Ui_TextShadow(S32 x, S32 y, const char *s, U8 colour) {
     Ui_Text(x + 2, y + 4, s, INK_BLACK);
     Ui_Text(x, y, s, colour);
 }
 
-S32 Ui_Title(S32 x0, S32 x1, S32 y, const char *s) {
-    S32 x = (x0 + x1 + 1) / 2 - Ui_TextWidth(s) / 2;
-    Ui_Text(x + 4, y + 4, s, INK_BLACK);
-    Ui_Text(x, y, s, INK_WHITE);
+S32 Ui_Title(S32 x0, S32 x1, S32 y, const char *s, bool asIs) {
+    if (!asIs)
+        s = Ui_Tr(s);
+    S32 x = (x0 + x1 + 1) / 2 - Ui_TextWidthAsIs(s) / 2;
+    Ui_TextAsIs(x + 4, y + 4, s, INK_BLACK);
+    Ui_TextAsIs(x, y, s, INK_WHITE);
     return y + 56;  // the title takes one row's pitch
 }
 
@@ -228,7 +285,7 @@ static S32 Wrap(const char *text, S32 width, const char **starts, S32 *lens, S32
         while (p[n]) {
             memcpy(buf, lineStart, n + 1);
             buf[n + 1] = 0;
-            if (Ui_TextWidth(buf) > width)
+            if (Ui_TextWidthAsIs(buf) > width)  // the voice: already in the Text language
                 break;
             if (p[n] == ' ')
                 lastBreak = p + n;

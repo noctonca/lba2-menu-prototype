@@ -3,6 +3,9 @@
 
 #include <SYSTEM/ADELINE_TYPES.H>
 
+#include <set>
+#include <string>
+
 // Palette indices (design system tokens.json, lba2 theme).
 enum {
     INK_BLACK = 0,
@@ -30,6 +33,19 @@ void Ui_RowBackground(S32 x0, S32 y0, S32 x1, S32 y1, RowFill fill);
 enum { BAND_SHADE_LVL = 11 };
 void Ui_Panel(S32 x0, S32 y0, S32 x1, S32 y1, S32 level);
 
+// Game-font text in the Text language (Ui_SetLang): s is the English, looked up in
+// lang/menu.tsv; "Label: Value" is looked up a side at a time. A text with letters the
+// table lacks is drawn as it is and noted (Ui_Missed). The AsIs forms take s as it is:
+// the voice, already translated, and More options' tuning rows, English by design.
+void Ui_SetLang(int lang);
+int Ui_Lang();
+const char *Ui_Tr(const char *s);
+const std::set<std::string> &Ui_Missed();
+void Ui_ClearMissed();
+S32 Ui_TextWidthAsIs(const char *s);
+S32 Ui_TextInkWidthAsIs(const char *s);
+void Ui_TextAsIs(S32 x, S32 y, const char *s, U8 colour);
+
 S32 Ui_TextWidth(const char *s);
 // The width of the ink alone: Ui_TextWidth less the spacing after the last letter.
 S32 Ui_TextInkWidth(const char *s);
@@ -37,7 +53,7 @@ void Ui_Text(S32 x, S32 y, const char *s, U8 colour);
 void Ui_TextShadow(S32 x, S32 y, const char *s, U8 colour);  // dialogue shadow +2,+4
 // A page title (the brand book's Title): white, the title shadow +4,+4, centred on
 // x0..x1, its text cell from y. Returns where the rows below may start.
-S32 Ui_Title(S32 x0, S32 x1, S32 y, const char *s);
+S32 Ui_Title(S32 x0, S32 x1, S32 y, const char *s, bool asIs = false);
 
 // Two solid triangles, kin of the corner arrow sprites, either side of a value.
 void Ui_ChangeMarks(S32 leftX, S32 rightX, S32 yCentre);

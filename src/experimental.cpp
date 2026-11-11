@@ -667,24 +667,24 @@ static void DrawListRow(const char *pane, const char *label, int i, S32 x0, S32 
             snprintf(text, sizeof text, "%s: %s", label, val);
         else
             snprintf(text, sizeof text, "%s", label);
-        Menu_RowLabelCentred(x0, x1, yc, text, INK_WHITE);
-        d.textLeft = (x0 + x1) / 2 - Ui_TextWidth(text) / 2;
-        d.textRight = (x0 + x1) / 2 + Ui_TextWidth(text) / 2 + 8;
+        Menu_RowLabelCentred(x0, x1, yc, text, INK_WHITE, true);  // tuning rows stay English
+        d.textLeft = (x0 + x1) / 2 - Ui_TextWidthAsIs(text) / 2;
+        d.textRight = (x0 + x1) / 2 + Ui_TextWidthAsIs(text) / 2 + 8;
         return;
     }
     MemoClip();
     SetClip(x0 + 1, y0, x1 - 1, y1);
-    Ui_Text(x0 + 16, yc - 18, label, INK_WHITE);
+    Ui_TextAsIs(x0 + 16, yc - 18, label, INK_WHITE);  // tuning rows stay English
     RestoreClip();
     d.textLeft = x0 + 16;
-    d.textRight = x0 + 16 + Ui_TextWidth(label);
+    d.textRight = x0 + 16 + Ui_TextWidthAsIs(label);
     if (i < 0)
         return;
     S32 valueRight = x1 - 24;
-    S32 left = valueRight + 1 - Ui_TextInkWidth(val);
+    S32 left = valueRight + 1 - Ui_TextInkWidthAsIs(val);
     if (d.textRight + 8 > left - 17)
         d.textRight = x1 + (d.textRight + 8 - (left - 17));  // the label runs into the value
-    Ui_Text(left, yc - 18, val, changed ? INK_COUNT : INK_WHITE);
+    Ui_TextAsIs(left, yc - 18, val, changed ? INK_COUNT : INK_WHITE);
     d.valueRight = valueRight;
     if (fill == FILL_CURSOR) {
         Ui_ChangeMarks(left - 17, valueRight + 17, yc);
@@ -728,9 +728,10 @@ static void DrawWideExp() {
     S32 x0 = f.x0 + (f.w - DRILL_W) / 2, x1 = x0 + DRILL_W - 1;
     S32 top = f.y0 + 24, limit = Menu_WideRowsLimit();
     const char *title = Table() || !g_inGroup ? "More options" : kGroups[g_group].name;
-    S32 rtop = Ui_Title(x0, x1, top, title);
+    const bool group = !(Table() || !g_inGroup);  // a group's name stays English, as its rows
+    S32 rtop = Ui_Title(x0, x1, top, title, group);
     Menu_Record("title", title, "", FILL_SHADE, x0, top, x1, top + 38).textLeft =
-        (x0 + x1 + 1) / 2 - Ui_TextWidth(title) / 2;
+        (x0 + x1 + 1) / 2 - (group ? Ui_TextWidthAsIs(title) : Ui_TextWidth(title)) / 2;
     if (Table()) {
         DrawTable(x0, x1, rtop, limit);
     } else if (!g_inGroup) {

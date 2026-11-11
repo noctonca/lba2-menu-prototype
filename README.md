@@ -182,14 +182,18 @@ memory like the other settings.
 
 ## Languages
 
-The voice (help, questions, messages) speaks the language the Text row picks:
-English, Francais, Deutsch, Espanol, Italiano, Portugues. The texts are in
-`lang/help.tsv`, a column per language, looked up by their English; anything
-missing is said in English. Row labels and values stay English. The
-translations are stand-ins, made to measure lengths, not reviewed by native
-speakers. After editing the file run `tools/lang.py`, which writes
-`src/lang_table.inc` in the game font's code page (CP850). The self test
-checks every text in every language and both fonts against its window.
+The whole menu is in the language the Text row picks: English, Français,
+Deutsch, Español, Italiano, Português. The voice (help, questions, messages) is
+in `lang/help.tsv`; labels, values, titles, answers, column heads and legend
+words in `lang/menu.tsv`, a column per language, looked up by their English.
+"Label: Value" rows are looked up a side at a time; `legend|Back` keeps the
+legend's Back apart from the walking-backwards action. Key names, numbers and
+More options' tuning rows stay as they are. The translations are stand-ins,
+made to measure lengths, not reviewed by native speakers. After editing either
+file run `tools/lang.py`, which writes `src/lang_table.inc` and
+`src/lang_menu.inc` in the game font's code page (CP850). The self test runs
+every walk in every language, checks every voice text in both fonts against
+its window, and reports any drawn text that `lang/menu.tsv` lacks.
 
 ## Driving it
 
