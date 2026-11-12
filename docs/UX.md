@@ -130,6 +130,12 @@ is no pointer, so the cost of a target is the number of key presses to it.
   too, where it does what Esc Cancel does. Every page has a title line for it, the one
   column's hub too, so nothing moves when it comes; a title too wide beside
   it swings, as a long 1997 row does (decided 2026-11-12).
+- A legend entry that takes a click lights under the mouse (its chip in the
+  current plasma, its word white), so it reads as a button; a finger has no
+  hover, so it lights only while pressed. No chips for the mouse's buttons:
+  wide, the help shares the band with the legend, and two more chips there
+  pushed ten translated help texts onto a second window (decided
+  2026-11-12). **[self test: hover, pointer]**
 - **Every row by the pointer alone.** A finger has no keys and no wheel: the
   scroll bar's thumb drags and its groove taps a viewful up or down, so on
   every page each row can take the cursor by pointing (2026-11-12).

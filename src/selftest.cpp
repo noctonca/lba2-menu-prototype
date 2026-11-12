@@ -30,7 +30,7 @@
 
 // The switch combinations tools/sweep.py runs, in its order: the pad's names of each
 // family (0 is the connected pad's, Xbox without one), and the green plasma on the chosen preset.
-static const char *kCombos[] = {"padnames=0", "padnames=2", "padnames=3", "greencurrent=1"};
+static const char *kCombos[] = {"padnames=0", "padnames=2", "padnames=3", "greencurrent=1", "pointer=1", "pointer=2"};
 
 static const char *kPages[] = {
     "Options", "Preset", "Language and interface", "Display and graphics", "Sound",
@@ -1904,25 +1904,45 @@ struct Walker {
                     Expect(Menu_TopRow() == p.b, Fmt("pointer: over More options row %d, the cursor is on %d", p.b, Menu_TopRow()));
             }
             Expect(rowsSeen > 0, Fmt("pointer: no row on %s takes the pointer", page));
-            // Back, from the legend.
-            Frame();
-            n = Menu_Points(&pts);
-            int depth0 = 0;
-            Where(&depth0);
-            bool back = false;
-            for (int i = 0; i < n && !back; i++) {
-                if (pts[i].kind == POINT_KEY && pts[i].a == KEY_ESC) {
-                    back = true;
-                    const MenuPoint p = pts[i];
-                    Mouse((p.x0 + p.x1) / 2, (p.y0 + p.y1) / 2);
-                    Click();
-                    int depth1 = 0;
-                    Where(&depth1);
-                    Expect(depth1 == depth0 - 1 || (depth0 == 1 && depth1 == 0),
-                           Fmt("pointer: Back in the legend on %s leaves depth %d, not %d", page, depth1, depth0 - 1));
-                }
+            // Back: every way the pointer has, the legend's and the corner button (shown once
+            // the pointer was used), each a click going back one, as Esc does; the legend's
+            // lights under the mouse first (2026-11-12).
+            int ways = 0;
+            for (int k = 0;; k++) {
+                Fresh(page);
+                Mouse(0, 0);  // the pointer used last: the corner Back shows
+                n = Menu_Points(&pts);
+                MenuPoint p{};
+                bool found = false;
+                for (int i = 0, seen = 0; i < n && !found; i++)
+                    if (pts[i].kind == POINT_KEY && pts[i].a == KEY_ESC && seen++ == k)
+                        p = pts[i], found = true;
+                if (!found)
+                    break;
+                ways++;
+                int depth0 = 0;
+                Where(&depth0);
+                Mouse((p.x0 + p.x1) / 2, (p.y0 + p.y1) / 2);
+                const ChipBox *chips;
+                const int nc = Ui_ChipBoxes(&chips);
+                bool chip = false, lit = false;
+                for (int c = 0; c < nc; c++)
+                    if (chips[c].legend && chips[c].x0 >= p.x0 && chips[c].x1 <= p.x1 && chips[c].y0 >= p.y0 - 1 &&
+                        chips[c].y1 <= p.y1) {
+                        chip = true;
+                        lit = lit || !chips[c].plain;
+                    }
+                // A finger has no hover (the combo pointer=2 plays one).
+                Expect(!chip || lit || Menu_GetSwitch("pointer") == 2,
+                       Fmt("hover: the legend's Back on %s does not light under the mouse", page));
+                Click();
+                int depth1 = 0;
+                Where(&depth1);
+                Expect(depth1 == depth0 - 1 || (depth0 == 1 && depth1 == 0),
+                       Fmt("pointer: the %s Back on %s leaves depth %d, not %d", chip ? "legend's" : "corner", page, depth1,
+                           depth0 - 1));
             }
-            Expect(back, Fmt("pointer: no Back in the legend on %s takes a click", page));
+            Expect(ways >= 2, Fmt("pointer: %s has %d ways back by the pointer, not the legend's and the corner's", page, ways));
         }
     }
 

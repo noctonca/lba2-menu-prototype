@@ -104,7 +104,8 @@ row, chip or answer under it, and a click (press and let go on the same thing)
 does what Enter does. A value's arrows step it, a slider moves by a drag (by
 how far it goes; a click alone leaves it, as the 1997 slider is its whole row,
 label and all), and a legend entry presses its key (Back, Defaults, Keyboard
-and the rest). The right button is Esc. Once the mouse or a finger was used
+and the rest); it lights under the mouse, as a row does, so it reads as a
+button (under a finger only while pressed). The right button is Esc. Once the mouse or a finger was used
 last, a Back button sits on the title's line (see docs/UX.md); a key or a pad's
 button takes it away. The wheel scrolls a page that
 has a scroll bar, a row a notch, and takes the cursor along only when it would

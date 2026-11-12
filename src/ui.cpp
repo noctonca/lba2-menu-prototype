@@ -164,11 +164,11 @@ void Ui_TextShadow(S32 x, S32 y, const char *s, U8 colour) {
     Ui_Text(x, y, s, colour);
 }
 
-static S32 s_backRoom;
+static S32 s_backRight;
 static bool s_titled;
 static S32 s_titleX0, s_titleY;
 
-void Ui_SetBackRoom(S32 w) { s_backRoom = w; }
+void Ui_SetBackRight(S32 x1) { s_backRight = x1; }
 
 bool Ui_FirstTitle(S32 *x0, S32 *y) {
     *x0 = s_titleX0, *y = s_titleY;
@@ -191,7 +191,7 @@ S32 Ui_Title(S32 x0, S32 x1, S32 y, const char *s, bool asIs) {
         s_titleX0 = x0, s_titleY = y;
     }
     const S32 w = Ui_TextWidthAsIs(s);
-    const S32 from = s_backRoom > 0 ? x0 + s_backRoom + 16 : x0;  // the button's right edge and a gap
+    const S32 from = s_backRight > 0 && s_backRight + 16 > x0 ? s_backRight + 16 : x0;  // the button's edge and a gap
     S32 x = (x0 + x1 + 1) / 2 - w / 2;
     if (x < from)
         x = (from + x1 + 1) / 2 - w / 2;

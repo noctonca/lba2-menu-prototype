@@ -59,10 +59,9 @@ void Ui_TextShadow(S32 x, S32 y, const char *s, U8 colour);  // dialogue shadow 
 // A page title (the brand book's Title): white, the title shadow +4,+4, centred on
 // x0..x1, its text cell from y. Returns where the rows below may start.
 S32 Ui_Title(S32 x0, S32 x1, S32 y, const char *s, bool asIs = false);
-// The corner Back's width from a title's x0 this frame, 0 for none: a title moves right of
-// it when centring would put it under the button (the one column, where Back sits on the
-// title's line at the rows' left edge).
-void Ui_SetBackRoom(S32 w);
+// The corner Back's right edge this frame, 0 for none: a title starts right of it (and a gap)
+// when centring would put it under the button, and swings in what is left when too wide.
+void Ui_SetBackRight(S32 x1);
 // The first title drawn this frame: its span's left and its line's top. False: none.
 bool Ui_FirstTitle(S32 *x0, S32 *y);
 
