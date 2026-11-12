@@ -1691,6 +1691,7 @@ struct Walker {
         Languages();
         PadNames();
         Pointer();
+        Wheel();
     }
 
     void Mouse(S32 x, S32 y) {
@@ -1703,6 +1704,67 @@ struct Walker {
         Host_InjectClick(false);
         Frame();
         Frame();
+    }
+
+    // The wheel (EPmager, 2026-11-12): it turns the view of a page that scrolls, a row a
+    // notch, and leaves a page that does not alone. The cursor stays on the page's view (its
+    // row drawn as the cursor's, on More options its row among the lines), and the view
+    // stays where the wheel left it in the frames after.
+    void Wheel() {
+        if (opt->only)
+            return;
+        std::vector<const char *> pages(kPages, kPages + sizeof kPages / sizeof kPages[0]);
+        pages.push_back("Keys and buttons");
+        pages.push_back("More options");
+        for (const char *page : pages) {
+            Fresh(page);
+            const bool scrolls = Menu_ScrollBarShown();
+            const int row0 = Menu_TopRow(), scroll0 = Menu_Scroll();
+            auto turn = [&](int notches) {
+                path.push_back(Fmt("wheel %d", notches));
+                Host_InjectWheel(notches);
+                Frame();
+            };
+            auto cursorDrawn = [&]() {
+                if (MoreOptions_Active())
+                    return true;  // its own lines; the table keeps the cursor's line in view
+                const DrawnRow *rows;
+                int nr = Menu_DrawnRows(&rows);
+                for (int i = 0; i < nr; i++)
+                    if (!strcmp(rows[i].fill, "cursor"))
+                        return true;
+                return false;
+            };
+            if (!scrolls) {
+                for (int notches : {-1, 1, 1}) {  // each checked alone: down then up would cancel
+                    turn(notches);
+                    Expect(Menu_TopRow() == row0 && Menu_Scroll() == scroll0,
+                           Fmt("wheel: %s does not scroll, but %d notch moved the cursor (%d to %d) or the view (%d to %d)",
+                               page, notches, row0, Menu_TopRow(), scroll0, Menu_Scroll()));
+                }
+                continue;
+            }
+            int steps = 0;
+            for (int i = 0; i < 100; i++) {
+                const int before = Menu_Scroll();
+                turn(-1);
+                const int after = Menu_Scroll();
+                Expect(after == before + 1 || after == before,
+                       Fmt("wheel: one notch down on %s took the view from %d to %d", page, before, after));
+                Expect(cursorDrawn(), Fmt("wheel: the cursor is off the view on %s at scroll %d", page, after));
+                Frame();
+                Frame();
+                Expect(Menu_Scroll() == after,
+                       Fmt("wheel: the view on %s went back from %d to %d with the wheel still", page, after, Menu_Scroll()));
+                if (after == before)
+                    break;
+                steps++;
+            }
+            Expect(steps > 0, Fmt("wheel: %s scrolls, but the wheel did not move its view", page));
+            turn(100);
+            Expect(Menu_Scroll() == 0, Fmt("wheel: up to the top on %s leaves the view at %d", page, Menu_Scroll()));
+            Expect(cursorDrawn(), Fmt("wheel: the cursor is off the view on %s at the top", page));
+        }
     }
 
     // The pointer (2026-11-12): on every page, the mouse over a row's target puts the cursor on

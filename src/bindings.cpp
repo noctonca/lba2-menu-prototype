@@ -980,13 +980,18 @@ static void DrawActions(S32 x0, S32 x1, S32 headsTop, S32 limit, const char *pan
     }
     int cols[3];
     int ncols = Columns(cols);
-    const int g = CurrentGroup(), row = Menu_TopRow();
+    const int g = CurrentGroup();
+    int row = Menu_TopRow();
     int &scroll = Menu_Scroll();
     int n = GroupCount(g);
     S32 top = HeadsInRow() ? headsTop : headsTop + 22;
     int visible = (limit - top + ROW_GAP) / ROW_PITCH;
     if (visible > n)
         visible = n;
+    if (const int want = Menu_WheelView(scroll, visible, n, row); want != row) {
+        Menu_CursorTo(want);
+        row = want;
+    }
     if (row < scroll)
         scroll = row;
     if (row >= scroll + visible)
@@ -1063,28 +1068,36 @@ static void DrawColumnControls() {
         return;
     }
     if (OnGroups()) {
-        // The groups, as a 1997 sub-menu: a Return row, then one row each.
-        const int cursor = Menu_TopRow();
+        // The groups under the page's title, one row each; row 0, Return, is not shown (Esc
+        // Back is in the legend), so the view counts from row 1.
+        int cursor = Menu_TopRow() - 1;
         int &scroll = Menu_Scroll();
         S32 top = 16, bottom = Menu_DialogueTop() - 16;
-        int n = GROUP_COUNT + 1;
-        int visible = (bottom - top + ROW_GAP) / ROW_PITCH;
+        int n = GROUP_COUNT;
+        int visible = (bottom - top - ROW_PITCH + ROW_GAP) / ROW_PITCH;
         if (visible > n)
             visible = n;
+        if (const int want = Menu_WheelView(scroll, visible, n, cursor); want != cursor) {
+            Menu_CursorTo(want + 1);
+            cursor = want;
+        }
         if (cursor < scroll)
             scroll = cursor;
         if (cursor >= scroll + visible)
             scroll = cursor - visible + 1;
         S32 stackH = visible * ROW_PITCH - ROW_GAP;
-        S32 y = top + (bottom - top - stackH) / 2;
+        S32 y = top + (bottom - top - ROW_PITCH - stackH) / 2 + ROW_PITCH;
         S32 y0 = y;
+        Ui_Title(x0, x1, y - ROW_PITCH, "Keys and buttons");
+        Menu_Record("title", "Keys and buttons", "", FILL_SHADE, x0, y - ROW_PITCH, x1, y - ROW_PITCH + 38).textLeft =
+            (x0 + x1 + 1) / 2 - Ui_TextWidth("Keys and buttons") / 2;
         for (int i = scroll; i < scroll + visible; i++) {
-            const char *label = i == 0 ? "Return to previous menu" : kGroups[i - 1].name;
+            const char *label = kGroups[i].name;
             RowFill fill = i == cursor ? FILL_CURSOR : FILL_SHADE;
             Ui_RowBackground(x0, y, x1, y + ROW_H, fill);
             Menu_RowLabelCentred(x0, x1, y + ROW_H / 2, label, INK_WHITE, false, i == cursor);
             DrawnRow &d = Menu_Record("column", label, "", fill, x0, y, x1, y + ROW_H);
-            Menu_Point(POINT_ROW, x0, y, x1, y + ROW_H, P_KEYS, i);
+            Menu_Point(POINT_ROW, x0, y, x1, y + ROW_H, P_KEYS, i + 1);
             d.textLeft = (x0 + x1) / 2 - Ui_TextWidth(label) / 2;
             d.textRight = (x0 + x1) / 2 + Ui_TextWidth(label) / 2 + 8;
             y += ROW_PITCH;

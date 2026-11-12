@@ -51,6 +51,13 @@ void MoreOptions_Pages(Page *pages);  // fills pages[P_MORE]
 int Menu_TopPage();
 int Menu_TopRow();
 int &Menu_Scroll();
+// The wheel turns the view of a page that scrolls, and only that (EPmager, 2026-11-12: the
+// cursor already follows the pointer). A page that draws a scroll bar calls this before it
+// keeps its cursor in view: it moves scroll by the notches turned, within 0..total-visible,
+// and returns the line the cursor must be on to stay in view (cursor itself when it is).
+int Menu_WheelView(int &scroll, int visible, int total, int cursor);
+// The cursor on the top page's row, as the pointer puts it there.
+void Menu_CursorTo(int row);
 
 // One row as drawn this frame, for `state`.
 struct DrawnRow {
@@ -90,6 +97,8 @@ int Menu_Points(const MenuPoint **out);  // the last draw's, for the self test
 // Centred in the row; wider than the row, from its left (8 in) and, with cursor, swinging.
 void Menu_RowLabelCentred(S32 x0, S32 x1, S32 yc, const char *s, U8 colour, bool asIs = false, bool cursor = false);
 void Menu_DrawScrollBar(S32 x0, S32 y0, S32 y1, int first, int visible, int total);
+// Whether this frame drew a scroll bar: the page scrolls (for the self test).
+bool Menu_ScrollBarShown();
 
 // Whether pages take the wide layout, and the frame it is composed in. With the
 // `sheet` switch off, the frame is the whole canvas (the wide layout from 840

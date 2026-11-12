@@ -577,11 +577,12 @@ void Menu_NoteScreen() {
 
 static int TopPage() { return g_stack[g_depth - 1].page; }
 
-// A row as the layout shows it: a wide page has no Return row (Esc goes back), and a row
-// with a "shown when" check is there only while it holds.
+// A row as the layout shows it: no Return row, since the legend names Esc Back in both
+// layouts (EPmager, 2026-11-12: the one column showed both once it had a legend), and a
+// row with a "shown when" check is there only while it holds.
 static bool RowShown(const Page &p, int i) {
     const Row &r = p.rows[i];
-    if (r.type == R_RETURN && Wide() && !g_first)
+    if (r.type == R_RETURN && !g_first)
         return false;
     return !r.shown || r.shown();
 }
@@ -954,7 +955,7 @@ static PointTarget g_points[POINT_MAX];
 static int g_pointCount;
 static PointTarget g_press;  // what the left button went down on
 static bool g_pressOn;
-static int g_wheel;          // notches still to walk, one a frame
+static int g_wheelView;      // notches turned this frame, for a page that scrolls (Menu_WheelView)
 
 void Menu_Point(PointKind kind, S32 x0, S32 y0, S32 x1, S32 y1, int a, int b) {
     if (g_pointCount < POINT_MAX)
@@ -988,6 +989,22 @@ static void CursorTo(int page, int row) {
     t.row = row;
     const Row *r = CursorRow();
     Trace("cursor %s (pointer)", r ? (r->type == R_PRESET_ROW ? "preset row" : RowLabel(*r)) : "-");
+}
+
+void Menu_CursorTo(int row) { CursorTo(TopPage(), row); }
+
+int Menu_WheelView(int &scroll, int visible, int total, int cursor) {
+    const int n = g_wheelView;
+    g_wheelView = 0;
+    if (!n || visible >= total)
+        return cursor;
+    scroll -= n;  // up is positive: the view goes toward the top
+    if (scroll > total - visible)
+        scroll = total - visible;
+    if (scroll < 0)
+        scroll = 0;
+    Trace("scroll %d (wheel)", scroll);
+    return cursor < scroll ? scroll : cursor >= scroll + visible ? scroll + visible - 1 : cursor;
 }
 
 // The cursor where the pointer is.
@@ -1036,7 +1053,6 @@ static void UpdatePointer() {
     const PointTarget *at = PointAt(in.x, in.y);
     if (Bindings_Waiting()) {
         // A click is not a key to bind: only the legend's Cancel and the right button act.
-        g_wheel = 0;
         if (in.pressed) {
             g_pressOn = at && at->kind == POINT_KEY;
             if (g_pressOn)
@@ -1093,14 +1109,7 @@ static void UpdatePointer() {
     }
     if (in.rightPressed)
         Host_PressNow(KEY_ESC);
-    g_wheel += in.wheel;
-    if (g_wheel > 0) {
-        Host_PressNow(KEY_UP);
-        g_wheel--;
-    } else if (g_wheel < 0) {
-        Host_PressNow(KEY_DOWN);
-        g_wheel++;
-    }
+    g_wheelView = in.wheel;  // taken by this frame's draw if its page scrolls, else dropped
 }
 
 void Menu_Update() {
@@ -1418,7 +1427,11 @@ static void DrawWideRow(const char *pane, const Row &r, int row, S32 x0, S32 y0,
     clip.Restore();
 }
 
+static bool g_scrollBarShown;
+bool Menu_ScrollBarShown() { return g_scrollBarShown; }
+
 void Menu_DrawScrollBar(S32 x0, S32 y0, S32 y1, int first, int visible, int total) {
+    g_scrollBarShown = true;
     // ScrollBarReview: 12 wide, thumb inset 2, in the margin.
     S32 x1 = x0 + 11;
     GamePieces_Shade(x0 + 1, y0 + 1, x1 - 1, y1 - 1, MENU_SHADE_LVL);
@@ -1730,7 +1743,7 @@ static void DrawColumn() {
     const Page &p = g_pages[t.page];
     int shown[PAGE_ROWS_MAX];
     const int count = ShownRows(t.page, shown);
-    const int cursor = Position(t.page, t.row);
+    int cursor = Position(t.page, t.row);
 
     // First launch on a canvas that takes the wide composition sits in its frame,
     // the dialogue window where the band is on every other page.
@@ -1753,19 +1766,32 @@ static void DrawColumn() {
         S32 top = 16, bottom = H - 1 - 137 - 16;
         if (g_first)
             top = 168 - 8;
-        int visible = (bottom - top + ROW_GAP) / ROW_PITCH;
+        // A page names itself in a title where its Return row was, as the wide pages do;
+        // the hub has none.
+        const bool titled = g_depth > 1 && !g_first;
+        const S32 titleH = titled ? ROW_PITCH : 0;
+        int visible = (bottom - top - titleH + ROW_GAP) / ROW_PITCH;
         if (visible > count)
             visible = count;
         if (g_scroll > count - visible)
             g_scroll = count - visible;  // a row went (Undo reset): no rows past the end
+        if (const int want = Menu_WheelView(g_scroll, visible, count, cursor); want != cursor) {
+            CursorTo(t.page, shown[want]);
+            cursor = want;
+        }
         if (cursor < g_scroll)
             g_scroll = cursor;
         if (cursor >= g_scroll + visible)
             g_scroll = cursor - visible + 1;
         S32 stackH = visible * ROW_PITCH - ROW_GAP;
-        S32 y = top + (bottom - top - stackH) / 2;  // centred above the dialogue window
+        S32 y = top + (bottom - top - titleH - stackH) / 2 + titleH;  // centred above the dialogue window
         if (g_first)
             y = oy + 168;
+        if (titled) {
+            Ui_Title(W / 2 - 275, W / 2 + 275, y - titleH, p.name);
+            Menu_Record("title", p.name, "", FILL_SHADE, W / 2 - 275, y - titleH, W / 2 + 275, y - titleH + 38).textLeft =
+                W / 2 - Ui_TextWidth(p.name) / 2;
+        }
         // The 1997 width: LargeurMenu 550, centred.
         S32 x0 = W / 2 - 275, x1 = W / 2 + 275;
         for (int i = g_scroll; i < g_scroll + visible; i++) {
@@ -1800,7 +1826,7 @@ static void DrawWide() {
     } else {
         int shown[PAGE_ROWS_MAX];
         const int n = ShownRows(t.page, shown);
-        const int cursor = Position(t.page, t.row);
+        int cursor = Position(t.page, t.row);
         S32 rowsTop = top;
         if (g_depth > 1) {
             rowsTop = Ui_Title(x0, x1, top, page.name);
@@ -1812,6 +1838,10 @@ static void DrawWide() {
             visible = n;
         if (g_scroll > n - visible)
             g_scroll = n - visible;  // a row went (Undo reset): no rows past the end
+        if (const int want = Menu_WheelView(g_scroll, visible, n, cursor); want != cursor) {
+            CursorTo(t.page, shown[want]);
+            cursor = want;
+        }
         if (cursor < g_scroll)
             g_scroll = cursor;
         if (cursor >= g_scroll + visible)
@@ -1880,22 +1910,18 @@ void Menu_DrawFoot(const char **keysIn, const char **words, int nk) {
     g_helpBox.x0 = bx0; g_helpBox.y0 = bandY0; g_helpBox.x1 = bx1; g_helpBox.y1 = bandY1;
 }
 
+// The prototype's own lines, the F1 keys and a switch's note, on one line in the top margin:
+// the one place free at every size (EPmager, 2026-11-12: a list at the top right hid the
+// rows under it, the note at the bottom right the legend's words). Each switch's toggle
+// names its value in the note.
+static void DrawTopLine(const char *s, U8 ink) {
+    const S32 w = Ui_SmallWidth(s, 1), x = (S32)Host_LogicalW() / 2 - w / 2, y = 4;
+    Box(x - 4, y - 3, x + w + 3, y + 10, 0);
+    Ui_Small(x, y, s, ink, 1);
+}
+
 static void DrawOverlay() {
-    static const char *lines[] = {
-        "Prototype keys",
-        "F1 this list   F2 / Shift F2 screen size",
-        "Drag the window's edge: any screen size",
-        "F3 green plasma on the chosen preset: off / on",
-        "F11 pad names: connected / Xbox / PlayStation / Nintendo",
-        "F10 legend keys in their role's colour: on / off",
-        "F12 the pad's button shapes on chips: on / off",
-    };
-    S32 n = (S32)(sizeof lines / sizeof lines[0]);
-    S32 w = 8 * 50 + 16, h = n * 12 + 12;
-    S32 x0 = (S32)Host_LogicalW() - w - 8, y0 = 8;
-    Ui_Panel(x0, y0, x0 + w, y0 + h, PANEL_SHADE_LVL);
-    for (S32 i = 0; i < n; i++)
-        Ui_Small(x0 + 8, y0 + 8 + i * 12, lines[i], i ? INK_CONFIG_MENU : INK_CONFIG_HEAD, 1);
+    DrawTopLine("F1 hide  F2 size  F3 green  F10 key colours  F11 pad names  F12 shapes", INK_CONFIG_MENU);
 }
 
 // The console as lba2cc draws it (CONSOLE.CPP Console_Draw): the top half of the screen,
@@ -1969,6 +1995,7 @@ void Menu_Draw() {
     SyncView();
     g_drawnCount = 0;
     g_pointCount = 0;
+    g_scrollBarShown = false;
     g_helpBox.shown = false;
     g_helpBox.x0 = g_helpBox.y0 = g_helpBox.x1 = g_helpBox.y1 = 0;  // where it was is no help on a new screen
     g_voiceLines = g_voiceNeeded = g_voiceMax = g_voiceWidth = 0;
@@ -1999,14 +2026,11 @@ void Menu_Draw() {
         DrawConsole();
     if (g_val[S_FPS])
         DrawFps();
-    if (sw_overlay)
+    if (g_toast[0] && Host_TimeMs() < g_toastUntil)
+        DrawTopLine(g_toast, INK_CONFIG_HEAD);
+    else if (sw_overlay)
         DrawOverlay();
-    if (g_toast[0] && Host_TimeMs() < g_toastUntil) {
-        S32 w = Ui_SmallWidth(g_toast, 1);
-        S32 x = (S32)Host_LogicalW() - w - 12, yy = (S32)Host_LogicalH() - 14;
-        Box(x - 4, yy - 3, x + w + 3, yy + 10, 0);
-        Ui_Small(x, yy, g_toast, INK_CONFIG_HEAD, 1);
-    }
+    g_wheelView = 0;  // turned where nothing scrolls: dropped
 }
 
 // ───────────────────────────── Switches and state ─────────────────────────────

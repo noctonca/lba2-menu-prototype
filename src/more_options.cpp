@@ -387,7 +387,7 @@ static int TableLines(int *line) {
 // status line at its foot and the scroll bar beside it.
 static void DrawTable(S32 px0, S32 px1, S32 py0, S32 py1) {
     const S32 s = kScale, pitch = 10 * s;
-    const int cursorRow = Cursor();
+    int cursorRow = Cursor();
     int &scroll = Menu_Scroll();  // in lines, the group heads counted
     Ui_Panel(px0, py0, px1, py1, 15);  // as the band (decided 2026-11-03)
 
@@ -406,8 +406,27 @@ static void DrawTable(S32 px0, S32 px1, S32 py0, S32 py1) {
     for (int k = 0; k < total; k++)
         if (line[k] == cursorRow)
             cl = k;
-    // Keep the cursor in view, and its group's head when it is the group's first row.
-    int want = line[cl - 1] < 0 ? cl - 1 : cl;
+    if (int want = Menu_WheelView(scroll, visible < total ? visible : total, total, cl); want != cl) {
+        // On a row, not a head, and one whose head (when it is its group's first) is in view
+        // too, or the rule below would turn the view back.
+        const int last = scroll + (visible < total ? visible : total) - 1;
+        if (want <= scroll)
+            while (want < last && (line[want] < 0 || (want > 0 && line[want - 1] < 0 && want - 1 < scroll)))
+                want++;
+        else
+            while (want > scroll && line[want] < 0)
+                want--;
+        if (line[want] >= 0 && line[want] != cursorRow) {
+            Menu_CursorTo(line[want]);
+            cursorRow = line[want];
+            cl = want;
+        }
+    }
+    // Keep the cursor in view, and its group's head when it is the group's first row and
+    // the cursor has just come to it (each frame, it would turn back the wheel's view).
+    static int s_lastCursor = -1;
+    int want = cl > 0 && line[cl - 1] < 0 && cursorRow != s_lastCursor ? cl - 1 : cl;
+    s_lastCursor = cursorRow;
     if (want < scroll)
         scroll = want;
     if (cl >= scroll + visible)

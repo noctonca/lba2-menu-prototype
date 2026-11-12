@@ -104,6 +104,7 @@ U32 Host_PhysW() { return s_physW; }
 U32 Host_PhysH() { return s_physH; }
 
 static void PadRemoved(uint32_t id);
+static void PaintOverlay(U32 *argb, U32 pitch, U32 w, U32 h, const U8 *palette);
 
 // Button presses and releases counted as they arrive: LIB386's Click says only what is held
 // when the frame reads it, so a click quicker than a frame (a browser's, a touchpad tap) was lost.
@@ -506,7 +507,7 @@ bool Host_Init(const HostConfig &cfg) {
 
     SetFont(font, 2, 8);  // as PERSO.CPP sets it
     ScreenFont_Init();
-    SetOverlayPrePresentCallback(ScreenFont_Paint);  // after the smooth picture's hook
+    SetOverlayPrePresentCallback(PaintOverlay);  // after the smooth picture's hook
     Rnd_Seed(1997);       // the plasma's start; fixed so captures repeat
     GamePieces_InitPlasma();
     Host_UseMenuPalette();
@@ -844,6 +845,88 @@ void Host_InjectClick(bool right) {
 void Host_InjectWheel(S32 notches) { s_injWheel += notches; }
 void Host_Pointer(HostPointer *out) { *out = s_ptr; }
 
+// The pointer's arrow, by lba2cc's menu rules (LIB386 MOUSE.CPP): shown once a real mouse
+// moves, hidden after 3 s still and while a finger points. Painted on the screen's frame
+// after the screen font (PaintOverlay), not on the canvas: the font leaves out a word whose
+// canvas changed under it, and the picture's present does not go through LIB386's flip,
+// which draws the arrow in the game.
+enum { POINTER_IDLE_HIDE_MS = 3000 };
+extern U8 BinGphMouse[];  // LIB386 SYSTEM/MOUSEDAT.CPP: lba2cc's arrow
+static U32 s_ptrActiveAt;
+static bool s_ptrSeen;
+
+bool Host_PointerShown() {
+    return s_ptrSeen && !LastInputWasTouch && Host_TimeMs() - s_ptrActiveAt < POINTER_IDLE_HIDE_MS;
+}
+
+// The arrow at the canvas's whole step, as the canvas is shown. Its pixels are found by
+// drawing it on the canvas twice over two fills (a pixel it leaves is the fill); the canvas
+// is put back after.
+static void PaintPointer(U32 *argb, U32 pitch, U32 w, U32 h, const U8 *palette) {
+    if (!Host_PointerShown())
+        return;
+    S32 gx0, gy0, gx1, gy1;
+    GetBoxGraph(0, &gx0, &gy0, &gx1, &gy1, BinGphMouse);
+    const S32 x0 = s_ptr.x + gx0, y0 = s_ptr.y + gy0;
+    const S32 bw = gx1 - gx0 + 1, bh = gy1 - gy0 + 1;
+    enum { ARROW_MAX = 64 };
+    if (bw <= 0 || bh <= 0 || bw > ARROW_MAX || bh > ARROW_MAX)
+        return;
+    static U8 saved[ARROW_MAX][ARROW_MAX], pass[2][ARROW_MAX][ARROW_MAX];
+    const S32 cx0 = ClipXMin, cy0 = ClipYMin, cx1 = ClipXMax, cy1 = ClipYMax;
+    ClipXMin = 0, ClipYMin = 0, ClipXMax = (S32)s_logW - 1, ClipYMax = (S32)s_logH - 1;
+    auto at = [](S32 x, S32 y) -> U8 & { return ((U8 *)Log)[TabOffLine[y] + x]; };
+    auto inside = [](S32 x, S32 y) { return x >= 0 && y >= 0 && x < (S32)s_logW && y < (S32)s_logH; };
+    for (S32 j = 0; j < bh; j++)
+        for (S32 i = 0; i < bw; i++)
+            if (inside(x0 + i, y0 + j))
+                saved[j][i] = at(x0 + i, y0 + j);
+    for (int p = 0; p < 2; p++) {
+        for (S32 j = 0; j < bh; j++)
+            for (S32 i = 0; i < bw; i++)
+                if (inside(x0 + i, y0 + j))
+                    at(x0 + i, y0 + j) = (U8)(254 + p);
+        AffGraph(0, s_ptr.x, s_ptr.y, BinGphMouse);
+        for (S32 j = 0; j < bh; j++)
+            for (S32 i = 0; i < bw; i++)
+                pass[p][j][i] = inside(x0 + i, y0 + j) ? at(x0 + i, y0 + j) : (U8)(254 + p);
+    }
+    for (S32 j = 0; j < bh; j++)
+        for (S32 i = 0; i < bw; i++)
+            if (inside(x0 + i, y0 + j))
+                at(x0 + i, y0 + j) = saved[j][i];
+    ClipXMin = cx0, ClipYMin = cy0, ClipXMax = cx1, ClipYMax = cy1;
+
+    U32 k = w / s_logW < h / s_logH ? w / s_logW : h / s_logH;
+    if (k < 1)
+        k = 1;
+    const S32 bx = (S32)(w - k * s_logW) / 2, by = (S32)(h - k * s_logH) / 2;
+    for (S32 j = 0; j < bh; j++)
+        for (S32 i = 0; i < bw; i++) {
+            if (pass[0][j][i] != pass[1][j][i])
+                continue;  // the fill showed through: not the arrow's
+            const U8 *rgb = palette + pass[0][j][i] * 3;
+            const U32 c = 0xff000000u | (U32)rgb[0] << 16 | (U32)rgb[1] << 8 | rgb[2];
+            for (U32 dy = 0; dy < k; dy++) {
+                const S32 y = by + (y0 + j) * (S32)k + (S32)dy;
+                if (y < 0 || y >= (S32)h)
+                    continue;
+                U32 *row = (U32 *)((U8 *)argb + (size_t)y * pitch);
+                for (U32 dx = 0; dx < k; dx++) {
+                    const S32 x = bx + (x0 + i) * (S32)k + (S32)dx;
+                    if (x >= 0 && x < (S32)w)
+                        row[x] = c;
+                }
+            }
+        }
+}
+
+// What is painted on the screen's frame over the canvas: the screen font, then the arrow.
+static void PaintOverlay(U32 *argb, U32 pitch, U32 w, U32 h, const U8 *palette) {
+    ScreenFont_Paint(argb, pitch, w, h, palette);
+    PaintPointer(argb, pitch, w, h, palette);
+}
+
 static void ReadPointer() {
     const bool realMove = MouseConsumeMotionFlag();
     if (realMove)
@@ -874,6 +957,10 @@ static void ReadPointer() {
     s_injWheel = 0;
     if (s_ptr.moved || s_ptr.pressed || s_ptr.rightPressed || s_ptr.wheel)
         s_lastPad = false;  // the legend names keys again
+    if (!s_ptrInjected && (realMove || s_ptr.pressed || s_ptr.rightPressed || s_ptr.wheel)) {
+        s_ptrSeen = true;
+        s_ptrActiveAt = Host_TimeMs();
+    }
 }
 
 bool Host_BeginFrame() {
@@ -956,7 +1043,7 @@ bool Host_ShotScreen(const char *path) {
         argb[i] = 0xff000000u | (U32)rgb[0] << 16 | (U32)rgb[1] << 8 | rgb[2];
     }
     ScreenPicture_PaintSmooth(argb, w * 4, w, h, s_palCurrent, s_menuImage);
-    ScreenFont_Paint(argb, w * 4, w, h, s_palCurrent);
+    PaintOverlay(argb, w * 4, w, h, s_palCurrent);
     bool ok = Shot_WriteArgb(path, w, h, argb);
     free(idx);
     free(argb);

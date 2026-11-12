@@ -103,7 +103,11 @@ The mouse works as lba2cc's game menu has it: moving it puts the cursor on the
 row, chip or answer under it, and a click (press and let go on the same thing)
 does what Enter does. A value's arrows step it, a slider takes the value where
 it is clicked or dragged, and a legend entry presses its key (Back, Defaults,
-Keyboard and the rest). The right button is Esc, the wheel Up and Down. While
+Keyboard and the rest). The right button is Esc. The wheel scrolls a page that
+has a scroll bar, a row a notch, and takes the cursor along only when it would
+leave the view; on a page that fits, it does nothing. lba2cc's arrow shows once
+the mouse moves and hides after 3 s still, painted over the finished frame (so
+`shotscreen` shows it, `shot` does not). While
 the game waits for a key to bind, only the right button and the legend's
 Cancel act. The targets are placed as each page draws, so a click can't miss
 what is drawn.
@@ -112,7 +116,7 @@ what is drawn.
 
 The screen size changes in place, as lba2cc's own resolution switch does it:
 the page, the cursor and the settings stay as they were, and a
-note at the bottom right says the new size and its logical canvas.
+note in the top margin says the new size and its logical canvas.
 
 - F2 steps to the next size in the list, Shift+F2 back to the previous one
   (640x480, 768x480, 1024x480, 1280x720, 1280x800, 1920x1080, 2400x1080,
@@ -154,7 +158,7 @@ own keys:
 
 | Key | What it does |
 | --- | --- |
-| F1 | this list on screen (switch `overlay`) |
+| F1 | these keys on one line in the top margin (switch `overlay`); a switch's note takes the line for 2 s |
 | F2 | the next screen size; Shift+F2 the previous (see Screen sizes) |
 | F3 | the green current-value plasma on the chosen preset, besides its "(current)" (switch `greencurrent`, off at start) |
 | F11 | steps the Button names row: Auto / Xbox / PlayStation / Nintendo (switch `padnames`) |
@@ -369,8 +373,9 @@ heads are a line above the rows; `margin:` nothing on a wide page is drawn in
 its margins (32 at the sides, 24 at the top and bottom); `trailing:` wide, what
 a row shows on the right ends 24 in from its right edge; `pitch:` rows in a pane
 are 56 apart and 50 tall; `current:` at most one current-value row in a pane;
-`value:` every setting row shows its value; `return:` the wide layout shows no
-Return row (Esc goes back); `proximity:` a pane's last row is
+`value:` every setting row shows its value; `return:` no layout shows a
+Return row (Esc goes back; the one column put a title in its place on
+2026-11-12, once it had a legend); `proximity:` a pane's last row is
 further from the help below than rows are from each other, a column head above
 the rows is nearer them than the row above it, and a column head inside a row
 is in its pane's first row, above its own chip, and clear of the action's name.

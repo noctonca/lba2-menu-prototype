@@ -90,6 +90,9 @@ struct HostPointer {
     S32 wheel;          // notches turned, up positive
 };
 void Host_Pointer(HostPointer *out);
+// Whether lba2cc's arrow is shown where the pointer is: a real mouse moved in the last 3 s.
+// The host paints it over the frame as it is presented.
+bool Host_PointerShown();
 // A script's mouse: `mouse X Y` moves it, `click [right]` presses and lets go a frame
 // later, `wheel N` turns it.
 void Host_InjectPointer(S32 x, S32 y);
