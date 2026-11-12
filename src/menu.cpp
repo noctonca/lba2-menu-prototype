@@ -1061,11 +1061,24 @@ static int BarFirstAt(S32 y) {
     return first < 0 ? 0 : first > b.total - b.visible ? b.total - b.visible : first;
 }
 
-// A slider's value where the pointer is along its bar.
+// A slider moves by a drag, never by a press: the 1997 slider is its whole row, label and
+// all, so a press set Master volume from 100 to 5 when it landed on the word (2026-11-12).
+// Past a few pixels sideways the value follows the pointer by how far it went, from where it
+// was, across the row's width for the whole range.
+enum { SLIDE_START_PX = 6 };
+static S32 g_slideFromX, g_slideFromValue;
+static bool g_sliding;
+
 static void SlideTo(const PointTarget &p, S32 x) {
     const Setting &st = kSettings[p.a];
+    if (!g_sliding) {
+        if (x - g_slideFromX < SLIDE_START_PX && g_slideFromX - x < SLIDE_START_PX)
+            return;
+        g_sliding = true;
+    }
     S32 w = p.x1 - p.x0;
-    int v = w > 0 ? (int)(((x - p.x0) * st.max + w / 2) / w) : 0;
+    int v = w > 0 ? (int)(g_slideFromValue + ((x - g_slideFromX) * st.max + (x >= g_slideFromX ? w / 2 : -w / 2)) / w)
+                  : g_slideFromValue;
     v = v < 0 ? 0 : v > st.max ? st.max : v;
     if (v != g_val[p.a]) {
         g_val[p.a] = v;
@@ -1109,8 +1122,11 @@ static void UpdatePointer() {
         if (at) {
             g_press = *at;
             PointTo(*at);
-            if (at->kind == POINT_SLIDER)
-                SlideTo(*at, in.x);
+            if (at->kind == POINT_SLIDER) {
+                g_slideFromX = in.x;
+                g_slideFromValue = g_val[at->a];
+                g_sliding = false;
+            }
             if (at->kind == POINT_SCROLL && g_bar.shown) {
                 if (in.y < g_bar.ty0)  // the groove above the thumb: a viewful up
                     g_scrollTo = g_bar.first > g_bar.visible ? g_bar.first - g_bar.visible : 0;

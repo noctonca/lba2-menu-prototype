@@ -1691,6 +1691,7 @@ struct Walker {
         Languages();
         PadNames();
         Pointer();
+        Sliders();
         Wheel();
         PointerReach();
     }
@@ -1705,6 +1706,51 @@ struct Walker {
         Host_InjectClick(false);
         Frame();
         Frame();
+    }
+
+    void Button(bool down) {
+        path.push_back(down ? "mousedown" : "mouseup");
+        Host_InjectButton(down);
+        Frame();
+    }
+
+    // A slider by the pointer (2026-11-12): the 1997 slider is its whole row, so a click on
+    // its label must not set it (it set Master volume from 100 to 5), and a drag along the
+    // row must move it.
+    void Sliders() {
+        if (opt->only)
+            return;
+        Fresh("Sound");
+        const MenuPoint *pts;
+        int n = Menu_Points(&pts);
+        std::vector<MenuPoint> rowTargets;
+        for (int i = 0; i < n; i++)
+            if (pts[i].kind == POINT_ROW)
+                rowTargets.push_back(pts[i]);
+        int sliders = 0;
+        for (const MenuPoint &row : rowTargets) {
+            const S32 y = (row.y0 + row.y1) / 2, x = row.x0 + 24;  // on the label's first letters
+            Mouse(x, y);
+            n = Menu_Points(&pts);
+            bool isSlider = false;
+            for (int i = 0; i < n; i++)
+                isSlider = isSlider || (pts[i].kind == POINT_SLIDER && pts[i].b == row.b);
+            if (!isSlider)
+                continue;
+            sliders++;
+            const std::string label = Menu_CursorLabel(), v0 = Menu_CursorValue();
+            Click();
+            Expect(Menu_CursorValue() == v0, Fmt("slider: a click on %s's label set it from %s to %s", Repr(label.c_str()).c_str(),
+                                                v0.c_str(), Menu_CursorValue()));
+            const S32 to = atoi(v0.c_str()) > 50 ? x : row.x1 - 24, from = to == x ? row.x1 - 24 : x;
+            Mouse(from, y);
+            Button(true);
+            Mouse((from + to) / 2, y);
+            Mouse(to, y);
+            Button(false);
+            Expect(Menu_CursorValue() != v0, Fmt("slider: a drag along %s left it at %s", Repr(label.c_str()).c_str(), v0.c_str()));
+        }
+        Expect(sliders > 0, "slider: no slider on Sound takes the pointer");
     }
 
     // Every row by the pointer alone (2026-11-12): a finger has no keys and no wheel, so on

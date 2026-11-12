@@ -85,7 +85,7 @@ DrawnRow &Menu_Record(const char *pane, const char *label, const char *value, Ro
 //   POINT_CHIP    a binding's chip: a = row, b = chip. Hover puts the cursor on it, a click is Enter
 //   POINT_ANSWER  a question's answer: a = answer. Hover chooses it, a click is Enter
 //   POINT_STEP    a value's arrow: a = -1 or +1, b = row. A click is Left or Right
-//   POINT_SLIDER  a slider's bar: a = setting, b = row. A press or a drag sets the value there
+//   POINT_SLIDER  a slider's row: a = setting, b = row. A drag moves the value by how far it goes; a press alone does not
 //   POINT_KEY     a legend entry: a = the UiKey it names. A click presses it
 enum PointKind { POINT_ROW, POINT_CHIP, POINT_ANSWER, POINT_STEP, POINT_SLIDER, POINT_KEY, POINT_SCROLL };
 void Menu_Point(PointKind kind, S32 x0, S32 y0, S32 x1, S32 y1, int a, int b = 0);

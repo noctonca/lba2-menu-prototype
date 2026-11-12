@@ -101,9 +101,12 @@ the engine does).
 
 The mouse works as lba2cc's game menu has it: moving it puts the cursor on the
 row, chip or answer under it, and a click (press and let go on the same thing)
-does what Enter does. A value's arrows step it, a slider takes the value where
-it is clicked or dragged, and a legend entry presses its key (Back, Defaults,
-Keyboard and the rest). The right button is Esc. The wheel scrolls a page that
+does what Enter does. A value's arrows step it, a slider moves by a drag (by
+how far it goes; a click alone leaves it, as the 1997 slider is its whole row,
+label and all), and a legend entry presses its key (Back, Defaults, Keyboard
+and the rest). The right button is Esc. Once the mouse or a finger was used
+last, a Back button sits on the title's line (see docs/UX.md); a key or a pad's
+button takes it away. The wheel scrolls a page that
 has a scroll bar, a row a notch, and takes the cursor along only when it would
 leave the view; on a page that fits, it does nothing. The scroll bar takes the
 pointer too: drag its thumb, or tap the groove above or below it to move a
@@ -251,7 +254,7 @@ Every run can be steered and read back without a person at the keys.
 Commands, one per line: `key <up|down|left|right|enter|esc|tab|del|f1..f12> [count]`,
 `press <key>` (a raw key for rebinding: an SDL name such as `J`, `Left Alt` or
 `Keypad 5`, or `pad:a`, `pad:lb`, `pad:lstick-up` ...),
-`wait <frames>`, `mouse <x> <y>` (logical pixels), `click [right]`, `wheel <notches>`, `mousedown`, `mouseup`, `state`, `measure`, `widths <file> [voice width]`, `shot <path.png> [scale]`, `switch <name> <value>`,
+`wait <frames>`, `mouse <x> <y>` (logical pixels), `click [right]`, `tap <x> <y>` (a click as touch), `wheel <notches>`, `mousedown`, `mouseup`, `state`, `measure`, `widths <file> [voice width]`, `shot <path.png> [scale]`, `switch <name> <value>`,
 `set <setting> <value>`, `open <page name>`, `size <WxH>`, `quit`.
 
 `measure` prints the width in the game font of every setting's label, its
