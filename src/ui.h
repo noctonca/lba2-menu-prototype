@@ -85,7 +85,15 @@ enum { CHIP_AND_GAP = 3 };  // between the two chips, a step
 // pad: the family whose button the chip names (1 Xbox, 2 PlayStation, 3 Nintendo), drawn
 // as the pad shows it (pad_icons.h); 0 for a key.
 S32 Ui_ChipWidth(const char *key, S32 scale, int pad = 0);
-S32 Ui_Chip(S32 x, S32 y, const char *key, S32 scale, bool lit = false, int pad = 0);
+// roles: what a legend's key does, CHIP_ROLE_* for the key, or for a key of two keys the
+// first's in bits 0-1 and the second's in bits 2-3. With g_roleInk the letters take the
+// role's colour, as an Xbox pad prints A green and B red; a pad's button that has its own
+// colour keeps it.
+enum { CHIP_ROLE_NONE = 0, CHIP_ROLE_CONFIRM = 1, CHIP_ROLE_BACK = 2 };
+extern int g_roleInk;  // 1: legend keys in their role's colour; switch roleink, F10
+S32 Ui_Chip(S32 x, S32 y, const char *key, S32 scale, bool lit = false, int pad = 0, int roles = 0);
+// A colour a role gives a chip's letters (the self test finds a chip's ink by colour).
+bool Ui_IsRoleInk(U8 c);
 
 // Every chip drawn this frame with its whole name inside, for the self test: the frame's
 // box, the name, whether it is on the plain shade (its letters in INK_CONFIG_MENU) and

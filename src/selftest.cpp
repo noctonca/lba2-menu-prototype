@@ -184,6 +184,7 @@ static void Check(std::vector<std::string> *found) {
         for (S32 y = c.y0 + 1; y < c.y1; y++)
             for (S32 x = c.x0 + 1; x < c.x1; x++)
                 if (((const U8 *)Log)[TabOffLine[y] + x] == INK_CONFIG_MENU ||
+                    Ui_IsRoleInk(((const U8 *)Log)[TabOffLine[y] + x]) ||
                     (c.pad && PadIcons_IsColour(((const U8 *)Log)[TabOffLine[y] + x])))
                     ix0 = std::min(ix0, x), ix1 = std::max(ix1, x), iy0 = std::min(iy0, y), iy1 = std::max(iy1, y);
         if (ix1 < 0)

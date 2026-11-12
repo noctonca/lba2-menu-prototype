@@ -1554,10 +1554,32 @@ static void LegendRecord(int i, const char *key, const char *word) {
     strncat(g_legend, item, sizeof g_legend - strlen(g_legend) - 1);
 }
 
+// What a legend's key does, from its keyboard name (before a pad's names replace it):
+// Enter confirms, Esc goes back. The wait for a pad's button names its Start, which
+// cancels. Ui_Chip's roles: a key of two keys gives each its own.
+static int LegendRoles(const char *raw, const char *word) {
+    int roles = 0, part = 0;
+    for (const char *p = raw; part < 2; part++) {
+        const char *end = strchr(p, CHIP_AND[0]);
+        const size_t n = end ? (size_t)(end - p) : strlen(p);
+        const int role = n == 5 && !strncmp(p, "Enter", 5) ? CHIP_ROLE_CONFIRM
+                         : n == 3 && !strncmp(p, "Esc", 3) ? CHIP_ROLE_BACK
+                                                           : CHIP_ROLE_NONE;
+        roles |= role << (2 * part);
+        if (!end)
+            break;
+        p = end + 1;
+    }
+    if (!roles && !strcmp(word, "Cancel"))
+        roles = CHIP_ROLE_BACK;
+    return roles;
+}
+
 // In a row: chip, word, chip, word, centred on yc.
 // Stacked (the review card's legend): one key a line from y0, the chips ending on
 // one column and the words starting on the next, so the words read as a list.
-static void DrawLegendStacked(S32 x0, S32 y0, const char **keys, const char **words, int n, S32 scale) {
+static void DrawLegendStacked(S32 x0, S32 y0, const char **keys, const char **raws, const char **words, int n,
+                              S32 scale) {
     g_legend[0] = 0;
     const int per = LegendPerColumn(n);
     S32 chipW = 0, wordW = 0, x = x0 - LEGEND_COLUMN_GAP * scale;
@@ -1569,7 +1591,7 @@ static void DrawLegendStacked(S32 x0, S32 y0, const char **keys, const char **wo
         }
         S32 y = y0 + (i % per) * pitch;
         S32 c = Ui_ChipWidth(keys[i], scale, Bindings_LegendPadFamily());
-        Ui_Chip(x + chipW - c, y, keys[i], scale, false, Bindings_LegendPadFamily());
+        Ui_Chip(x + chipW - c, y, keys[i], scale, false, Bindings_LegendPadFamily(), LegendRoles(raws[i], words[i]));
         Ui_Word(x + chipW + 4 * scale, y + chipH / 2 - 4 * scale, LegendWord(words[i]), INK_CONFIG_MENU, scale);
         LegendRecord(i, keys[i], words[i]);
         LegendPoint(x + chipW - c, y - 1, x + chipW + 4 * scale + Ui_WordWidth(LegendWord(words[i]), scale), y + chipH,
@@ -1647,7 +1669,8 @@ void Menu_DrawDialogue(const char **keys, const char **words, int nk) {
 }
 
 // In a row: chip, word, then the next, from x; returns the width.
-static S32 DrawLegendRow(S32 x, S32 y, const char **keys, const char **words, int n, S32 scale, bool draw) {
+static S32 DrawLegendRow(S32 x, S32 y, const char **keys, const char **raws, const char **words, int n, S32 scale,
+                         bool draw) {
     if (draw)
         g_legend[0] = 0;
     S32 w = 0;
@@ -1656,7 +1679,7 @@ static S32 DrawLegendRow(S32 x, S32 y, const char **keys, const char **words, in
             w += 12 * scale;
         S32 c = Ui_ChipWidth(keys[i], scale, Bindings_LegendPadFamily());
         if (draw) {
-            Ui_Chip(x + w, y, keys[i], scale, false, Bindings_LegendPadFamily());
+            Ui_Chip(x + w, y, keys[i], scale, false, Bindings_LegendPadFamily(), LegendRoles(raws[i], words[i]));
             Ui_Word(x + w + c + 4 * scale, y + 2 * scale, LegendWord(words[i]), INK_CONFIG_MENU, scale);
             LegendRecord(i, keys[i], words[i]);
             LegendPoint(x + w, y - 1, x + w + c + 4 * scale + Ui_WordWidth(LegendWord(words[i]), scale), y + 12 * scale,
@@ -1688,10 +1711,10 @@ void Menu_DrawDialogueIn(S32 x0, S32 y0, S32 x1, S32 y1, const char **keysIn, co
         // The 8x8 font at 2x when the line fits, as the wide band has it; 1x, the 1997 key
         // screen's size, when it does not.
         S32 scale = 2;
-        if (DrawLegendRow(0, 0, keys, words, nk, scale, false) > x1 - x0 - 32)
+        if (DrawLegendRow(0, 0, keys, keysIn, words, nk, scale, false) > x1 - x0 - 32)
             scale = 1;
-        S32 w = DrawLegendRow(0, 0, keys, words, nk, scale, false);
-        DrawLegendRow(x1 - 16 - w + 1, y1 - 8 - 12 * scale + 1, keys, words, nk, scale, true);
+        S32 w = DrawLegendRow(0, 0, keys, keysIn, words, nk, scale, false);
+        DrawLegendRow(x1 - 16 - w + 1, y1 - 8 - 12 * scale + 1, keys, keysIn, words, nk, scale, true);
     } else {
         g_legend[0] = 0;
     }
@@ -1851,7 +1874,7 @@ void Menu_DrawFoot(const char **keysIn, const char **words, int nk) {
     if (markX1 > legendX - 8)
         markX1 = legendX - 8;
     DrawPageMark(markX1, bandY1);
-    DrawLegendStacked(bx1 - 24 - legendW + 1, bandY0 + 7, keys, words, nk, chip);
+    DrawLegendStacked(bx1 - 24 - legendW + 1, bandY0 + 7, keys, keysIn, words, nk, chip);
     g_helpBox.shown = true;
     g_helpBox.kind = "band";
     g_helpBox.x0 = bx0; g_helpBox.y0 = bandY0; g_helpBox.x1 = bx1; g_helpBox.y1 = bandY1;
@@ -1864,6 +1887,7 @@ static void DrawOverlay() {
         "Drag the window's edge: any screen size",
         "F3 green plasma on the chosen preset: off / on",
         "F11 pad names: connected / Xbox / PlayStation / Nintendo",
+        "F10 legend keys in their role's colour: off / on",
         "F12 the pad's button shapes on chips: on / off",
     };
     S32 n = (S32)(sizeof lines / sizeof lines[0]);
@@ -1999,6 +2023,7 @@ static const SwitchDef kSwitches[] = {
     {"whole", &sw_whole, 0, 1, 0},
     {"greencurrent", &sw_greencurrent, 0, 1, 0},
     {"padicons", &g_padIcons, 0, 1, 1},  // shapes for the pad's buttons on chips
+    {"roleink", &g_roleInk, 0, 1, 0},    // Enter green, Esc red in the legend
 };
 
 bool Menu_SetSwitch(const char *name, int v) {

@@ -302,11 +302,19 @@ S32 Ui_ChipWidth(const char *key, S32 scale, int pad) {
     return PadIcons_Width(key, scale, pad) + 8 * scale;
 }
 
-S32 Ui_Chip(S32 x, S32 y, const char *key, S32 scale, bool lit, int pad) {
+int g_roleInk = 0;
+
+// The Xbox pad's A green and B red (pad_icons.cpp), so a keyboard's Enter and Esc read as
+// the pad's A and B do.
+enum : U8 { INK_ROLE_CONFIRM = 140, INK_ROLE_BACK = 74 };
+
+bool Ui_IsRoleInk(U8 c) { return c == INK_ROLE_CONFIRM || c == INK_ROLE_BACK; }
+
+S32 Ui_Chip(S32 x, S32 y, const char *key, S32 scale, bool lit, int pad, int roles) {
     if (const char *and_ = strchr(key, CHIP_AND[0])) {
         std::string first(key, and_ - key);
-        S32 w = Ui_Chip(x, y, first.c_str(), scale, lit, pad) + CHIP_AND_GAP * scale;
-        return w + Ui_Chip(x + w, y, and_ + 1, scale, lit, pad);
+        S32 w = Ui_Chip(x, y, first.c_str(), scale, lit, pad, roles & 3) + CHIP_AND_GAP * scale;
+        return w + Ui_Chip(x + w, y, and_ + 1, scale, lit, pad, roles >> 2 & 3);
     }
     S32 w = Ui_ChipWidth(key, scale, pad), h = 8 * scale + 4 * scale;
     S32 x1 = x + w - 1, y1 = y + h - 1;
@@ -321,7 +329,12 @@ S32 Ui_Chip(S32 x, S32 y, const char *key, S32 scale, bool lit, int pad) {
     // The letters' ink in the middle, not their cells (EPmager, 2026-11-12).
     S32 tx, ty;
     CentreInk(x, y, w, h, key, scale, pad, &tx, &ty);
-    PadIcons_Text(tx, ty, key, lit ? INK_WHITE : INK_CONFIG_MENU, scale, !lit, pad);
+    U8 ink = lit ? INK_WHITE : INK_CONFIG_MENU;
+    if (!lit && g_roleInk && roles == CHIP_ROLE_CONFIRM)
+        ink = INK_ROLE_CONFIRM;
+    else if (!lit && g_roleInk && roles == CHIP_ROLE_BACK)
+        ink = INK_ROLE_BACK;
+    PadIcons_Text(tx, ty, key, ink, scale, !lit, pad);
     NoteChip(x, y, x1, y1, key, scale, !lit, true, pad);
     return w;
 }
