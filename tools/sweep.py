@@ -124,6 +124,19 @@ def run_scripts(binary, size, combo, only, shots):
             st = json.loads(l[6:])
             for prob in check(st):
                 found[f"{size} {label} [{st['page']}] {prob}"] = None
+    if not only or only == MORE_OPTIONS_PAGE:
+        # The table as the first thing drawn after a start shows its defaults, nothing
+        # changed (its values were once set on first read, and it drew zeros).
+        q = subprocess.run([binary, "--headless", "--size", size, "--script", "/dev/stdin"],
+                           input=f"open {MORE_OPTIONS_PAGE}\nwait 1\nstate\nquit\n",
+                           capture_output=True, text=True, timeout=60)
+        for l in q.stdout.splitlines():
+            if l.startswith("state "):
+                lines = json.loads(l[6:]).get("more_options", {}).get("lines", [])
+                changed = [x["text"] for x in lines if x.get("changed")]
+                if not lines or changed:
+                    found[f"{size} fresh start [{MORE_OPTIONS_PAGE}] {len(changed)} rows changed "
+                          f"before any change: {changed[:3]}"] = None
     return found
 
 def head_row(h, rows):

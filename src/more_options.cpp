@@ -157,46 +157,35 @@ static bool IsExperimental(int i) {
 static const char *kTag = "experimental";
 
 static int g_val[TUNING_COUNT];
-static bool g_valReady;
-
-static void Ready() {
-    if (!g_valReady) {
-        MoreOptions_Defaults();
-        g_valReady = true;
-    }
-}
+// The defaults from the start: filled on first use, the table drew zeros, every row
+// "changed", when it was the first thing to read them.
+static const bool s_valsSet = (MoreOptions_Defaults(), true);
 
 int MoreOptions_Count() { return TUNING_COUNT; }
 const char *MoreOptions_Name(int i) { return kTuning[i].name; }
 void MoreOptions_Get(int *out) {
-    Ready();
     memcpy(out, g_val, sizeof g_val);
 }
 void MoreOptions_Put(const int *in) {
     memcpy(g_val, in, sizeof g_val);
-    g_valReady = true;
 }
 bool MoreOptions_PresetsSet(int i) { return !kGroups[kTuning[i].group].player; }
 void MoreOptions_Defaults() {
     for (int i = 0; i < TUNING_COUNT; i++)
         g_val[i] = kTuning[i].def;
-    g_valReady = true;
 }
 void MoreOptions_PresetDefaults() {
-    Ready();
     for (int i = 0; i < TUNING_COUNT; i++)
         if (MoreOptions_PresetsSet(i))
             g_val[i] = kTuning[i].def;
 }
 bool MoreOptions_AnyChanged() {
-    Ready();
     for (int i = 0; i < TUNING_COUNT; i++)
         if (g_val[i] != kTuning[i].def)
             return true;
     return false;
 }
 bool MoreOptions_PresetChanged() {
-    Ready();
     for (int i = 0; i < TUNING_COUNT; i++)
         if (MoreOptions_PresetsSet(i) && g_val[i] != kTuning[i].def)
             return true;
@@ -204,7 +193,6 @@ bool MoreOptions_PresetChanged() {
 }
 
 bool MoreOptions_Set(const char *name, int value) {
-    Ready();
     for (int i = 0; i < TUNING_COUNT; i++) {
         if (strcmp(kTuning[i].name, name) != 0)
             continue;
