@@ -67,21 +67,27 @@ int ScreenFont_Face() { return s_face; }
 
 static int FaceIndex() { return 0; }
 
-// Advance of c (and kerning before the next letter) in logical pixels.
-static float Advance(int f, U8 c, U8 next) {
+// The narrowest space in small text, in logical pixels. Zilla's own is 2 at the 1x size
+// (capitals 7 tall), and the letters' soft edges either side close it at 640x480.
+static const float SMALL_SPACE_MIN = 3.0f;
+
+// Advance of c (and kerning before the next letter) in logical pixels, before scale.
+static float Advance(int f, U8 c, U8 next, float scale = 1.0f) {
     int aw, lsb;
     stbtt_GetCodepointHMetrics(&s_font[f], Unicode(c), &aw, &lsb);
     float a = aw * s_unit[f];
+    if (c == ' ' && scale < 1.0f && a * scale < SMALL_SPACE_MIN)
+        a = SMALL_SPACE_MIN / scale;
     if (next)
         a += stbtt_GetCodepointKernAdvance(&s_font[f], Unicode(c), Unicode(next)) * s_unit[f];
     return a;
 }
 
-static float WidthF(const char *s) {
+static float WidthF(const char *s, float scale = 1.0f) {
     const int f = FaceIndex();
     float w = 0;
     for (const U8 *p = (const U8 *)s; *p; p++)
-        w += Advance(f, *p, p[1]);
+        w += Advance(f, *p, p[1], scale);
     return w;
 }
 
@@ -165,7 +171,7 @@ static void Queue(S32 x, S32 y, const char *s, U8 ink, S32 width, float scale = 
 
 void ScreenFont_Text(S32 x, S32 y, const char *s, U8 ink) { Queue(x, y, s, ink, ScreenFont_Width(s)); }
 
-S32 ScreenFont_SmallWidth(const char *s, S32 cap) { return (S32)ceilf(WidthF(s) * SmallScale(cap)); }
+S32 ScreenFont_SmallWidth(const char *s, S32 cap) { return (S32)ceilf(WidthF(s, SmallScale(cap)) * SmallScale(cap)); }
 
 void ScreenFont_SmallText(S32 x, S32 y, const char *s, U8 ink, S32 cap) {
     // Descenders reach about a third of the capitals' height below the baseline.
@@ -270,7 +276,7 @@ void ScreenFont_Paint(U32 *argb, U32 pitch, U32 w, U32 h, const U8 *palette) {
                     dst[x] = 0xff000000u | r << 16 | gg << 8 | b;
                 }
             }
-            pen += Advance(f, *p, p[1]) * k * it.scale;
+            pen += Advance(f, *p, p[1], it.scale) * k * it.scale;
         }
     }
 }
