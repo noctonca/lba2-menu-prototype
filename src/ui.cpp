@@ -208,22 +208,22 @@ void Ui_Steps(S32 xRight, S32 yc, S32 count, S32 lit, S32 *outLeft) {
     }
 }
 
-S32 Ui_WordWidth(const char *s, S32 scale) {
-    return ScreenFont_On() ? ScreenFont_SmallWidth(s, 7 * scale) : Ui_SmallWidth(s, scale);
-}
-
-void Ui_Word(S32 x, S32 y, const char *s, U8 colour, S32 scale) {
-    if (ScreenFont_On())
-        ScreenFont_SmallText(x, y, s, colour, 7 * scale);
-    else
-        Ui_Small(x, y, s, colour, scale);
-}
-
 S32 Ui_SmallWidth(const char *s, S32 scale) {
-    return (S32)strlen(s) * 8 * scale;
+    return ScreenFont_On() ? ScreenFont_SmallWidth(s, 7 * scale) : Ui_Font8Width(s, scale);
 }
 
 void Ui_Small(S32 x, S32 y, const char *s, U8 colour, S32 scale) {
+    if (ScreenFont_On())
+        ScreenFont_SmallText(x, y, s, colour, 7 * scale);
+    else
+        Ui_Font8(x, y, s, colour, scale);
+}
+
+S32 Ui_Font8Width(const char *s, S32 scale) {
+    return (S32)strlen(s) * 8 * scale;
+}
+
+void Ui_Font8(S32 x, S32 y, const char *s, U8 colour, S32 scale) {
     U8 *log = (U8 *)Log;
     for (; *s; s++, x += 8 * scale) {
         const U8 *glyph = &Font8x8[(U8)*s * 8];

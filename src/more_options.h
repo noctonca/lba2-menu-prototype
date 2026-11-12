@@ -6,8 +6,9 @@
 
 #include <stdio.h>
 
-// One dense table in the 8x8 font, as the 1997 key binding screen (decided 2026-11-03;
-// design card ExperimentalTable).
+// One dense table in small text (Ui_Small: the 8x8 font, or Zilla Slab when the menu
+// draws in it), as the 1997 key binding screen (decided 2026-11-03; design card
+// ExperimentalTable).
 
 // The page is on the menu's stack (P_MORE, a row for each value, MoreOptions_Pages): the
 // menu's loop moves along it and Esc leaves it. The page keeps what its rows add: changing

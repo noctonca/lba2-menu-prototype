@@ -1492,7 +1492,7 @@ static int LegendPerColumn(int n) { return n > 3 ? (n + 1) / 2 : n; }
 static void LegendColumn(const char **keys, const char **words, int i0, int i1, S32 scale, S32 *chipW, S32 *wordW) {
     *chipW = *wordW = 0;
     for (int i = i0; i < i1; i++) {
-        S32 c = Ui_ChipWidth(keys[i], scale), t = Ui_WordWidth(LegendWord(words[i]), scale);
+        S32 c = Ui_ChipWidth(keys[i], scale), t = Ui_SmallWidth(LegendWord(words[i]), scale);
         *chipW = c > *chipW ? c : *chipW;
         *wordW = t > *wordW ? t : *wordW;
     }
@@ -1569,11 +1569,11 @@ static void DrawLegendStacked(S32 x0, S32 y0, const char **keys, const char **wo
         S32 y = y0 + (i % per) * pitch;
         S32 c = Ui_ChipWidth(keys[i], scale);
         Ui_Chip(x + chipW - c, y, keys[i], scale);
-        Ui_Word(x + chipW + 4 * scale, y + chipH / 2 - 4 * scale, LegendWord(words[i]), INK_CONFIG_MENU, scale);
+        Ui_Small(x + chipW + 4 * scale, y + chipH / 2 - 4 * scale, LegendWord(words[i]), INK_CONFIG_MENU, scale);
         LegendRecord(i, keys[i], words[i]);
-        LegendPoint(x + chipW - c, y - 1, x + chipW + 4 * scale + Ui_WordWidth(LegendWord(words[i]), scale), y + chipH,
+        LegendPoint(x + chipW - c, y - 1, x + chipW + 4 * scale + Ui_SmallWidth(LegendWord(words[i]), scale), y + chipH,
                     keys[i], words[i]);
-        LegendGrow(x + chipW - c, y, x + chipW + 4 * scale + Ui_WordWidth(LegendWord(words[i]), scale) - 1,
+        LegendGrow(x + chipW - c, y, x + chipW + 4 * scale + Ui_SmallWidth(LegendWord(words[i]), scale) - 1,
                    y + chipH - 1, scale);
     }
 }
@@ -1656,14 +1656,14 @@ static S32 DrawLegendRow(S32 x, S32 y, const char **keys, const char **words, in
         S32 c = Ui_ChipWidth(keys[i], scale);
         if (draw) {
             Ui_Chip(x + w, y, keys[i], scale);
-            Ui_Word(x + w + c + 4 * scale, y + 2 * scale, LegendWord(words[i]), INK_CONFIG_MENU, scale);
+            Ui_Small(x + w + c + 4 * scale, y + 2 * scale, LegendWord(words[i]), INK_CONFIG_MENU, scale);
             LegendRecord(i, keys[i], words[i]);
-            LegendPoint(x + w, y - 1, x + w + c + 4 * scale + Ui_WordWidth(LegendWord(words[i]), scale), y + 12 * scale,
+            LegendPoint(x + w, y - 1, x + w + c + 4 * scale + Ui_SmallWidth(LegendWord(words[i]), scale), y + 12 * scale,
                         keys[i], words[i]);
-            LegendGrow(x + w, y, x + w + c + 4 * scale + Ui_WordWidth(LegendWord(words[i]), scale) - 1,
+            LegendGrow(x + w, y, x + w + c + 4 * scale + Ui_SmallWidth(LegendWord(words[i]), scale) - 1,
                        y + 12 * scale - 1, scale);
         }
-        w += c + 4 * scale + Ui_WordWidth(LegendWord(words[i]), scale);
+        w += c + 4 * scale + Ui_SmallWidth(LegendWord(words[i]), scale);
     }
     return w;
 }
@@ -1869,7 +1869,7 @@ static void DrawOverlay() {
     S32 x0 = (S32)Host_LogicalW() - w - 8, y0 = 8;
     Ui_Panel(x0, y0, x0 + w, y0 + h, PANEL_SHADE_LVL);
     for (S32 i = 0; i < n; i++)
-        Ui_Small(x0 + 8, y0 + 8 + i * 12, lines[i], i ? INK_CONFIG_MENU : INK_CONFIG_HEAD, 1);
+        Ui_Font8(x0 + 8, y0 + 8 + i * 12, lines[i], i ? INK_CONFIG_MENU : INK_CONFIG_HEAD, 1);
 }
 
 // The console as lba2cc draws it (CONSOLE.CPP Console_Draw): the top half of the screen,
@@ -1902,12 +1902,12 @@ static void DrawConsole() {
         char line[160];
         snprintf(line, sizeof line, kConsoleLines[i][1], kConsoleLines[i][0][0] == 'h' ? kVersionString : kCommit);
         U8 ink = kConsoleLines[i][0][0] == 'h' ? INK_CONFIG_HEAD : kConsoleLines[i][0][0] == 'd' ? INK_DISABLED : INK_WHITE;
-        Ui_Small(8, y, line, ink, 1);
+        Ui_Font8(8, y, line, ink, 1);
     }
     if (g_console == CON_READONLY)
-        Ui_Small(8, y, "Read only. Any button closes it.", INK_CONFIG_HEAD, 1);
+        Ui_Font8(8, y, "Read only. Any button closes it.", INK_CONFIG_HEAD, 1);
     else
-        Ui_Small(8, y, (Host_TimeMs() / 500) % 2 ? "]> " : "]> _", INK_WHITE, 1);
+        Ui_Font8(8, y, (Host_TimeMs() / 500) % 2 ? "]> " : "]> _", INK_WHITE, 1);
 }
 
 // Frame rate on: the count in the bottom left corner, white, the 8x8 font (OBJECT.CPP

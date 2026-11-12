@@ -316,8 +316,9 @@ camera behavior, not a machine's limit, so it went to Controls and camera
 instead, and Reverse stereo, which is for speakers or headphones the wrong way
 round rather than a 1997 machine, went back to Sound (EPmager, 2026-11-11).
 
-- One dense table in the 8x8 font at 1x, as the 1997 key binding screen
-  (decided 2026-11-03): a line per value under its group's head, the cursor a
+- One dense table in small text at 1x, as the 1997 key binding screen
+  (decided 2026-11-03; in Zilla Slab when the menu draws in it, since
+  2026-11-12): a line per value under its group's head, the cursor a
   plasma strip, and at the foot the row's help on two lines with a status line
   under it (the default, the range and the lba2.cfg key when it fits). 31 lines
   are in view on a wide screen.
@@ -337,7 +338,9 @@ round rather than a 1997 machine, went back to Sound (EPmager, 2026-11-11).
 ## Frame rate, the console and the version
 
 - **Frame rate** (Display and graphics, under Vsync, decided 2026-11-03) shows the frame count in the bottom left corner, white,
-  in the 8x8 font, as lba2cc's console `fps` and the 1997 SPEED code do. It is
+  in the menu's small text (the 8x8 font with the game font, Zilla Slab
+  with Zilla Slab), where lba2cc's console `fps` and the 1997 SPEED code
+  put it. It is
   not kept in lba2.cfg: off at every start. Presets leave it alone. lba2cc
   draws it only in play; here it shows over the menu so the row can be judged.
   On Display it makes seven rows, so at 960x540 the page scrolls (Image is

@@ -77,7 +77,7 @@ the call is answered.
   (and 14 in the pad view's one chip) and leaves the longest action name,
   "Behavior action", 8 clear of its first chip (decided 2026-11-03).
 - **Controls column heads sit inside the first visible row**, above their
-  chips, in the 8x8 font at 1x: the one place 1x is used on the wide canvas,
+  chips, in the small text at 1x: the one place 1x is used on the wide canvas,
   since 2x does not fit between a row's frame and its chip. Both panes then
   start at y 24 and their rows line up (decided 2026-11-03). With one pane at a time the group's name is
   the title and the actions start one pitch below it. The pad column's head reads "Gamepad", so the
@@ -178,11 +178,15 @@ pad player on a 4:3 or 5:4 screen saw no buttons at all (EPmager,
 
 **Law of Similarity** (what looks alike is taken to work alike).
 - One style per role: labels white in the game font; values in a column on the
-  right; help in the voice; keys in the 8x8 font in chips. *(review rule 1,
-  three registers)* The legend's words beside the chips are in the menu's
-  face: Zilla Slab at the 8x8 font's size when the menu draws in Zilla Slab,
-  the 8x8 font with the game font (EPmager, 2026-11-11: 8x8 words beside Zilla
-  Slab rows read as a second style).
+  right; help in the voice; keys in chips. *(review rule 1, three registers)*
+  One face for everything the player reads: with Zilla Slab on, the small
+  text (key chips, legend words, column heads, the More options table, the
+  frame rate, "1/2") is Zilla Slab at the 8x8 font's size; with the game
+  font, it is the 8x8 font. Only the console keeps the 8x8 font, as lba2cc
+  draws it (decided 2026-11-12; before, chips and More options stayed 8x8
+  beside Zilla Slab, and EPmager had found 8x8 legend words beside Zilla Slab
+  rows read as a second style, 2026-11-11). **[check: key chips fit in both
+  faces, six languages, 640x480 and 1920x1080]**
 - A row that opens something (a category, the preset row, Keys and buttons)
   takes Enter and shows "Open" in the legend; a setting takes Left and Right.
   A choice or a switch also steps on Enter, so its legend line shows both
@@ -279,13 +283,13 @@ is read; help cut off is not. **[self test: help cut off]**
 - **Help never pages** (2026-11-12, replaces "long help pages on"). Menu help
   stays within its budget, so it fits its window in every Text language; the
   console help on More options is in the table's own status lines, in the
-  8x8 font, two lines above the default and range, whole
+  table's small text, two lines above the default and range, whole
   and in English. The voice there says the group's help, in the Text
   language. **[self test: help in N windows, table: row help cut off, voice
   text with no translation]**
 - **Paged help says where it is** (2026-11-12, replaces the dialogue's arrow,
   which asks for a key the menu never waits for). Should help ever page,
-  "1/2" in the 8x8 font sits in the window's bottom-right corner, in the band
+  "1/2" in the small text sits in the window's bottom-right corner, in the band
   short of the legend, and the last window keeps "2/2", so a player who looks
   late sees there was more. Each window is typed and held for its words (0.3 s
   a word), as the demo reel pages a dialogue.
