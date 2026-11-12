@@ -295,23 +295,35 @@ are in `ink-count`.
 **Peak-End Rule.** First launch ends with the game, not with a settings
 screen: one question, then play.
 
-**Selective Attention, Banner Blindness.** The voice says one short thing about
-the row under the cursor. Help that fits one line in English *(review rule 7)*
-is read; help cut off is not. **[self test: help cut off]**
+**Selective Attention, Banner Blindness.** The voice first says one short thing
+about the row under the cursor. Help that fits one line in English *(review
+rule 7)* is read while scrolling; help cut off is not. **[self test: help cut
+off]**
 
-- **Help never pages** (2026-11-12, replaces "long help pages on"). Menu help
-  stays within its budget, so it fits its window in every Text language; the
-  console help on More options is in the table's own status lines, in the
-  8x8 font, two lines above the default and range, whole
-  and in English. The voice there says the group's help, in the Text
-  language. **[self test: help in N windows, table: row help cut off, voice
-  text with no translation]**
-- **Paged help says where it is** (2026-11-12, replaces the dialogue's arrow,
-  which asks for a key the menu never waits for). Should help ever page,
-  "1/2" in small words sits in the window's bottom-right corner, in the band
-  short of the legend, and the last window keeps "2/2", so a player who looks
-  late sees there was more. Each window is typed and held for its words (0.3 s
-  a word), as the demo reel pages a dialogue.
+- **Long help: a short line, then More** (2026-11-12, replaces "help never
+  pages"; the capped help read as too short to be useful). A row's help is its
+  short line, then a second window that says when or why to change it
+  ("Everything at once." then "Turns all the sound up or down. The rows below
+  set each part."). The writer ends a window with `@P`, as `TEXT.HQR` ends a
+  1997 dialogue page (MESSAGE.CPP GetNextLine). Space or the pad's Y turns to
+  the next window, and from the last back to the first; moving the cursor
+  starts again at the short line. The legend shows More only when the help
+  has another window. Rows without a second window keep their short line
+  alone. **[self test: help in N windows]**
+- **Every window fits its two lines.** A window too long for them goes on in
+  the next, so a player still reads it all, but the self test reports more
+  than two windows. The narrowest voices are the 640x480 dialogue window
+  (591 px) and the Keys and buttons pages, where More widens the legend (445
+  to 482 px). The console help on More options is in the table's own status
+  lines, in the 8x8 font, two lines above the default and range, whole and in
+  English; the voice there says the group's help, in the Text language.
+  **[self test: table: row help cut off, voice text with no translation]**
+- **Paged help says where it is with ellipses** (2026-11-12, replaces the "1/2"
+  mark, which sat under the legend's Back at 640x480, and the dialogue's arrow,
+  which asks for a key the menu never waits for). A window with more to come
+  ends in "..." (its own full stop dropped), and a later window starts with
+  one; its lines wrap short of the width by the ellipsis. Each window is typed
+  as the cursor's help is. No window turns by itself.
 
 **Jakob's Law (the player's own device).** The legend names what the player
 holds (2026-11-11): after a pad press the pad's buttons (A Open, B Back), after
@@ -331,12 +343,11 @@ strip at the value edge, which read badly on a TV.
   is dimmed), it takes the help's place; nothing is added after the help. A
   dimmed row says why it is dimmed ("Only with the Auto camera."), not what it
   does.
-- **Help leaves room for translation** (decided 2026-11-03). An English help
-  text is at most about 750 px in the game font, two thirds of what the
-  voice's two lines hold (about 1,130 px at 620 wide). The 1997 game's own
-  translations of their sentences run 1.1x English typically and up to 1.5x
-  (German) in their longest tenth, so a translation half as long again still
-  fits. Measure with `widths`.
+- **Help leaves room for translation** (decided 2026-11-03; the 750 px cap
+  dropped 2026-11-12). Each window is measured in all six Text languages
+  instead of English being held to a budget: the 1997 game's own translations
+  of their sentences run 1.1x English typically and up to 1.5x (German) in
+  their longest tenth. Measure with `widths`.
 - **The Text row changes the whole menu** (2026-11-12, after the maintainer
   changed the language and saw only the help change). Labels, values, page
   titles, answers, column heads and the legend's words are in `lang/menu.tsv`,
@@ -382,6 +393,8 @@ check the parts marked.
   No. **[self test: preset]**
 - **Tab** switches Keyboard and Gamepad on the Controls page; the page opens
   on the device used last. **Del** clears a chip. **[self test: bind]**
+- **Space** (the pad's Y) turns the help to its next window when the legend
+  shows More. While a key change waits for a key, Space is taken as the key.
 
 ## Words and the voice
 

@@ -397,34 +397,59 @@ void Voice_Say(Voice &v, const char *text, bool typed) {
     v.text[sizeof v.text - 1] = 0;
     v.start = Host_TimeMs();
     v.typed = typed;
+    v.page = 0;
 }
 
-// Word wrap into lines of the game font, as the dialogue does.
-static S32 Wrap(const char *text, S32 width, const char **starts, S32 *lens, S32 maxLines) {
+// Word wrap into lines of the game font, as the dialogue does. "@P" (a word of its own, as
+// in TEXT.HQR) ends the line and starts a new window: newPage[l] is set on the line after it.
+static bool PageBreakAt(const char *p, const char *text) {
+    return p[0] == '@' && p[1] == 'P' && (p[2] == ' ' || p[2] == 0) && (p == text || p[-1] == ' ');
+}
+
+static S32 Wrap(const char *text, S32 width, const char **starts, S32 *lens, S32 maxLines, bool *newPage = NULL) {
     S32 lines = 0;
     const char *p = text;
+    bool pending = false;
     while (*p && lines < maxLines) {
-        while (*p == ' ')
-            p++;
+        for (;;) {
+            if (*p == ' ') {
+                p++;
+            } else if (PageBreakAt(p, text)) {
+                pending = true;
+                p += 2;
+            } else {
+                break;
+            }
+        }
+        if (!*p)
+            break;
         const char *lineStart = p, *lastBreak = NULL;
         char buf[512];
         S32 n = 0;
-        while (p[n]) {
+        bool over = false;
+        while (p[n] && !PageBreakAt(p + n, text)) {
             memcpy(buf, lineStart, n + 1);
             buf[n + 1] = 0;
-            if (Ui_TextWidthAsIs(buf) > width)  // the voice: already in the Text language
+            if (Ui_TextWidthAsIs(buf) > width) {  // the voice: already in the Text language
+                over = true;
                 break;
+            }
             if (p[n] == ' ')
                 lastBreak = p + n;
             n++;
         }
         S32 len = n;
-        if (p[n] && lastBreak)
+        if (over && lastBreak)
             len = (S32)(lastBreak - lineStart);
+        while (len > 0 && lineStart[len - 1] == ' ')
+            len--;
         starts[lines] = lineStart;
         lens[lines] = len;
+        if (newPage)
+            newPage[lines] = lines > 0 && pending;
+        pending = false;
         lines++;
-        p = lineStart + len;
+        p = lineStart + (len > 0 ? len : n > 0 ? n : 1);
     }
     return lines;
 }
@@ -435,9 +460,39 @@ S32 Voice_Lines(const char *text, S32 width) {
     return Wrap(text, width, starts, lens, VOICE_MAX_LINES);
 }
 
-static const S32 s_msPerWord = 300;  // how long a window of help is held, per word
-static S32 s_lastPage, s_lastPages;
+// Each window's first line: a new one after maxLines lines, or where the text breaks.
+static S32 Windows(const bool *newPage, S32 all, S32 maxLines, S32 *first) {
+    S32 pages = 0;
+    for (S32 l = 0; l < all; l++)
+        if (l == 0 || newPage[l] || l - first[pages - 1] >= maxLines)
+            first[pages++] = l;
+    first[pages] = all;
+    return pages > 0 ? pages : 1;
+}
 
+static const char kEllipsis[] = "...";
+
+// Lines and windows as the voice shows them: a paged text wraps again short of the
+// width by the ellipsis it will carry.
+static S32 Layout(const char *text, S32 width, S32 maxLines, const char **starts, S32 *lens, bool *newPage,
+                  S32 *first, S32 *all) {
+    *all = Wrap(text, width, starts, lens, VOICE_MAX_LINES, newPage);
+    S32 pages = Windows(newPage, *all, maxLines, first);
+    if (pages > 1) {
+        *all = Wrap(text, width - Ui_TextWidthAsIs(kEllipsis), starts, lens, VOICE_MAX_LINES, newPage);
+        pages = Windows(newPage, *all, maxLines, first);
+    }
+    return pages;
+}
+
+S32 Voice_Pages(const char *text, S32 width, S32 maxLines) {
+    const char *starts[VOICE_MAX_LINES];
+    S32 lens[VOICE_MAX_LINES], first[VOICE_MAX_LINES + 1], all;
+    bool newPage[VOICE_MAX_LINES];
+    return Layout(text, width, maxLines < 1 ? 1 : maxLines, starts, lens, newPage, first, &all);
+}
+
+static S32 s_lastPage, s_lastPages;
 
 void Voice_LastPage(S32 *page, S32 *pages) {
     *page = s_lastPage;
@@ -445,52 +500,68 @@ void Voice_LastPage(S32 *page, S32 *pages) {
 }
 
 // Letters are typed one per 20 ms; a letter takes 13 steps of the colour ramp to settle.
-enum { MS_PER_LETTER = 20, RAMP_STEPS = 13, MIN_HOLD_MS = 1500 };
+enum { MS_PER_LETTER = 20, RAMP_STEPS = 13 };
 
-static S32 HoldMs(const char *const *starts, const S32 *lens, S32 first, S32 count) {
-    S32 words = 0;
-    for (S32 l = first; l < first + count; l++)
-        for (S32 i = 0; i < lens[l]; i++)
-            if (starts[l][i] != ' ' && (i == 0 || starts[l][i - 1] == ' '))
-                words++;
-    S32 ms = words * s_msPerWord;
-    return ms < MIN_HOLD_MS ? MIN_HOLD_MS : ms;
+bool Voice_Turn(Voice &v) {
+    if (s_lastPages < 2)
+        return false;
+    v.page = (s_lastPage + 1) % s_lastPages;
+    v.start = Host_TimeMs();
+    return true;
 }
 
 S32 Voice_Draw(const Voice &v, S32 x0, S32 y0, S32 width, S32 maxLines, S32 *needed) {
     const char *starts[VOICE_MAX_LINES];
-    S32 lens[VOICE_MAX_LINES];
+    S32 lens[VOICE_MAX_LINES], firsts[VOICE_MAX_LINES + 1];
+    bool newPage[VOICE_MAX_LINES];
     if (maxLines > VOICE_MAX_LINES)
         maxLines = VOICE_MAX_LINES;
     if (maxLines < 1)
         maxLines = 1;
-    S32 all = Wrap(v.text, width, starts, lens, VOICE_MAX_LINES);
+    S32 all;
+    S32 pages = Layout(v.text, width, maxLines, starts, lens, newPage, firsts, &all);
     if (needed)
         *needed = all;
+    if (all == 0)
+        firsts[1] = 0;
 
-    // Which window is showing, and since when: each is typed (when the voice types),
-    // then held for its words, then the next begins. The last one stays.
-    S32 pages = all > 0 ? (all + maxLines - 1) / maxLines : 1;
+    // The window the player turned to; typing starts again on each.
     S32 elapsed = (S32)(Host_TimeMs() - v.start);
-    S32 page = 0;
-    for (; page + 1 < pages; page++) {
-        S32 first = page * maxLines;
-        S32 count = all - first < maxLines ? all - first : maxLines;
-        S32 letters = 0;
-        for (S32 l = first; l < first + count; l++)
-            letters += lens[l];
-        S32 span = (v.typed ? (letters + RAMP_STEPS) * MS_PER_LETTER : 0) + HoldMs(starts, lens, first, count);
-        if (elapsed < span)
-            break;
-        elapsed -= span;
-    }
+    S32 page = v.page < pages ? v.page : pages - 1;
     s_lastPage = page;
     s_lastPages = pages;
 
-    S32 first = page * maxLines;
-    S32 lines = all - first < maxLines ? all - first : maxLines;
+    S32 first = firsts[page];
+    S32 lines = firsts[page + 1] - first;
     if (lines < 0)
         lines = 0;
+
+    // The ellipses: "..." before a window after the first, and after one with more to come
+    // (its own full stop dropped: "Everything at once...").
+    static char marked[VOICE_MAX_LINES][300];
+    if (pages > 1 && lines > 0) {
+        for (S32 l = 0; l < lines; l++) {
+            const char *src = starts[first + l];
+            S32 n = lens[first + l] < 280 ? lens[first + l] : 280;
+            char *out = marked[l];
+            S32 o = 0;
+            if (l == 0 && page > 0) {
+                memcpy(out, kEllipsis, 3);
+                o = 3;
+            }
+            if (l == lines - 1 && page + 1 < pages && n > 0 && src[n - 1] == '.')
+                n--;
+            memcpy(out + o, src, n);
+            o += n;
+            if (l == lines - 1 && page + 1 < pages) {
+                memcpy(out + o, kEllipsis, 3);
+                o += 3;
+            }
+            out[o] = 0;
+            starts[first + l] = out;
+            lens[first + l] = o;
+        }
+    }
 
     // Letters shown so far in this window: one per 20 ms. Spaces count, as in the dialogue.
     S32 total = 0;

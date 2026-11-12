@@ -119,20 +119,29 @@ S32 Ui_KeyChipHeight(S32 scale);
 // (MESSAGE.CPP AffAllCar). Wraps into at most maxLines of the game font.
 struct Voice {
     char text[512];
-    U32 start;
+    U32 start;   // when the text, or the window it turned to, began
     bool typed;  // false: shown whole
+    S32 page;    // the window a player turned to (Voice_Turn)
 };
 void Voice_Say(Voice &v, const char *text, bool typed);
+// Help in more than one window: the player turns them with a key (Voice_Turn) and each
+// stays until turned. "@P" in a text ends a window there, as the 1997 dialogue's @P ends a
+// page (MESSAGE.CPP GetNextLine), so a window ends where its writer chose. A window too long
+// for its lines also goes on in the next: a fallback the self test reports.
+// The next window, typed again; after the last, the first. False when there is one window.
+bool Voice_Turn(Voice &v);
+// How many windows of maxLines the text takes at that width.
+S32 Voice_Pages(const char *text, S32 width, S32 maxLines);
+// Paged help shows where it is with "..." at a window's end when more follows and at its
+// start after the first (2026-11-12): the lines then wrap short of the width by the
+// ellipsis, so it always fits.
 // The most lines the voice wraps a text into.
 enum { VOICE_MAX_LINES = 16 };
 // How many lines of the game font the text wraps into at that width.
 S32 Voice_Lines(const char *text, S32 width);
-// Returns the lines drawn; *needed gets how many the whole text takes. Help longer
-// than maxLines is said a window at a time, as the demo reel pages a dialogue
-// (MESSAGE.CPP Dial under DemoSlide): each window is typed, held long enough to
-// read, then the next one is typed. The last window stays.
+// Returns the lines drawn; *needed gets how many the whole text takes. The window shown is
+// the one the player turned to.
 S32 Voice_Draw(const Voice &v, S32 x0, S32 y0, S32 width, S32 maxLines, S32 *needed);
-// How long a window is held: this many ms for each word in it, and at least 1.5 s.
 // The window the last Voice_Draw showed (0 is the first) and how many there are.
 void Voice_LastPage(S32 *page, S32 *pages);
 

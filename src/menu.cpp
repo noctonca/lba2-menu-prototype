@@ -336,6 +336,11 @@ static int sw_whole = 0;
 // current-value plasma, as before (EPmager, 2026-11-11: green and the blue cursor read alike,
 // so he asked for the words alone). F3; off at start, to show his proposal.
 static int sw_greencurrent = 0;
+// Long help (asked for 2026-11-12, after the short help read as too short to be useful): a row's
+// help is its short line, then a second window saying when or why to change it, turned with
+// Space or the pad's Y ("More" in the legend); no 750 px cap. 0: the short help alone, as the
+// 2026-11-03 cap left it. F4.
+static int sw_longhelp = 1;
 
 // What a build off main says: lba2cc's LBA2_VERSION_STRING and the commit's first 7. A release
 // says its number alone. An example; the prototype has no build of its own to name.
@@ -706,8 +711,9 @@ static const char *HelpFor(const Row *r) {
     return RowHelp(*r) ? RowHelp(*r) : "";
 }
 
-// Shorter help for translation (decided 2026-11-03): English at most about 750 px,
-// so a translation half as long again still fits the voice's two lines.
+// The short lines (decided 2026-11-03): each row's first window, the line read while
+// scrolling. The longer drafts they replace said more; long help's second windows
+// (kMoreHelp) say it now.
 static const char *const kShortHelp[][2] = {
     {"Stops the picture tearing. Off can raise the frame rate on a slow display.", "Stops the picture tearing."},
     {"Rain, shadows and the far islands. Lower it on a slow machine.", "Rain, shadows and the far islands."},
@@ -723,6 +729,38 @@ static const char *const kShortHelp[][2] = {
     {"Does what the behavior does: jump, hit or hide.", "Jumps, hits or hides, by behavior."},
 };
 
+// Long help's second window: what a row's short line leaves out, when or why to change it
+// (sw_longhelp). Keyed by the short line as the voice says it, after kShortHelp.
+static const char *const kMoreHelp[][2] = {
+    {"The language the game writes in.", "The voices keep their own language, on the row below."},
+    {"The language the characters speak.", "The voices exist in English, French and German only."},
+    {"Shows what is said while the voices play.", "Keep it on if you don't understand the voices' language."},
+    {"The picture behind the menu.", "Picture: the 1997 menu's. Twinsun: the planet turning. Off: black."},
+    {"The game's letters, or sharp Zilla Slab.", "Zilla Slab is drawn at your screen's size and stays sharp."},
+    {"Stops the picture tearing.", "Off can raise the frame rate on a slow display."},
+    {"Shows the frame rate while you play.", "It is off again each time the game starts."},
+    {"Sharp pixels, or smoothed when scaled.", "Smooth softens the pixels' edges when the picture is scaled up."},
+    {"Everything at once.", "Turns all the sound up or down. The rows below set each part."},
+    {"Footsteps, doors, magic.", "Lower it if the fights cover what the characters say."},
+    {"The characters' voices.", "Raise it if the music or the sounds cover what is said."},
+    {"The score.", "At 0 the music stops; the voices and sounds go on."},
+    {"Swaps the left and right speakers.", "For speakers or headphones the wrong way round."},
+    {"The pad's button names in the prompts. Auto reads the pad.", "Choose one if Auto names the wrong buttons."},
+    {"Classic cuts; Auto follows you.", "Classic cuts between fixed views, as in 1997. Auto turns with Twinsen."},
+    {"Cuts to the designers' shots outdoors.", "Off skips the shots that cut in once as you arrive."},
+    {"Off plays the 1997 bugs as they were.", "On fixes the known bugs of the 1997 release."},
+    {"Hold it to choose a behavior.", "Hold it, press left or right to choose, then let go."},
+    {"Jumps, hits or hides, by behavior.", "Athletic jumps, Aggressive hits, Discreet hides."},
+    {"Steps Twinsen back.", "He keeps facing the way he faced."},
+};
+
+static const char *MoreHelp(const char *shortLine) {
+    for (size_t i = 0; i < sizeof kMoreHelp / sizeof kMoreHelp[0]; i++)
+        if (!strcmp(shortLine, kMoreHelp[i][0]))
+            return kMoreHelp[i][1];
+    return NULL;
+}
+
 const char *Menu_Tr(const char *english) { return Lang_Tr(english, g_val[S_TEXT_LANG]); }
 
 static std::set<std::string> s_voiceMissed;
@@ -731,11 +769,19 @@ const std::set<std::string> &Menu_VoiceMissed() { return s_voiceMissed; }
 static void Say(const char *text, bool translate) {
     if (translate) {
         for (size_t i = 0; i < sizeof kShortHelp / sizeof kShortHelp[0]; i++)
-            if (!strcmp(text, kShortHelp[i][0]))
+            if (!strcmp(text, kShortHelp[i][0]))  // the short line comes first under long help too
                 text = kShortHelp[i][1];
+        const char *more = sw_longhelp ? MoreHelp(text) : NULL;
         if (g_val[S_TEXT_LANG] > 0 && text[0] && !Lang_Find(text, g_val[S_TEXT_LANG]))
             s_voiceMissed.insert(text);
+        if (more && g_val[S_TEXT_LANG] > 0 && !Lang_Find(more, g_val[S_TEXT_LANG]))
+            s_voiceMissed.insert(more);
         text = Lang_Tr(text, g_val[S_TEXT_LANG]);  // the voice speaks the Text language
+        if (more) {  // the short line, then the second window (@P ends a window, as in TEXT.HQR)
+            static char both[512];
+            snprintf(both, sizeof both, "%s @P %s", text, Lang_Tr(more, g_val[S_TEXT_LANG]));
+            text = both;
+        }
     }
     // The game font has no =, ~ or + (each draws as a stray mark); the console help has all three.
     static char said[512];
@@ -1204,6 +1250,12 @@ void Menu_Update() {
         return;
     }
 
+    if (Host_Pressed(KEY_MORE)) {
+        if (Voice_Turn(g_voice))
+            Trace("help window %d", (int)g_voice.page + 1);
+        else
+            Trace("help more: one window");
+    }
     if (Bindings_Active() && Host_Pressed(KEY_TAB))
         Bindings_SwitchDevice();
     if (Host_Pressed(KEY_UP))
@@ -1528,6 +1580,23 @@ static void LegendFor(const Row *r, const char **keys, const char **words, int *
     words[(*n)++] = g_first ? "Modern" : "Back";
 }
 
+// Help with another window: Space (the pad's Y) turns it, "More" in the legend before its
+// last entry (Back stays last). Every page's legend comes through the band or the dialogue
+// window, so it is added there. Measured without it: a voice too long beside the legend as
+// it was is longer still beside a wider one.
+static int WithMore(const char **in, const char **inWords, int n, S32 voiceW, S32 lines, const char **keys,
+                    const char **words) {
+    for (int i = 0; i < n && i < 7; i++)
+        keys[i] = in[i], words[i] = inWords[i];
+    if (!g_voice.text[0] || n < 1 || n > 7 || Voice_Pages(g_voice.text, voiceW, lines) < 2)
+        return n;
+    keys[n] = keys[n - 1];
+    words[n] = words[n - 1];
+    keys[n - 1] = "Space";
+    words[n - 1] = "More";
+    return n + 1;
+}
+
 // A legend word in the Text language. "legend|Back" first: the legend's Back (the menu
 // before) is not the Back an action names (walking backwards).
 static const char *LegendWord(const char *w) {
@@ -1592,6 +1661,7 @@ static void LegendPoint(S32 x0, S32 y0, S32 x1, S32 y1, const char *key, const c
         {"Back", KEY_ESC},  {"Cancel", KEY_ESC},  {"Modern", KEY_ESC},     {"Close", KEY_ESC},
         {"Open", KEY_ENTER}, {"Change", KEY_ENTER}, {"Answer", KEY_ENTER}, {"Choose", KEY_ENTER}, {"Restore", KEY_ENTER},
         {"Clear", KEY_DEL},  {"Defaults", KEY_DEL}, {"Keyboard", KEY_TAB}, {"Gamepad", KEY_TAB},
+        {"More", KEY_MORE},
     };
     if ((key[0] == '\x11' || key[0] == '\x18') && !strchr(key, CHIP_AND[0]))
         return;
@@ -1682,19 +1752,15 @@ static void DrawConfirm(const char *pane, S32 x0, S32 x1, S32 y0) {
     }
 }
 
-// Paged help (help longer than its window) says where it is: "1/2" in the legend words' face in the
-// window's bottom-right corner, kept on the last window, so a player who looks late still sees
-// there was more (decided 2026-11-12, over the dialogue's arrow tried on the Xbox 2026-11-11).
+// Paged help says where it is with ellipses in the text (Voice_Draw), not a "1/2" mark: the
+// mark sat under the legend's Back at 640x480 (2026-11-12). `state` still names the window.
 static char g_pageMark[8];
-static void DrawPageMark(S32 x1, S32 y1) {
+static void NotePageMark() {
     S32 page = 0, pages = 1;
     Voice_LastPage(&page, &pages);
     g_pageMark[0] = 0;
-    if (pages < 2)
-        return;
-    S32 sc = Wide() ? 2 : 1;
-    snprintf(g_pageMark, sizeof g_pageMark, "%d/%d", (int)page + 1, (int)pages);
-    Ui_Word(x1 - 12 - Ui_WordWidth(g_pageMark, sc) + 1, y1 - 6 - 8 * sc, g_pageMark, INK_CONFIG_MENU, sc);
+    if (pages > 1)
+        snprintf(g_pageMark, sizeof g_pageMark, "%d/%d", (int)page + 1, (int)pages);
 }
 const char *Menu_PageMark() { return g_pageMark; }
 const char *Menu_Legend() { return g_legend; }
@@ -1753,13 +1819,16 @@ static void LegendKeys(const char **in, const char **out, int nk) {
         out[i] = Bindings_LegendKey(in[i]);
 }
 
-void Menu_DrawDialogueIn(S32 x0, S32 y0, S32 x1, S32 y1, const char **keysIn, const char **words, int nk) {
+void Menu_DrawDialogueIn(S32 x0, S32 y0, S32 x1, S32 y1, const char **keysGiven, const char **wordsGiven, int nk) {
+    const char *keysIn[8], *words[8];
+    nk = WithMore(keysGiven, wordsGiven, nk, x1 - x0 - 32, nk ? 2 : 3, keysIn, words);
     Ui_Panel(x0, y0, x1, y1, PANEL_SHADE_LVL);
     // The legend takes the window's third line, so the help has two, as in the wide band;
     // no help at 640x480 needs a third (measured 2026-11-11, six languages).
     const S32 maxLines = nk ? 2 : 3;
     g_voiceLines = Voice_Draw(g_voice, x0 + 16, y0 + 12, x1 - x0 - 32, maxLines, &g_voiceNeeded);
     g_voiceMax = maxLines;
+    g_voiceWidth = x1 - x0 - 32;
     if (nk) {
         const char *keys[8];
         LegendKeys(keysIn, keys, nk);
@@ -1773,7 +1842,7 @@ void Menu_DrawDialogueIn(S32 x0, S32 y0, S32 x1, S32 y1, const char **keysIn, co
     } else {
         g_legend[0] = 0;
     }
-    DrawPageMark(x1, y1);  // the window's own corner, where MESSAGE.CPP AffFleche puts its arrow
+    NotePageMark();
     g_helpBox.shown = true;
     g_helpBox.kind = "dialogue";
     g_helpBox.x0 = x0; g_helpBox.y0 = y0; g_helpBox.x1 = x1; g_helpBox.y1 = y1;
@@ -1924,7 +1993,9 @@ static S32 BandVoiceWidth(const char **keys, const char **words, int nk) {
     return voiceW > 620 ? 620 : voiceW;
 }
 
-void Menu_DrawFoot(const char **keysIn, const char **words, int nk) {
+void Menu_DrawFoot(const char **keysGiven, const char **wordsGiven, int nk) {
+    const char *keysIn[8], *words[8];
+    nk = WithMore(keysGiven, wordsGiven, nk, BandVoiceWidth(keysGiven, wordsGiven, nk), 2, keysIn, words);
     // After a pad press the legend names the pad's buttons, not the keyboard's.
     const char *keys[8];
     for (int i = 0; i < nk && i < 8; i++)
@@ -1941,11 +2012,7 @@ void Menu_DrawFoot(const char **keysIn, const char **words, int nk) {
     g_voiceLines = Voice_Draw(g_voice, bx0 + 16, bandY0 + 5, voiceW, 2, &g_voiceNeeded);
     g_voiceMax = 2;
     g_voiceWidth = voiceW;
-    // More to read: the page mark at the voice's bottom-right corner, short of the legend.
-    S32 markX1 = bx0 + 16 + voiceW + 29, legendX = bx1 - 24 - legendW + 1;
-    if (markX1 > legendX - 8)
-        markX1 = legendX - 8;
-    DrawPageMark(markX1, bandY1);
+    NotePageMark();
     DrawLegendStacked(bx1 - 24 - legendW + 1, bandY0 + 7, keys, keysIn, words, nk, chip);
     g_helpBox.shown = true;
     g_helpBox.kind = "band";
@@ -1963,7 +2030,7 @@ static void DrawTopLine(const char *s, U8 ink) {
 }
 
 static void DrawOverlay() {
-    DrawTopLine("F1 hide  F2 size  F3 green  F10 key colours  F11 pad names  F12 shapes", INK_CONFIG_MENU);
+    DrawTopLine("F1 hide  F2 size  F3 green  F4 long help  F10 key colours  F11 pad names  F12 shapes", INK_CONFIG_MENU);
 }
 
 // The console as lba2cc draws it (CONSOLE.CPP Console_Draw): the top half of the screen,
@@ -2091,6 +2158,7 @@ static const SwitchDef kSwitches[] = {
     {"greencurrent", &sw_greencurrent, 0, 1, 0},
     {"padicons", &g_padIcons, 0, 1, 1},  // shapes for the pad's buttons on chips
     {"roleink", &g_roleInk, 0, 1, 1},    // Enter green, Esc red in the legend
+    {"longhelp", &sw_longhelp, 0, 1, 1},  // a second window of help, turned with Space or Y
 };
 
 bool Menu_SetSwitch(const char *name, int v) {

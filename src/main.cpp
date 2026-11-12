@@ -426,6 +426,8 @@ int Lba2Main(int argc, char *argv[]) {
             Menu_SetSwitch("overlay", !Menu_GetSwitch("overlay"));
         if (Host_Pressed(KEY_F3))
             Menu_SetSwitch("greencurrent", !Menu_GetSwitch("greencurrent"));
+        if (Host_Pressed(KEY_F4))
+            Menu_SetSwitch("longhelp", !Menu_GetSwitch("longhelp"));
         if (Host_Pressed(KEY_F11))
             Menu_SetSwitch("padnames", Menu_GetSwitch("padnames") + 1);
         if (Host_Pressed(KEY_F10))

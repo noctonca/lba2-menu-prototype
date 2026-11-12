@@ -135,12 +135,17 @@ static void Check(std::vector<std::string> *found) {
     // the most lines the voice wraps.
     if (v.needed >= VOICE_MAX_LINES)
         found->push_back(Fmt("help cut off (%d lines or more, %d px): %s", v.needed, v.width, Repr(v.text).c_str()));
-    if (v.max && v.needed && v.pages != (v.needed + v.max - 1) / v.max)
-        found->push_back(Fmt("help pages: %d lines in %d make %d windows, not %d: %s", v.needed, v.max, v.pages,
-                             (v.needed + v.max - 1) / v.max, Repr(v.text).c_str()));
-    // Help never pages (2026-11-12): within budget it fits its window, and console help is in
-    // the More options table's status lines.
-    if (v.pages > 1)
+    // A window holds max lines, and an @P in the text starts the next one.
+    if (v.max && v.needed && v.width) {
+        const S32 want = Voice_Pages(v.text, v.width, v.max);
+        if (v.pages != want)
+            found->push_back(Fmt("help pages: %d lines in %d make %d windows, not %d: %s", v.needed, v.max, v.pages,
+                                 (int)want, Repr(v.text).c_str()));
+    }
+    // Short help never pages (2026-11-12). Long help (switch longhelp, asked for 2026-11-12) is a
+    // short line and a second window: a third means a window's text is too long for it.
+    const int most = Menu_GetSwitch("longhelp") > 0 ? 2 : 1;
+    if (v.pages > most)
         found->push_back(Fmt("help in %d windows: %s", v.pages, Repr(v.text).c_str()));
     // Console help in the table's status lines is never cut off.
     MoreOptionsTable rt;

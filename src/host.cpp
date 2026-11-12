@@ -68,6 +68,7 @@ static const U32 kScancode[KEY_COUNT] = {
     K_F1, K_F2, K_F3, K_F4, K_F5, K_F6, K_F7, K_F8, K_F9, K_F10, K_F11, K_F12,
     K_1, K_2, K_3, K_4, K_5, K_6, K_7, K_8, K_9,
     K_0, K_PAGE_UP, K_PAGE_DOWN,
+    K_SPACE,
 };
 
 // A screen 3:2 or wider takes the wide composition (960x540) at the
@@ -543,6 +544,7 @@ static const char *kKeyNames[KEY_COUNT] = {
     "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12",
     "1", "2", "3", "4", "5", "6", "7", "8", "9",
     "0", "pgup", "pgdn",
+    "more",
 };
 
 void Host_Inject(UiKey k) { s_injected[k] = true; }
@@ -574,8 +576,8 @@ const U8 *Host_Palette() { return s_palCurrent; }
 
 // The menu's pad buttons are fixed, as the arrows, Enter and Esc are on the keyboard:
 // no binding moves them, so a pad-only player can always use the menu. By pad input,
-// in lba2cc's K_GAMEPAD order (PadRawDown): A Enter, B Esc, View Tab, X Del, LB and RB
-// a page, the d-pad and the left stick the arrows.
+// in lba2cc's K_GAMEPAD order (PadRawDown): A Enter, B Esc, View Tab, X Del, Y the help's
+// next window, LB and RB a page, the d-pad and the left stick the arrows.
 struct PadMenuKey {
     UiKey key;
     int pad;
@@ -583,7 +585,7 @@ struct PadMenuKey {
 static const PadMenuKey kPadMenuKeys[] = {
     {KEY_ENTER, 0}, {KEY_ESC, 1},   {KEY_DEL, 2},   {KEY_TAB, 4},    {KEY_PGUP, 9},   {KEY_PGDN, 10},
     {KEY_UP, 11},   {KEY_DOWN, 12}, {KEY_LEFT, 13}, {KEY_RIGHT, 14}, {KEY_UP, 15},    {KEY_DOWN, 16},
-    {KEY_LEFT, 17}, {KEY_RIGHT, 18},
+    {KEY_LEFT, 17}, {KEY_RIGHT, 18}, {KEY_MORE, 3},
 };
 static bool PadRawDown(int n);
 

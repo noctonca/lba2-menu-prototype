@@ -146,3 +146,4 @@
 {"Xbox", "Xbox", "Xbox", "Xbox", "Xbox", "Xbox"},
 {"PlayStation", "PlayStation", "PlayStation", "PlayStation", "PlayStation", "PlayStation"},
 {"Nintendo", "Nintendo", "Nintendo", "Nintendo", "Nintendo", "Nintendo"},
+{"legend|More", "Suite", "Mehr", "M\xa0""s", "Altro", "Mais"},

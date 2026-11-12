@@ -155,7 +155,8 @@ carried across: the page you were on stays open, on the same row.
 To quit, Esc out of the Options, then Esc again on "Options closed" (Enter
 opens them again); in fullscreen there is no close box. Cmd+Q works too.
 
-Keys: arrows, Enter, Esc; a pad's d-pad or left stick, A and B. The prototype's
+Keys: arrows, Enter, Esc; a pad's d-pad or left stick, A and B. Space (the pad's
+Y) turns the help to its next window when the legend shows More. The prototype's
 own keys:
 
 | Key | What it does |
@@ -163,6 +164,7 @@ own keys:
 | F1 | these keys on one line in the top margin (switch `overlay`); a switch's note takes the line for 2 s |
 | F2 | the next screen size; Shift+F2 the previous (see Screen sizes) |
 | F3 | the green current-value plasma on the chosen preset, besides its "(current)" (switch `greencurrent`, off at start) |
+| F4 | long help: a row's short line, then a second window on Space or Y saying when or why to change it (switch `longhelp`, on at start; off is the short help alone) |
 | F11 | steps the Button names row: Auto / Xbox / PlayStation / Nintendo (switch `padnames`) |
 
 Two more switches have no key: `keyboard` 0 plays as a console before a key is

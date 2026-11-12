@@ -1282,15 +1282,15 @@ const char *Bindings_LegendKey(const char *key) {
         strncat(joined, Bindings_LegendKey(and_ + 1), sizeof joined - strlen(joined) - 1);
         return joined;
     }
-    static char names[4][16];
+    static char names[5][16];
     static const struct {
         const char *key;
         int pad;
-    } kFixed[] = {{"Enter", 0}, {"Esc", 1}, {"Del", 2}, {"Tab", 4}};
+    } kFixed[] = {{"Enter", 0}, {"Esc", 1}, {"Del", 2}, {"Tab", 4}, {"Space", 3}};
     // With no keyboard (a console before any key is typed) the pad's names from the start.
     if ((!Host_LastInputWasPad() && Host_KeyboardSeen()) || g_waiting)
         return key;
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 5; i++) {
         if (!strcmp(key, kFixed[i].key)) {
             PadName(PAD_CODE_BASE + kFixed[i].pad, names[i], sizeof names[i]);
             return names[i];
