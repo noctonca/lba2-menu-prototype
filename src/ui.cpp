@@ -198,7 +198,7 @@ void Ui_Steps(S32 xRight, S32 yc, S32 count, S32 lit, S32 *outLeft) {
         S32 x0 = x + i * (w + gap), y0 = yc - h / 2;
         S32 x1 = x0 + w - 1, y1 = y0 + h - 1;
         if (i < lit)  // GAMEMENU.CPP: the slider plasma, as the 1997 slider fill
-            GamePieces_FireBar(x0 + 1, y0 + 1, x1 - 1, y1 - 1, PLASMA_SLIDER);
+            GamePieces_FireBar(x0 + 1, y0 + 1, x1, y1 - 1, PLASMA_SLIDER);
         else
             GamePieces_Shade(x0 + 1, y0 + 1, x1 - 1, y1 - 1, 4);
         Line(x0, y0, x1, y0, COUL_UP_BLUE);
@@ -264,7 +264,7 @@ S32 Ui_Chip(S32 x, S32 y, const char *key, S32 scale, bool lit) {
     S32 w = Ui_ChipWidth(key, scale), h = 8 * scale + 4 * scale;
     S32 x1 = x + w - 1, y1 = y + h - 1;
     if (lit)
-        GamePieces_FireBar(x + 1, y + 1, x1 - 1, y1 - 1, PLASMA_CURRENT);
+        GamePieces_FireBar(x + 1, y + 1, x1, y1 - 1, PLASMA_CURRENT);
     else
         GamePieces_Shade(x + 1, y + 1, x1 - 1, y1 - 1, MENU_SHADE_LVL);
     Line(x, y, x1, y, COUL_UP_BLUE);
@@ -283,9 +283,9 @@ bool Ui_KeyChip(S32 x, S32 y, S32 w, const char *name, S32 scale, ChipFill fill,
     S32 h = Ui_KeyChipHeight(scale);
     S32 x1 = x + w - 1, y1 = y + h - 1;
     if (fill == CHIP_CURSOR)
-        GamePieces_FireBar(x + 1, y + 1, x1 - 1, y1 - 1, PLASMA_CURSOR);
+        GamePieces_FireBar(x + 1, y + 1, x1, y1 - 1, PLASMA_CURSOR);
     else if (fill == CHIP_WAITING)
-        GamePieces_FireBar(x + 1, y + 1, x1 - 1, y1 - 1, PLASMA_CURRENT);
+        GamePieces_FireBar(x + 1, y + 1, x1, y1 - 1, PLASMA_CURRENT);
     else
         GamePieces_Shade(x + 1, y + 1, x1 - 1, y1 - 1, MENU_SHADE_LVL);
     U8 up = red ? COUL_UP_RED : COUL_UP_BLUE, down = red ? COUL_DOWN_RED : COUL_DOWN_BLUE;

@@ -11,6 +11,9 @@ enum { PLASMA_CURSOR = 12, PLASMA_SLIDER = 4, PLASMA_CURRENT = 8 };
 void GamePieces_InitPlasma();
 // Animate the plasma (call once a frame) and fill a rectangle with a bank.
 void GamePieces_AnimatePlasma();
+// As DrawFireBar, Fill_Poly leaves out column x1: a 1997 row draws its frame there.
+// A fill inside a frame passes the frame's own right column as x1, or a dark column
+// shows between the plasma and the frame.
 void GamePieces_FireBar(S32 x0, S32 y0, S32 x1, S32 y1, S32 bank);
 
 // INVENT.CPP DrawCadre with ALL_ANGLES: the 1px two-tone frame with chamfers.
