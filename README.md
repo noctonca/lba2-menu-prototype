@@ -375,8 +375,8 @@ heads are a line above the rows; `margin:` nothing on a wide page is drawn in
 its margins (32 at the sides, 24 at the top and bottom); `trailing:` wide, what
 a row shows on the right ends 24 in from its right edge; `pitch:` rows in a pane
 are 56 apart and 50 tall; `current:` at most one current-value row in a pane;
-`value:` every setting row shows its value; `return:` the wide layout shows no
-Return row (Esc goes back); the one column keeps it, under the page's title; `proximity:` a pane's last row is
+`value:` every setting row shows its value; `return:` no layout shows a Return row
+(Esc goes back; a mouse or a finger has the corner Back); `proximity:` a pane's last row is
 further from the help below than rows are from each other, a column head above
 the rows is nearer them than the row above it, and a column head inside a row
 is in its pane's first row, above its own chip, and clear of the action's name.

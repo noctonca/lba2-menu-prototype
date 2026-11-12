@@ -99,6 +99,8 @@ void Host_InjectPointer(S32 x, S32 y);
 // `mousedown` / `mouseup`: the left button held until let go, for a drag.
 void Host_InjectButton(bool down);
 void Host_InjectClick(bool right);
+// `tap X Y`: a finger at X, Y, pressed and let go a frame later (a click marked as touch).
+void Host_InjectTap(S32 x, S32 y);
 void Host_InjectWheel(S32 notches);
 const char *Host_KeyName(UiKey k);
 
@@ -115,6 +117,11 @@ bool Host_InjectRaw(const char *name);
 bool Host_InjectPad(const char *name);
 // What the player touched last: true when it was the pad.
 bool Host_LastInputWasPad();
+// What the player used last, if it was a pointer: POINTER_MOUSE after the mouse moved,
+// clicked or turned its wheel, POINTER_TOUCH after a finger; POINTER_NONE once a key or a
+// pad's button is pressed. The menu shows its pointer-only pieces (the corner Back) by it.
+enum { POINTER_NONE = 0, POINTER_MOUSE = 1, POINTER_TOUCH = 2 };
+int Host_LastPointer();
 // A keyboard is offered (the Keyboard view, Tab) only where there is one: always on a
 // desktop; on a console once a key has been typed on one.
 bool Host_KeyboardSeen();

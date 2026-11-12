@@ -577,13 +577,13 @@ void Menu_NoteScreen() {
 
 static int TopPage() { return g_stack[g_depth - 1].page; }
 
-// A row as the layout shows it: a wide page has no Return row (Esc goes back); the one
-// column keeps it under the page's title, as 1997 had it and as a big target for a finger
-// or the mouse (decided 2026-11-12). A row with a "shown when" check is there only while
-// it holds.
+// A row as the layout shows it. No page shows a Return row (decided 2026-11-12, EPmager:
+// clutter): Esc goes back, and a mouse or a finger has the corner Back (DrawBack). The
+// "original" fixture keeps it, as today's lba2cc page has it. A row with a "shown when"
+// check is there only while it holds.
 static bool RowShown(const Page &p, int i) {
     const Row &r = p.rows[i];
-    if (r.type == R_RETURN && Wide() && !g_first)
+    if (r.type == R_RETURN && &p != &g_pages[P_ORIGINAL])
         return false;
     return !r.shown || r.shown();
 }
@@ -1779,6 +1779,46 @@ void Menu_DrawDialogueIn(S32 x0, S32 y0, S32 x1, S32 y1, const char **keysIn, co
     g_helpBox.x0 = x0; g_helpBox.y0 = y0; g_helpBox.x1 = x1; g_helpBox.y1 = y1;
 }
 
+// ── The corner Back (decided 2026-11-12) ──
+// For a mouse or a finger only: shown once the pointer was used last, gone at a key or a
+// pad's button, which have Esc and B. It sits on the title's line: in the one column at the
+// rows' left edge (the title moves right of it when it must), wide in the frame's margin left
+// of the rows. A row's height, as big a target as a row; it presses Esc.
+static bool BackShown() { return Host_LastPointer() != POINTER_NONE && !g_first && !g_closed && !g_console; }
+// Always Back, one look and one width on every screen (decided 2026-11-12; on a question it
+// does what the legend's Esc Cancel does). In the Text language as the legend has it
+// ("legend|Back": the plain "Back" is the walk-back key).
+static const char *BackWord() { return LegendWord("Back"); }
+static S32 BackWidth() { return 44 + Ui_TextWidthAsIs(BackWord()) + 20; }
+static struct {
+    bool shown;
+    S32 x0, y0, x1, y1;
+} g_backBox;
+
+static void DrawBack() {
+    S32 tx, ty;
+    const bool titled = Ui_FirstTitle(&tx, &ty);
+    S32 x0, y0;
+    if (Wide()) {
+        const WideFrame f = Menu_WideFrame();
+        x0 = f.x0 + 24;
+        y0 = (titled ? ty : f.y0 + 24) - 6;
+    } else {
+        x0 = titled ? tx : (S32)Host_LogicalW() / 2 - 275;
+        y0 = (titled ? ty : 16) - 6;  // the title's 38 in a row's 50
+    }
+    const S32 x1 = x0 + BackWidth(), y1 = y0 + ROW_H, yc = (y0 + y1) / 2;
+    HostPointer in;
+    Host_Pointer(&in);
+    const bool over = in.x >= x0 && in.x <= x1 && in.y >= y0 && in.y <= y1;
+    const bool lit = over && (Host_LastPointer() == POINTER_MOUSE || in.held);  // a finger has no hover
+    Ui_RowBackground(x0, y0, x1, y1, lit ? FILL_CURSOR : FILL_SHADE);
+    Ui_Arrow(x0 + 18, yc, -1);
+    Ui_TextAsIs(x0 + 44, yc - 18, BackWord(), INK_WHITE);
+    Menu_Point(POINT_KEY, x0, y0, x1, y1, KEY_ESC);
+    g_backBox = {true, x0, y0, x1, y1};
+}
+
 static void DrawColumn() {
     S32 W = (S32)Host_LogicalW(), H = (S32)Host_LogicalH();
     const Place &t = Top();
@@ -1808,9 +1848,10 @@ static void DrawColumn() {
         S32 top = 16, bottom = H - 1 - 137 - 16;
         if (g_first)
             top = 168 - 8;
-        // A page names itself in a title above its Return row, as the wide pages do (EPmager,
-        // 2026-11-12); the hub has none.
-        const bool titled = g_depth > 1 && !g_first;
+        // A page names itself in a title above its rows, as the wide pages do (EPmager,
+        // 2026-11-12). The hub too, so the corner Back has its line and nothing moves when
+        // it comes (decided 2026-11-12).
+        const bool titled = !g_first;
         const S32 titleH = titled ? ROW_PITCH : 0;
         int visible = (bottom - top - titleH + ROW_GAP) / ROW_PITCH;
         if (visible > count)
@@ -2048,6 +2089,8 @@ void Menu_Draw() {
     Host_DrawBackground();
     GamePieces_AnimatePlasma();
 
+    Ui_SetBackRoom(BackShown() && !Wide() ? BackWidth() : 0);
+    g_backBox.shown = false;
     if (g_closed) {
         // Two lines at the voice's pitch: on one, 784 wide, it would not fit 640.
         const char *lines[2] = {"Options closed.", "<ENTER> opens them again. <ESC> quits."};
@@ -2063,6 +2106,8 @@ void Menu_Draw() {
     } else {
         DrawColumn();
     }
+    if (BackShown())
+        DrawBack();
 
     if (g_console)
         DrawConsole();
@@ -2422,6 +2467,9 @@ void Menu_WriteState(FILE *f) {
     // What the pointer can point at, as the last draw placed it: [kind, x0, y0, x1, y1, a, b].
     static const char *const kPointKinds[] = {"row", "chip", "answer", "step", "slider", "key", "scroll"};
     static_assert(sizeof kPointKinds / sizeof kPointKinds[0] == POINT_SCROLL + 1, "a name for every PointKind");
+    fprintf(f, ",\"pointer\":\"%s\"", Host_LastPointer() == POINTER_TOUCH ? "touch" : Host_LastPointer() == POINTER_MOUSE ? "mouse" : "none");
+    if (g_backBox.shown)
+        fprintf(f, ",\"back\":[%d,%d,%d,%d]", (int)g_backBox.x0, (int)g_backBox.y0, (int)g_backBox.x1, (int)g_backBox.y1);
     fprintf(f, ",\"points\":[");
     for (int i = 0; i < g_pointCount; i++) {
         const PointTarget &p = g_points[i];

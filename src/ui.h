@@ -59,8 +59,16 @@ void Ui_TextShadow(S32 x, S32 y, const char *s, U8 colour);  // dialogue shadow 
 // A page title (the brand book's Title): white, the title shadow +4,+4, centred on
 // x0..x1, its text cell from y. Returns where the rows below may start.
 S32 Ui_Title(S32 x0, S32 x1, S32 y, const char *s, bool asIs = false);
+// The corner Back's width from a title's x0 this frame, 0 for none: a title moves right of
+// it when centring would put it under the button (the one column, where Back sits on the
+// title's line at the rows' left edge).
+void Ui_SetBackRoom(S32 w);
+// The first title drawn this frame: its span's left and its line's top. False: none.
+bool Ui_FirstTitle(S32 *x0, S32 *y);
 
 // Two solid triangles, kin of the corner arrow sprites, either side of a value.
+// One arrow of the change marks: its tip at tipX, pointing left (dir -1) or right (+1).
+void Ui_Arrow(S32 tipX, S32 yc, S32 dir);
 void Ui_ChangeMarks(S32 leftX, S32 rightX, S32 yCentre);
 // Framed steps for a value with few of them (detail level 0..3 shows 3 steps):
 // lit steps take the slider plasma, unlit ones stay dark. They end on xRight.

@@ -629,6 +629,7 @@ static bool PadDown(int k) {
 static bool s_rawDown[256 + PAD_CODE_COUNT];
 static S32 s_rawPressed, s_rawInjected;
 static bool s_lastPad;
+static int s_lastPointer;  // POINTER_*: the pointer, if it was used last
 #ifdef LBA2_PROTO_SDL
 static bool s_keyboardSeen = true;
 #else
@@ -661,8 +662,10 @@ static bool PadRawDown(int n) {
 static void ScanRaw() {
     s_rawPressed = s_rawInjected;
     s_rawInjected = 0;
-    if (s_rawPressed)
+    if (s_rawPressed) {
         s_lastPad = s_rawPressed >= PAD_CODE_BASE;
+        s_lastPointer = POINTER_NONE;
+    }
     if (s_rawPressed && s_rawPressed < PAD_CODE_BASE)
         s_keyboardSeen = true;
     for (int i = 0; i < 256 + PAD_CODE_COUNT; i++) {
@@ -672,6 +675,7 @@ static void ScanRaw() {
             if (!s_rawPressed)
                 s_rawPressed = code;
             s_lastPad = i >= 256;
+            s_lastPointer = POINTER_NONE;
             if (i < 256)
                 s_keyboardSeen = true;
         }
@@ -828,7 +832,7 @@ S32 Host_PadFamily() {
 static HostPointer s_ptr;
 static bool s_ptrInjected;        // a script put it; a real move takes it back
 static S32 s_injX, s_injY;
-static bool s_injMoved, s_injDown, s_injRight, s_injHeld;
+static bool s_injMoved, s_injDown, s_injRight, s_injHeld, s_injTouch;
 static S32 s_injWheel;
 
 void Host_InjectPointer(S32 x, S32 y) {
@@ -842,7 +846,13 @@ void Host_InjectClick(bool right) {
     else
         s_injDown = true;
 }
+void Host_InjectTap(S32 x, S32 y) {
+    Host_InjectPointer(x, y);
+    s_injDown = true;
+    s_injTouch = true;
+}
 void Host_InjectWheel(S32 notches) { s_injWheel += notches; }
+int Host_LastPointer() { return s_lastPointer; }
 void Host_InjectButton(bool down) { s_injHeld = down; }
 void Host_Pointer(HostPointer *out) { *out = s_ptr; }
 
@@ -956,8 +966,13 @@ static void ReadPointer() {
     s_ptr.wheel = ConsumeMouseWheelY() + s_injWheel;
     s_injMoved = s_injDown = s_injRight = false;
     s_injWheel = 0;
-    if (s_ptr.moved || s_ptr.pressed || s_ptr.rightPressed || s_ptr.wheel)
+    if (s_ptr.moved || s_ptr.pressed || s_ptr.rightPressed || s_ptr.wheel) {
         s_lastPad = false;  // the legend names keys again
+        const bool touch = s_ptrInjected ? s_injTouch : LastInputWasTouch != 0;
+        s_lastPointer = touch ? POINTER_TOUCH : POINTER_MOUSE;
+    }
+    if (!s_ptr.held)
+        s_injTouch = false;
     if (!s_ptrInjected && (realMove || s_ptr.pressed || s_ptr.rightPressed || s_ptr.wheel)) {
         s_ptrSeen = true;
         s_ptrActiveAt = Host_TimeMs();
@@ -979,6 +994,8 @@ bool Host_BeginFrame() {
         if (k == KEY_DEL)  // a Mac keyboard's delete key is Backspace
             down = down || CheckKey(K_BACKSPACE) != 0;
         s_pressed[k] = s_injected[k];
+        if (s_injected[k])
+            s_lastPointer = POINTER_NONE;  // a script's `key`, as a typed key
         s_injected[k] = false;
         if (down && !s_down[k]) {
             s_pressed[k] = true;
@@ -1058,6 +1075,7 @@ void Host_ResetInput() {
     memset(s_rawDown, 0, sizeof s_rawDown);
     s_rawPressed = s_rawInjected = 0;
     s_lastPad = false;
+    s_lastPointer = POINTER_NONE;
 }
 
 static int s_backdrop;
