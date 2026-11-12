@@ -1,8 +1,8 @@
 // A pad's buttons drawn as the pad shows them, in place of their names on chips:
-// PlayStation's four shapes; Xbox's coloured letters, View and Menu. The names stay the
-// binding's identity (the trace, the self test, the voice's "<CROSS>"); only a chip's
-// drawing changes, and only on a chip that names a pad's button: the keyboard's X key
-// stays the letter.
+// PlayStation's four shapes; Xbox's coloured letters, View and Menu; Nintendo's Home. The
+// names stay the binding's identity (the trace, the self test, the voice's "<CROSS>"); only
+// a chip's drawing changes, and only on a chip that names a pad's button: the keyboard's X
+// key stays the letter.
 #pragma once
 
 #include <SYSTEM/ADELINE_TYPES.H>

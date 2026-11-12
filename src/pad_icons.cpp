@@ -11,7 +11,7 @@ extern "C" U8 Font8x8[256 * 8];
 
 int g_padIcons = 1;
 
-enum { PAD_XBOX = 1, PAD_PLAYSTATION = 2 };
+enum { PAD_XBOX = 1, PAD_PLAYSTATION = 2, PAD_NINTENDO = 3 };
 
 // Each button 7x7 in an 8x8 cell, the top 7 rows as a capital of the 8x8 font sits.
 // colour 0: the letters' ink (a button printed without colour). A button with no rows is
@@ -41,6 +41,10 @@ static const struct {
     {PAD_XBOX, "Y", 244, {0}},
     {PAD_XBOX, "View", 0, {0xF0, 0x90, 0x90, 0xFE, 0x12, 0x12, 0x1E}},
     {PAD_XBOX, "Menu", 0, {0x00, 0xFE, 0x00, 0xFE, 0x00, 0xFE, 0x00}},
+    // Nintendo: the Switch's Pro Controller and Joy-Con print B, A, Y and X without colour,
+    // so those stay the font's letters, as do - and +, which the font draws as the pad
+    // prints them. Home: a house with a door, as its button shows.
+    {PAD_NINTENDO, "Home", 0, {0x10, 0x38, 0x7C, 0xFE, 0x7C, 0x6C, 0x6C}},
 };
 enum { BUTTON_COUNT = sizeof kButtons / sizeof kButtons[0] };
 
