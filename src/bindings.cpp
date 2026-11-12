@@ -841,7 +841,7 @@ static void DrawActionRow(int action, int row, S32 x0, S32 y0, S32 x1, S32 y1, c
         ChipFill fill = here ? (g_waiting ? CHIP_WAITING : CHIP_CURSOR) : CHIP_SHADE;
         bool red = ConflictOf(action, c) >= 0;
         S32 cy = ChipTop(yc, s);
-        bool fits = Ui_KeyChip(cx[i], cy, cw[i], name, s, fill, red);
+        bool fits = Ui_KeyChip(cx[i], cy, cw[i], name, s, fill, red, c >= 2 ? PadFamily() : 0);
         Menu_Point(POINT_CHIP, cx[i], cy, cx[i] + cw[i] - 1, cy + ch - 1, row, i);
         if (g_chipCount < 32) {
             DrawnChip &k = g_chips[g_chipCount++];
@@ -1247,6 +1247,14 @@ void Bindings_WriteState(FILE *f) {
         }
     }
     fprintf(f, "]}");
+}
+
+// Which pad family the legend's keys name, 0 when they are the keyboard's: as
+// Bindings_LegendKey decides, and while waiting for a pad's button, its Start.
+int Bindings_LegendPadFamily() {
+    if (g_waiting)
+        return CursorColumn() >= 2 ? PadFamily() : 0;
+    return !Host_LastInputWasPad() && Host_KeyboardSeen() ? 0 : PadFamily();
 }
 
 // A legend's key as the player's device names it: after a pad press, the pad's

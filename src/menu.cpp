@@ -1493,7 +1493,7 @@ static int LegendPerColumn(int n) { return n > 3 ? (n + 1) / 2 : n; }
 static void LegendColumn(const char **keys, const char **words, int i0, int i1, S32 scale, S32 *chipW, S32 *wordW) {
     *chipW = *wordW = 0;
     for (int i = i0; i < i1; i++) {
-        S32 c = Ui_ChipWidth(keys[i], scale), t = Ui_WordWidth(LegendWord(words[i]), scale);
+        S32 c = Ui_ChipWidth(keys[i], scale, Bindings_LegendPadFamily()), t = Ui_WordWidth(LegendWord(words[i]), scale);
         *chipW = c > *chipW ? c : *chipW;
         *wordW = t > *wordW ? t : *wordW;
     }
@@ -1568,8 +1568,8 @@ static void DrawLegendStacked(S32 x0, S32 y0, const char **keys, const char **wo
             LegendColumn(keys, words, i, i + per < n ? i + per : n, scale, &chipW, &wordW);
         }
         S32 y = y0 + (i % per) * pitch;
-        S32 c = Ui_ChipWidth(keys[i], scale);
-        Ui_Chip(x + chipW - c, y, keys[i], scale);
+        S32 c = Ui_ChipWidth(keys[i], scale, Bindings_LegendPadFamily());
+        Ui_Chip(x + chipW - c, y, keys[i], scale, false, Bindings_LegendPadFamily());
         Ui_Word(x + chipW + 4 * scale, y + chipH / 2 - 4 * scale, LegendWord(words[i]), INK_CONFIG_MENU, scale);
         LegendRecord(i, keys[i], words[i]);
         LegendPoint(x + chipW - c, y - 1, x + chipW + 4 * scale + Ui_WordWidth(LegendWord(words[i]), scale), y + chipH,
@@ -1654,9 +1654,9 @@ static S32 DrawLegendRow(S32 x, S32 y, const char **keys, const char **words, in
     for (int i = 0; i < n; i++) {
         if (i)
             w += 12 * scale;
-        S32 c = Ui_ChipWidth(keys[i], scale);
+        S32 c = Ui_ChipWidth(keys[i], scale, Bindings_LegendPadFamily());
         if (draw) {
-            Ui_Chip(x + w, y, keys[i], scale);
+            Ui_Chip(x + w, y, keys[i], scale, false, Bindings_LegendPadFamily());
             Ui_Word(x + w + c + 4 * scale, y + 2 * scale, LegendWord(words[i]), INK_CONFIG_MENU, scale);
             LegendRecord(i, keys[i], words[i]);
             LegendPoint(x + w, y - 1, x + w + c + 4 * scale + Ui_WordWidth(LegendWord(words[i]), scale), y + 12 * scale,

@@ -82,8 +82,10 @@ void Ui_Word(S32 x, S32 y, const char *s, U8 colour, S32 scale);
 // legend's "<> / Enter Change": either changes the value).
 #define CHIP_AND "\x1f"
 enum { CHIP_AND_GAP = 3 };  // between the two chips, a step
-S32 Ui_ChipWidth(const char *key, S32 scale);
-S32 Ui_Chip(S32 x, S32 y, const char *key, S32 scale, bool lit = false);
+// pad: the family whose button the chip names (1 Xbox, 2 PlayStation, 3 Nintendo), drawn
+// as the pad shows it (pad_icons.h); 0 for a key.
+S32 Ui_ChipWidth(const char *key, S32 scale, int pad = 0);
+S32 Ui_Chip(S32 x, S32 y, const char *key, S32 scale, bool lit = false, int pad = 0);
 
 // Every chip drawn this frame with its whole name inside, for the self test: the frame's
 // box, the name, whether it is on the plain shade (its letters in INK_CONFIG_MENU) and
@@ -101,7 +103,7 @@ int Ui_ChipBoxes(const ChipBox **out);
 // red: the alert pair, for a key on two actions. Returns false when the name
 // does not fit inside (it is clipped).
 enum ChipFill { CHIP_SHADE, CHIP_CURSOR, CHIP_WAITING };
-bool Ui_KeyChip(S32 x, S32 y, S32 w, const char *name, S32 scale, ChipFill fill, bool red);
+bool Ui_KeyChip(S32 x, S32 y, S32 w, const char *name, S32 scale, ChipFill fill, bool red, int pad = 0);
 S32 Ui_KeyChipHeight(S32 scale);
 
 // The game's voice: help typed letter by letter with the 13-step colour ramp

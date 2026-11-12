@@ -73,3 +73,4 @@ void Bindings_StartSaid(char *out, size_t n);
 void Bindings_SaidKey(const char *name, char *out, size_t n);
 // A legend key ("Enter", "Esc", "Del", "Tab") as the pad names it after a pad press.
 const char *Bindings_LegendKey(const char *key);
+int Bindings_LegendPadFamily();  // 0: the legend names keys

@@ -9,30 +9,48 @@
 
 int g_padIcons = 1;
 
-// The four shapes, 7x7 in an 8x8 cell, the top 7 rows as a capital of the 8x8 font sits.
-// Outlines one pixel wide, as the pad prints them: at the font's weight (uprights two wide)
-// they read as the letters X, O and I (tried 2026-11-12).
-// Colours: the PS1-PS4 pads' print, the nearest the menu palette has (green 139,203,147;
-// red 215,103,99; blue 131,183,215; pink 255,179,175).
+enum { PAD_XBOX = 1, PAD_PLAYSTATION = 2 };
+
+// Each button 7x7 in an 8x8 cell, the top 7 rows as a capital of the 8x8 font sits.
+// colour 0: the letters' ink (a button printed without colour). A button with no rows is
+// its name's letter in the 8x8 font, in its colour.
 static const struct {
+    int pad;
     const char *name;
     U8 colour;
     U8 rows[7];
-} kShapes[] = {
-    {"Triangle", 141, {0x10, 0x28, 0x28, 0x44, 0x44, 0x82, 0xFE}},
-    {"Circle", 76, {0x38, 0x44, 0x82, 0x82, 0x82, 0x44, 0x38}},
-    {"Cross", 205, {0x82, 0x44, 0x28, 0x10, 0x28, 0x44, 0x82}},
-    {"Square", 79, {0xFE, 0x82, 0x82, 0x82, 0x82, 0x82, 0xFE}},
+} kButtons[] = {
+    // PlayStation: outlines one pixel wide, as the pad prints them; at the font's weight
+    // (uprights two wide) they read as the letters X, O and I (tried 2026-11-12). The
+    // PS1-PS4 print's colours, the nearest the menu palette has (green 139,203,147;
+    // red 215,103,99; blue 131,183,215; pink 255,179,175).
+    {PAD_PLAYSTATION, "Triangle", 141, {0x10, 0x28, 0x28, 0x44, 0x44, 0x82, 0xFE}},
+    {PAD_PLAYSTATION, "Circle", 76, {0x38, 0x44, 0x82, 0x82, 0x82, 0x44, 0x38}},
+    {PAD_PLAYSTATION, "Cross", 205, {0x82, 0x44, 0x28, 0x10, 0x28, 0x44, 0x82}},
+    {PAD_PLAYSTATION, "Square", 79, {0xFE, 0x82, 0x82, 0x82, 0x82, 0x82, 0xFE}},
+    // Xbox: the letter in its colour, as the One and Series pads print it on a dark button
+    // (green 119,183,127; red 191,59,55; blue 79,155,191; yellow 255,207,0). A letter cut
+    // out of a coloured disc was tried and did not read at 7 pixels (2026-11-12). View: two
+    // squares, one over the other; Menu: three lines. Guide stays a word: its button is the
+    // Xbox logo.
+    {PAD_XBOX, "A", 140, {0}},
+    {PAD_XBOX, "B", 74, {0}},
+    {PAD_XBOX, "X", 203, {0}},
+    {PAD_XBOX, "Y", 244, {0}},
+    {PAD_XBOX, "View", 0, {0xF0, 0x90, 0x90, 0xFE, 0x12, 0x12, 0x1E}},
+    {PAD_XBOX, "Menu", 0, {0x00, 0xFE, 0x00, 0xFE, 0x00, 0xFE, 0x00}},
 };
-enum { SHAPE_COUNT = sizeof kShapes / sizeof kShapes[0] };
+enum { BUTTON_COUNT = sizeof kButtons / sizeof kButtons[0] };
 
-// The shape whose name is the whole word at s (s at a word's start), or -1; *len its length.
-static int ShapeAt(const char *s, size_t *len) {
-    if (!g_padIcons)
+// The button whose name is the whole word at s (s at a word's start), or -1; *len its length.
+static int ButtonAt(const char *s, int pad, size_t *len) {
+    if (!g_padIcons || !pad)
         return -1;
-    for (int i = 0; i < SHAPE_COUNT; i++) {
-        size_t n = strlen(kShapes[i].name);
-        if (!strncmp(s, kShapes[i].name, n) && (s[n] == 0 || s[n] == ' ')) {
+    for (int i = 0; i < BUTTON_COUNT; i++) {
+        if (kButtons[i].pad != pad)
+            continue;
+        size_t n = strlen(kButtons[i].name);
+        if (!strncmp(s, kButtons[i].name, n) && (s[n] == 0 || s[n] == ' ')) {
             *len = n;
             return i;
         }
@@ -40,11 +58,23 @@ static int ShapeAt(const char *s, size_t *len) {
     return -1;
 }
 
-static void DrawShape(S32 x, S32 y, int shape, U8 colour, S32 scale) {
+static bool HasRows(int b) {
+    for (int r = 0; r < 7; r++)
+        if (kButtons[b].rows[r])
+            return true;
+    return false;
+}
+
+static void DrawButton(S32 x, S32 y, int b, U8 colour, S32 scale) {
+    if (!HasRows(b)) {
+        char letter[2] = {kButtons[b].name[0], 0};
+        Ui_Small(x, y, letter, colour, scale);
+        return;
+    }
     U8 *log = (U8 *)Log;
     for (S32 row = 0; row < 7; row++)
         for (S32 col = 0; col < 8; col++) {
-            if (!(kShapes[shape].rows[row] & (0x80 >> col)))
+            if (!(kButtons[b].rows[row] & (0x80 >> col)))
                 continue;
             for (S32 dy = 0; dy < scale; dy++) {
                 S32 py = y + row * scale + dy;
@@ -59,17 +89,17 @@ static void DrawShape(S32 x, S32 y, int shape, U8 colour, S32 scale) {
         }
 }
 
-// Walks s a cell at a time: draw (when x is not null) and returns the cells taken.
-static S32 Walk(const char *s, S32 x, S32 y, U8 colour, S32 scale, bool coloured, bool draw) {
+// Walks s a cell at a time, drawing when draw is set; returns the cells taken.
+static S32 Walk(const char *s, S32 x, S32 y, U8 colour, S32 scale, bool coloured, int pad, bool draw) {
     S32 cells = 0;
     char one[2] = {0, 0};
     for (const char *p = s; *p;) {
         size_t len;
-        int shape = (p == s || p[-1] == ' ') ? ShapeAt(p, &len) : -1;
+        int b = (p == s || p[-1] == ' ') ? ButtonAt(p, pad, &len) : -1;
         S32 cx = x + cells * 8 * scale;
-        if (shape >= 0) {
+        if (b >= 0) {
             if (draw)
-                DrawShape(cx, y, shape, coloured ? kShapes[shape].colour : colour, scale);
+                DrawButton(cx, y, b, coloured && kButtons[b].colour ? kButtons[b].colour : colour, scale);
             p += len;
         } else {
             if (draw) {
@@ -83,8 +113,10 @@ static S32 Walk(const char *s, S32 x, S32 y, U8 colour, S32 scale, bool coloured
     return cells;
 }
 
-S32 PadIcons_Width(const char *s, S32 scale) { return Walk(s, 0, 0, 0, scale, false, false) * 8 * scale; }
+S32 PadIcons_Width(const char *s, S32 scale, int pad) {
+    return Walk(s, 0, 0, 0, scale, false, pad, false) * 8 * scale;
+}
 
-void PadIcons_Text(S32 x, S32 y, const char *s, U8 colour, S32 scale, bool coloured) {
-    Walk(s, x, y, colour, scale, coloured, true);
+void PadIcons_Text(S32 x, S32 y, const char *s, U8 colour, S32 scale, bool coloured, int pad) {
+    Walk(s, x, y, colour, scale, coloured, pad, true);
 }

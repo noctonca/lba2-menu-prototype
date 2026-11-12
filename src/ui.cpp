@@ -308,24 +308,24 @@ static void NoteChip(S32 x0, S32 y0, S32 x1, S32 y1, const char *key, S32 scale,
     snprintf(c.key, sizeof c.key, "%s", key);
 }
 
-S32 Ui_ChipWidth(const char *key, S32 scale) {
+S32 Ui_ChipWidth(const char *key, S32 scale, int pad) {
     if (const char *and_ = strchr(key, CHIP_AND[0])) {
         std::string first(key, and_ - key);
-        return Ui_ChipWidth(first.c_str(), scale) + CHIP_AND_GAP * scale + Ui_ChipWidth(and_ + 1, scale);
+        return Ui_ChipWidth(first.c_str(), scale, pad) + CHIP_AND_GAP * scale + Ui_ChipWidth(and_ + 1, scale, pad);
     }
     // A one-letter key is square, as a keycap or a pad's button (EPmager, 2026-11-12).
     if (key[0] && !key[1])
         return Ui_KeyChipHeight(scale);
-    return PadIcons_Width(key, scale) + 8 * scale;
+    return PadIcons_Width(key, scale, pad) + 8 * scale;
 }
 
-S32 Ui_Chip(S32 x, S32 y, const char *key, S32 scale, bool lit) {
+S32 Ui_Chip(S32 x, S32 y, const char *key, S32 scale, bool lit, int pad) {
     if (const char *and_ = strchr(key, CHIP_AND[0])) {
         std::string first(key, and_ - key);
-        S32 w = Ui_Chip(x, y, first.c_str(), scale, lit) + CHIP_AND_GAP * scale;
-        return w + Ui_Chip(x + w, y, and_ + 1, scale, lit);
+        S32 w = Ui_Chip(x, y, first.c_str(), scale, lit, pad) + CHIP_AND_GAP * scale;
+        return w + Ui_Chip(x + w, y, and_ + 1, scale, lit, pad);
     }
-    S32 w = Ui_ChipWidth(key, scale), h = 8 * scale + 4 * scale;
+    S32 w = Ui_ChipWidth(key, scale, pad), h = 8 * scale + 4 * scale;
     S32 x1 = x + w - 1, y1 = y + h - 1;
     if (lit)
         GamePieces_FireBar(x + 1, y + 1, x1, y1 - 1, PLASMA_CURRENT);
@@ -338,7 +338,7 @@ S32 Ui_Chip(S32 x, S32 y, const char *key, S32 scale, bool lit) {
     // The letters' ink in the middle, not their cells (EPmager, 2026-11-12).
     S32 tx, ty;
     CentreInk(x, y, w, h, key, scale, &tx, &ty);
-    PadIcons_Text(tx, ty, key, lit ? INK_WHITE : INK_CONFIG_MENU, scale, !lit);
+    PadIcons_Text(tx, ty, key, lit ? INK_WHITE : INK_CONFIG_MENU, scale, !lit, pad);
     NoteChip(x, y, x1, y1, key, scale, !lit, true);
     return w;
 }
@@ -347,7 +347,7 @@ S32 Ui_KeyChipHeight(S32 scale) {
     return 8 * scale + 4 * scale;
 }
 
-bool Ui_KeyChip(S32 x, S32 y, S32 w, const char *name, S32 scale, ChipFill fill, bool red) {
+bool Ui_KeyChip(S32 x, S32 y, S32 w, const char *name, S32 scale, ChipFill fill, bool red, int pad) {
     S32 h = Ui_KeyChipHeight(scale);
     S32 x1 = x + w - 1, y1 = y + h - 1;
     if (fill == CHIP_CURSOR)
@@ -365,7 +365,7 @@ bool Ui_KeyChip(S32 x, S32 y, S32 w, const char *name, S32 scale, ChipFill fill,
     bool empty = !name || !name[0];
     const char *text = empty ? "......" : name;
     S32 inner = w - 8 * scale;
-    S32 tw = PadIcons_Width(text, scale);
+    S32 tw = PadIcons_Width(text, scale, empty ? 0 : pad);
     S32 tx, ty;
     CentreInk(x, y, w, h, text, scale, &tx, &ty);
     if (tw > inner)  // too long: from the left, clipped
@@ -373,7 +373,7 @@ bool Ui_KeyChip(S32 x, S32 y, S32 w, const char *name, S32 scale, ChipFill fill,
     U8 ink = fill != CHIP_SHADE ? INK_WHITE : empty ? INK_DISABLED : INK_CONFIG_MENU;
     const ClipSave clip;
     SetClip(x + 2, y + 1, x1 - 2, y1 - 1);
-    PadIcons_Text(tx, ty, text, ink, scale, fill == CHIP_SHADE);
+    PadIcons_Text(tx, ty, text, ink, scale, fill == CHIP_SHADE, empty ? 0 : pad);
     clip.Restore();
     if (tw <= inner && !empty)
         NoteChip(x, y, x1, y1, text, scale, fill == CHIP_SHADE, false);
