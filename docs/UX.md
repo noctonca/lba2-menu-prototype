@@ -93,7 +93,9 @@ the call is answered.
   six English labels and their values need (up to 556); one pane is 640 wide
   and holds them with 84 to spare. A page's name is its title (the brand
   book's Title, +4,+4 shadow), in the seventh row's place: a page shows six
-  rows under it, the hub seven and no title. A longer page scrolls (Weapons,
+  rows under it, the hub too (titled Options since 2026-11-13, as the column's
+  hub is: rows keep their height between the hub and a page, and the corner
+  Back sits beside a title, not against the first row). A longer page scrolls (Weapons,
   seven actions). The hub no longer previews a category's rows.
 
 ## Vertical rhythm
@@ -129,7 +131,11 @@ is no pointer, so the cost of a target is the number of key presses to it.
   pad's button, which have Esc and B. It always says Back, on a question
   too, where it does what Esc Cancel does. Every page has a title line for it, the one
   column's hub too, so nothing moves when it comes; a title too wide beside
-  it swings, as a long 1997 row does (decided 2026-11-12).
+  it swings, as a long 1997 row does (decided 2026-11-12). Back is an option:
+  while the mouse is on it no row is lit and the help is quiet (a question
+  still asks); it stays lit over empty space, as a row keeps the cursor. The
+  first key while on Back only brings the cursor back to its row; the next
+  one moves (decided 2026-11-13).
 - A legend entry that takes a click lights under the mouse (its chip in the
   current plasma, its word white), so it reads as a button; a finger has no
   hover, so it lights only while pressed. No chips for the mouse's buttons:
@@ -159,7 +165,7 @@ is no pointer, so the cost of a target is the number of key presses to it.
 
 **Miller's Law, Chunking** (working memory holds about 7 chunks).
 - A page holds at most 7 rows (the brand book's "a plain menu does not
-  scroll"); on the wide canvas, 6 under the page's title, 7 on the hub. More
+  scroll"); on the wide canvas, 6 under the page's title, the hub's too. More
   means a sub-page. Since the help and the title, a 640x480 page shows 4 rows,
   the hub too, and the rest scroll.
 - The Controls page chunks 36 actions into 7 groups of 4 to 7.

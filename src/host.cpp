@@ -1011,6 +1011,7 @@ bool Host_BeginFrame() {
 
 bool Host_Pressed(UiKey k) { return s_pressed[k]; }
 void Host_PressNow(UiKey k) { s_pressed[k] = true; }
+void Host_Unpress(UiKey k) { s_pressed[k] = false; }
 
 void Host_SetHeadless(bool on) { s_headless = on; }
 

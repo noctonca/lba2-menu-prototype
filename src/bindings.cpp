@@ -938,7 +938,7 @@ static void DrawAnswers(S32 x0, S32 x1, S32 top, const char *pane, const char *c
     for (int i = 0; i < 2; i++) {
         const char *label = labels[i], *shown = shownText[i];
         S32 y0 = top + i * ROW_PITCH, yc = y0 + ROW_H / 2;
-        RowFill fill = i == answer ? FILL_CURSOR : FILL_SHADE;
+        RowFill fill = i == answer && Menu_CursorLit() ? FILL_CURSOR : FILL_SHADE;
         Ui_RowBackground(x0, y0, x1, y0 + ROW_H, fill);
         DrawnRow &d = Menu_Record(pane, label, "", fill, x0, y0, x1, y0 + ROW_H);
         Menu_Point(POINT_ANSWER, x0, y0, x1, y0 + ROW_H, i);
@@ -1001,7 +1001,7 @@ static void DrawActions(S32 x0, S32 x1, S32 headsTop, S32 limit, const char *pan
     S32 y = top;
     int first = GroupFirst(g);
     for (int i = scroll; i < scroll + visible; i++) {
-        DrawActionRow(first + i, i, x0, y, x1, y + ROW_H, cols, ncols, i == row, pane);
+        DrawActionRow(first + i, i, x0, y, x1, y + ROW_H, cols, ncols, i == row && Menu_CursorLit(), pane);
         y += ROW_PITCH;
     }
     if (HeadsInRow() && visible > 0)
@@ -1022,7 +1022,7 @@ static void DrawWideControls() {
     } else if (OnGroups()) {
         S32 y = top;
         for (int g = 0; g < GROUP_COUNT; g++) {
-            RowFill fill = g == CurrentGroup() ? FILL_CURSOR : FILL_SHADE;
+            RowFill fill = g == CurrentGroup() && Menu_CursorLit() ? FILL_CURSOR : FILL_SHADE;
             Ui_RowBackground(x0, y, x1, y + ROW_H, fill);
             Ui_TextInRoom(x0 + 16, x1 - 16, y + ROW_H / 2 - 18, Ui_Tr(kGroups[g].name), INK_WHITE, fill == FILL_CURSOR);
             DrawnRow &d = Menu_Record("bindings-left", kGroups[g].name, "", fill, x0, y, x1, y + ROW_H);
@@ -1095,9 +1095,10 @@ static void DrawColumnControls() {
             (x0 + x1 + 1) / 2 - Ui_TextWidth("Keys and buttons") / 2;
         for (int i = scroll; i < scroll + visible; i++) {
             const char *label = kGroups[i].name;
-            RowFill fill = i == cursor ? FILL_CURSOR : FILL_SHADE;
+            const bool lit = i == cursor && Menu_CursorLit();
+            RowFill fill = lit ? FILL_CURSOR : FILL_SHADE;
             Ui_RowBackground(x0, y, x1, y + ROW_H, fill);
-            Menu_RowLabelCentred(x0, x1, y + ROW_H / 2, label, INK_WHITE, false, i == cursor);
+            Menu_RowLabelCentred(x0, x1, y + ROW_H / 2, label, INK_WHITE, false, lit);
             DrawnRow &d = Menu_Record("column", label, "", fill, x0, y, x1, y + ROW_H);
             Menu_Point(POINT_ROW, x0, y, x1, y + ROW_H, P_KEYS, i + 1);
             d.textLeft = (x0 + x1) / 2 - Ui_TextWidth(label) / 2;

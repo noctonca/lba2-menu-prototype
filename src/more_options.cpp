@@ -472,7 +472,7 @@ static void DrawTable(S32 px0, S32 px1, S32 py0, S32 py1) {
             continue;
         }
         int i = line[k];
-        bool cursor = i == cursorRow;
+        bool cursor = i == cursorRow && Menu_CursorLit();
         bool changed = g_val[i] != kTuning[i].def;
         if (cursor)
             Ui_RowBackground(d.x0, d.y0, d.x1, d.y1, FILL_CURSOR);

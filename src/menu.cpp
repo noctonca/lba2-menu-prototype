@@ -775,6 +775,10 @@ static void UpdateVoice() {
         MoreOptions_Say();
         return;
     }
+    if (!g_confirm && !Menu_CursorLit()) {  // on Back: no row to speak of; a question still asks
+        Menu_SayAsIs("");
+        return;
+    }
     const Row *r = CursorRow();
     const char *text = g_confirm ? kQuestions[g_question].voice : HelpFor(r);
     if (text == g_helpBuf)
@@ -1026,8 +1030,26 @@ int Menu_WheelView(int &scroll, int visible, int total, int cursor) {
     return cursor < scroll ? scroll : cursor >= scroll + visible ? scroll + visible - 1 : cursor;
 }
 
+// The corner Back is an option a mouse can stand on: while it is, no row is lit (decided
+// 2026-11-13). It stays on Back over empty space, as a row keeps the cursor; a key hides Back
+// and the cursor is on its row again.
+static bool g_onBack;
+static bool BackShown();
+
+bool Menu_CursorLit() {
+    if (!g_onBack || !BackShown())
+        return true;
+    HostPointer in;
+    Host_Pointer(&in);
+    return !(LastPointer() == POINTER_MOUSE || in.held);  // a finger is on Back only while pressing it
+}
+
 // The cursor where the pointer is.
 static void PointTo(const PointTarget &p) {
+    const bool wasBack = g_onBack;
+    g_onBack = p.kind == POINT_KEY && p.b == POINT_KEY_BACK;
+    if (g_onBack && !wasBack)
+        Trace("cursor Back (pointer)");
     switch (p.kind) {
     case POINT_ROW:
         CursorTo(p.a, p.b);
@@ -1095,6 +1117,17 @@ static void UpdatePointer() {
     HostPointer in;
     Host_Pointer(&in);
     const PointTarget *at = PointAt(in.x, in.y);
+    if (g_onBack && LastPointer() == POINTER_NONE && !g_first && !g_closed && !g_console) {
+        // A key while on Back only brings the cursor back to its row (decided 2026-11-13); Esc
+        // still goes back, as Back would have.
+        g_onBack = false;
+        for (int k = 0; k < KEY_COUNT; k++)
+            if (k != KEY_ESC)
+                Host_Unpress((UiKey)k);
+        Trace("cursor back on its row (key)");
+    } else if (!BackShown()) {
+        g_onBack = false;
+    }
     if (Bindings_Waiting()) {
         // A click is not a key to bind: only the legend's Cancel and the right button act.
         if (in.pressed) {
@@ -1696,7 +1729,7 @@ static void DrawConfirm(const char *pane, S32 x0, S32 x1, S32 y0) {
     const char *const *answers = kQuestions[g_question].answers;
     for (int i = 0; i < 2; i++) {
         S32 ry0 = y0 + i * ROW_PITCH, yc = ry0 + ROW_H / 2;
-        RowFill fill = i == g_confirmCursor ? FILL_CURSOR : FILL_SHADE;
+        RowFill fill = i == g_confirmCursor && Menu_CursorLit() ? FILL_CURSOR : FILL_SHADE;
         Ui_RowBackground(x0, ry0, x1, ry0 + ROW_H, fill);
         DrawnRow &d = Menu_Record(pane, answers[i], "", fill, x0, ry0, x1, ry0 + ROW_H);
         Menu_Point(POINT_ANSWER, x0, ry0, x1, ry0 + ROW_H, i);
@@ -1841,12 +1874,11 @@ static void DrawBack() {
     const S32 x1 = x0 + BackWidth(), y1 = y0 + ROW_H, yc = (y0 + y1) / 2;
     HostPointer in;
     Host_Pointer(&in);
-    const bool over = in.x >= x0 && in.x <= x1 && in.y >= y0 && in.y <= y1;
-    const bool lit = over && (LastPointer() == POINTER_MOUSE || in.held);  // a finger has no hover
+    const bool lit = !Menu_CursorLit();  // it has the cursor
     Ui_RowBackground(x0, y0, x1, y1, lit ? FILL_CURSOR : FILL_SHADE);
     Ui_Arrow(x0 + 18, yc, -1);
     Ui_TextAsIs(x0 + 44, yc - 18, BackWord(), INK_WHITE);
-    Menu_Point(POINT_KEY, x0, y0, x1, y1, KEY_ESC);
+    Menu_Point(POINT_KEY, x0, y0, x1, y1, KEY_ESC, POINT_KEY_BACK);
     g_backBox = {true, x0, y0, x1, y1};
 }
 
@@ -1909,7 +1941,7 @@ static void DrawColumn() {
         // The 1997 width: LargeurMenu 550, centred.
         S32 x0 = W / 2 - 275, x1 = W / 2 + 275;
         for (int i = g_scroll; i < g_scroll + visible; i++) {
-            DrawColumnRow(p.rows[shown[i]], shown[i], x0, y, x1, y + ROW_H, i == cursor);
+            DrawColumnRow(p.rows[shown[i]], shown[i], x0, y, x1, y + ROW_H, i == cursor && Menu_CursorLit());
             y += ROW_PITCH;
         }
         if (visible < count)
@@ -1926,7 +1958,7 @@ static void DrawColumn() {
 }
 
 // Wide: one page at a time, centred and as wide as the 1997 canvas: the hub, then a page,
-// as the 1997 menu goes. A page names itself in a title; the hub has none.
+// as the 1997 menu goes. Every page names itself in a title, the hub too (1997's had none).
 static void DrawWide() {
     WideFrame f = Menu_WideFrame();
     const S32 top = f.y0 + 24;
@@ -1942,7 +1974,7 @@ static void DrawWide() {
         const int n = ShownRows(t.page, shown);
         int cursor = Position(t.page, t.row);
         S32 rowsTop = top;
-        if (g_depth > 1) {
+        {  // the hub too, as the column has it: rows keep their height between pages (decided 2026-11-13)
             rowsTop = Ui_Title(x0, x1, top, page.name);
             Menu_Record("title", page.name, "", FILL_SHADE, x0, top, x1, top + 38).textLeft =
                 (x0 + x1 + 1) / 2 - Ui_TextWidth(page.name) / 2;
@@ -1964,7 +1996,7 @@ static void DrawWide() {
         for (int i = g_scroll; i < g_scroll + visible; i++) {
             const Row &row = page.rows[shown[i]];
             RowFill fill = FILL_SHADE;
-            if (i == cursor)
+            if (i == cursor && Menu_CursorLit())
                 fill = FILL_CURSOR;
             else if (sw_greencurrent && row.type == R_PRESET_CHOICE && !g_first && row.arg == g_preset)
                 fill = FILL_CURRENT;  // the chosen preset wears the current-value plasma, as in the column

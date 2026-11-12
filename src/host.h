@@ -78,6 +78,7 @@ void Host_Inject(UiKey k);
 bool Host_KeyByName(const char *name, UiKey *out);
 // A key pressed this frame, as if typed: what a click on the menu stands for.
 void Host_PressNow(UiKey k);
+void Host_Unpress(UiKey k);  // drops this frame's press of k
 
 // The mouse (or a finger, which arrives as one), in the canvas's logical pixels, this frame.
 struct HostPointer {
