@@ -149,7 +149,8 @@ is no pointer, so the cost of a target is the number of key presses to it.
 they know: the 1997 menus, and every console game's menu.
 - 1997: Return to previous menu on top of a one-column sub-page; the plasma
   cursor; the current-value plasma on the entry in use; Enter opens; Esc goes
-  back. The entry in use also says "(current)" after its name, and the green
+  back. The entry in use also says "(current)" after its name ("(changed)"
+  once a setting it chose is changed; wide, the row's value Changed), and the green
   plasma is off unless switch `greencurrent` (F3) is on: green beside the
   blue cursor read as a second cursor (EPmager, 2026-11-11). **[self test,
   sweep: current]**
@@ -162,7 +163,10 @@ they know: the 1997 menus, and every console game's menu.
 voice and the legend share the band because both speak about the row under
 the cursor. The legend is stacked at the band's right, one key per line, so
 the voice keeps the band's width (decided 2026-11-03: a legend in a row left
-the voice 248 to 312 px on the Controls page). The first launch's question
+the voice 248 to 312 px on the Controls page). The band holds three lines, so
+four keys go in two columns read downwards, Back last at the bottom right as
+everywhere else (2026-11-12: the groups page's Del Defaults pushed Back out of
+the band; the voice keeps about 490 px there). **[self test: legend]** The first launch's question
 sits inside the composition, in the band's place.
 In the one column the legend is one line along the bottom of the 1997
 dialogue window, in its third line: the 8x8 chips at 2x when the line fits,

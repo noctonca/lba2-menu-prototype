@@ -76,9 +76,9 @@ const char *Ui_Tr(const char *s) {
         return s;
     if (const char *t = Lang_Label(s, s_lang))
         return t;
-    // A marked text, "Name (current)" or "1920 x 1080 (native)": the text and the mark each
+    // A marked text, "Name (current)", "Name (changed)" or "1920 x 1080 (native)": the text and the mark each
     // on its own.
-    static const char *const kMarks[] = {"(current)", "(native)"};
+    static const char *const kMarks[] = {"(current)", "(changed)", "(native)"};
     const size_t n = strlen(s);
     for (const char *mark : kMarks) {
         const size_t m = strlen(mark);

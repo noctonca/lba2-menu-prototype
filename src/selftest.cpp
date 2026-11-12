@@ -2,6 +2,7 @@
 // page, then every row of every page) in one process, without the frames a
 // script spends waiting, and checks the same rules. Each problem comes with a
 // command line that opens the screen it was found on.
+#include <algorithm>
 #include "selftest.h"
 
 #include "bindings.h"
@@ -153,6 +154,17 @@ static void Check(std::vector<std::string> *found) {
         found->push_back(Fmt("legend %s Enter on a value Enter %s: %s", entersteps ? "leaves out" : "names",
                              entersteps ? "steps" : "leaves", Repr(Menu_Legend()).c_str()));
     bool help = strcmp(v.where, "none") != 0;
+    // The legend stays inside the window it is drawn in (a fourth entry once ran out of the
+    // wide band), and on the screen.
+    if (v.legend) {
+        if (help && (v.lx0 < v.x0 + 2 || v.ly0 < v.y0 + 2 || v.lx1 > v.x1 - 2 || v.ly1 > v.y1 - 2))
+            found->push_back(Fmt("legend: out of the %s by %d px: %s", v.where,
+                                 std::max(std::max(v.x0 + 2 - v.lx0, v.y0 + 2 - v.ly0),
+                                          std::max(v.lx1 - (v.x1 - 2), v.ly1 - (v.y1 - 2))),
+                                 Repr(Menu_Legend()).c_str()));
+        if (v.lx0 < 0 || v.ly0 < 0 || v.lx1 >= W || v.ly1 >= H)
+            found->push_back(Fmt("legend: off the screen: %s", Repr(Menu_Legend()).c_str()));
+    }
     const DrawnRow *rows;
     int n = Menu_DrawnRows(&rows);
     for (int i = 0; i < n; i++) {
@@ -333,16 +345,27 @@ static void Check(std::vector<std::string> *found) {
                     Fmt("pitch: %s is %d tall, not 50", Repr(pr[i]->label).c_str(), pr[i]->y1 - pr[i]->y0));
     }
     // The Preset page names the chosen preset with "(current)", on that row alone (EPmager,
-    // 2026-11-11: the green plasma alone read like a second cursor).
+    // 2026-11-11: the green plasma alone read like a second cursor). Changed since, it says
+    // so instead: "(changed)" in the one column, the value Changed wide.
     if (!strcmp(Menu_PageName(), "Preset")) {
         int marked = 0, presets = 0;  // no preset rows while the Classic question is up
         for (int i = 0; i < n; i++) {
             const size_t len = strlen(rows[i].label);
             presets += !strncmp(rows[i].label, "Modern", 6) || !strncmp(rows[i].label, "Classic", 7);
-            marked += len > 10 && !strcmp(rows[i].label + len - 10, " (current)");
+            marked += (len > 10 && !strcmp(rows[i].label + len - 10, " (current)")) ||
+                      (len > 10 && !strcmp(rows[i].label + len - 10, " (changed)")) || !strcmp(rows[i].value, "Changed");
         }
         if (presets && marked != 1)
-            found->push_back(Fmt("current: %d rows on Preset say (current), not 1", marked));
+            found->push_back(Fmt("current: %d rows on Preset say (current) or (changed), not 1", marked));
+        // ...and the mark matches: no "(current)" on a preset changed since.
+        const bool changed = strstr(Menu_PresetLabel(), ", changed") != NULL;
+        for (int i = 0; presets && i < n; i++) {
+            const size_t len = strlen(rows[i].label);
+            if (changed && len > 10 && !strcmp(rows[i].label + len - 10, " (current)"))
+                found->push_back(Fmt("current: %s on a changed preset", Repr(rows[i].label).c_str()));
+            if (!changed && len > 10 && !strcmp(rows[i].label + len - 10, " (changed)"))
+                found->push_back(Fmt("current: %s on an unchanged preset", Repr(rows[i].label).c_str()));
+        }
     }
     // At most one current-value plasma in a pane.
     for (size_t p = 0; p < paneNames.size(); p++) {
@@ -646,8 +669,8 @@ struct Walker {
     bool MoveTo(const char *label) {
         for (int i = 0; i < 24; i++) {
             // The chosen preset reads "Modern (current)": the name is enough to find it.
-            const std::string here = Menu_CursorLabel(), marked = std::string(label) + " (current)";
-            if (here == label || here == marked)
+            const std::string here = Menu_CursorLabel();
+            if (here == label || here == std::string(label) + " (current)" || here == std::string(label) + " (changed)")
                 return true;
             Key("down");
         }
@@ -899,6 +922,13 @@ struct Walker {
             Key("right");
             if (!Expect(std::string(Menu_PresetLabel()).find(", changed") != std::string::npos,
                         Fmt("preset: changing Fix retail bugs leaves the preset row at %s", Repr(Menu_PresetLabel()).c_str())))
+                return;
+            // The Preset page says the preset is changed, not current, on every row.
+            OpenToo("Preset");
+            for (int i = 0; i < 3; i++, Key("down"))
+                Check("Preset");
+            OpenToo("Advanced and reset");
+            if (!MoveTo("Fix retail bugs"))
                 return;
             Key("left");
             if (!Expect(Menu_PresetLabel() == p0, Fmt("preset: putting Fix retail bugs back leaves the preset row at %s",

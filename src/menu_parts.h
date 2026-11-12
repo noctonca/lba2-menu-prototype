@@ -136,6 +136,8 @@ struct MenuHelp {
     int needed, max, width;
     int page, pages;  // the window of help showing, of how many (longer help pages on)
     const char *text;
+    bool legend;  // a legend was drawn: its chips and words took lx0..ly1, at legendScale
+    int lx0, ly0, lx1, ly1, legendScale;
 };
 void Menu_Help(MenuHelp *out);
 const char *Menu_PageName();  // as `state` names it

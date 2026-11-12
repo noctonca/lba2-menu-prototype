@@ -922,7 +922,9 @@ static void Legend(const char **keys, const char **words, int *n) {
         snprintf(other, sizeof other, "%s", DeviceName(!g_device));
         keys[*n] = "Tab", words[(*n)++] = other;
     }
-    if (OnGroups())
+    // The actions page too where the band's two columns have room: Esc goes back to the
+    // groups. In the one column a fourth key would shrink the legend's line to 1x.
+    if (OnGroups() || Wide())
         keys[*n] = "Esc", words[(*n)++] = "Back";
 }
 
@@ -1033,7 +1035,11 @@ static void DrawWideControls() {
         S32 shown = n < fit ? n : fit;
         S32 block = 56 + shown * ROW_PITCH - ROW_GAP;
         S32 y = top + (limit - top - block > 0 ? (limit - top - block) / 2 : 0);
-        S32 atop = Ui_Title(x0, x1, y, kGroups[CurrentGroup()].name);
+        // A key in use asks, titled as the other questions are; the answers stand in for the rows.
+        const char *title = g_swap.action < 0 ? kGroups[CurrentGroup()].name
+                            : g_device        ? "Confirm button swap"
+                                              : "Confirm key swap";
+        S32 atop = Ui_Title(x0, x1, y, title);
         DrawActions(x0, x1, atop, limit, "bindings-right");
     }
 

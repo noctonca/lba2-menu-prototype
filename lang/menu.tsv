@@ -130,10 +130,14 @@ Cancel	Annuler	Abbrechen	Cancelar	Annulla	Cancelar
 Reverse stereo	Stéréo inverse	Stereo invertieren	Invertir canales estéreo	Ribaltare suono stereo	Estéreo inverso
 Confirm settings reset	Confirmer la réinitialisation	Zurücksetzen bestätigen	Confirmar restablecimiento	Conferma ripristino	Confirmar reposição
 Confirm Classic preset	Confirmer le préréglage Classique	Voreinstellung Klassisch bestätigen	Confirmar preajuste Clásico	Conferma preimpostazione Classico	Confirmar predefinição Clássico
+Restore	Rétablir	Wiederherstellen	Restablecer	Ripristina	Repor
 (current)	(actuel)	(aktuell)	(actual)	(attuale)	(atual)
+(changed)	(modifié)	(geändert)	(cambiado)	(modificato)	(alterado)
 (native)	(native)	(nativ)	(nativa)	(nativa)	(nativa)
 Defaults	Par défaut	Standard	Por defecto	Predefiniti	Predefinições
 Confirm keyboard reset	Confirmer la réinitialisation du clavier	Tastatur zurücksetzen bestätigen	Confirmar restablecer teclado	Conferma ripristino tastiera	Confirmar reposição do teclado
+Confirm key swap	Confirmer l'échange de touche	Tastentausch bestätigen	Confirmar cambio de tecla	Conferma scambio tasto	Confirmar troca de tecla
+Confirm button swap	Confirmer l'échange de bouton	Tastentausch bestätigen	Confirmar cambio de botón	Conferma scambio pulsante	Confirmar troca de botão
 Confirm gamepad reset	Confirmer la réinitialisation de la manette	Gamepad zurücksetzen bestätigen	Confirmar restablecer mando	Conferma ripristino controller	Confirmar reposição do comando
 No, keep my keys	Non, garder mes touches	Nein, meine Tasten behalten	No, mantener mis teclas	No, tieni i miei tasti	Não, manter as minhas teclas
 Yes, reset keys	Oui, réinitialiser	Ja, zurücksetzen	Sí, restablecer	Sì, ripristina	Sim, repor

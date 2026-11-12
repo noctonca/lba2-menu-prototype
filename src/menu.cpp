@@ -460,6 +460,14 @@ static const char *RowLabel(const Row &r) {
         static char marked[2][64];  // two rows can be drawn before the first is used
         static int next;
         char *out = marked[next++ & 1];
+        // Changed since it was chosen, it is no longer what it says: wide, the row's value
+        // says Changed; in the one column, where a choice shows no value, the mark does.
+        if (PresetChanged()) {
+            if (Menu_Wide())
+                return r.label;
+            snprintf(out, sizeof marked[0], "%s (changed)", r.label);
+            return out;
+        }
         snprintf(out, sizeof marked[0], "%s (current)", r.label);  // Ui_Tr takes the parts apart
         return out;
     }
@@ -685,6 +693,9 @@ static const char *HelpFor(const Row *r) {
         }
         return RowHelp(*r);
     }
+    // The preset in use, changed since: Enter puts its settings back, and says so.
+    if (r->type == R_PRESET_CHOICE && !g_first && r->arg == g_preset && PresetChanged())
+        return "You changed some of its settings. Restore puts them back.";
     return RowHelp(*r) ? RowHelp(*r) : "";
 }
 
@@ -1205,6 +1216,23 @@ static struct {
     const char *kind;  // band, help-line, dialogue
 } g_helpBox;
 static char g_legend[128];
+// The box the legend's chips and words took last frame, and the 8x8 font's scale.
+static struct {
+    bool shown;
+    int x0, y0, x1, y1, scale;
+} g_legendBox;
+
+static void LegendGrow(S32 x0, S32 y0, S32 x1, S32 y1, S32 scale) {
+    if (!g_legendBox.shown) {
+        g_legendBox.shown = true;
+        g_legendBox.x0 = x0, g_legendBox.y0 = y0, g_legendBox.x1 = x1, g_legendBox.y1 = y1;
+    }
+    g_legendBox.x0 = x0 < g_legendBox.x0 ? x0 : g_legendBox.x0;
+    g_legendBox.y0 = y0 < g_legendBox.y0 ? y0 : g_legendBox.y0;
+    g_legendBox.x1 = x1 > g_legendBox.x1 ? x1 : g_legendBox.x1;
+    g_legendBox.y1 = y1 > g_legendBox.y1 ? y1 : g_legendBox.y1;
+    g_legendBox.scale = scale;
+}
 static int g_voiceLines, g_voiceNeeded, g_voiceMax, g_voiceWidth;
 
 DrawnRow &Menu_Record(const char *pane, const char *label, const char *value, RowFill fill, int x0, int y0, int x1,
@@ -1428,6 +1456,11 @@ static void LegendFor(const Row *r, const char **keys, const char **words, int *
             const bool steps = k == K_SLIDER || k == K_STEPS;
             keys[*n] = steps ? "\x11\x10" : "\x11\x10" CHIP_AND "Enter";
             words[(*n)++] = steps ? "Adjust" : "Change";
+        } else if (r->type == R_PRESET_CHOICE && !g_first && r->arg == g_preset) {
+            // The preset in use: Enter does nothing until it is changed, then puts it back.
+            if (PresetChanged()) {
+                keys[*n] = "Enter"; words[(*n)++] = "Restore";
+            }
         } else if (r->type == R_CATEGORY || r->type == R_PRESET_ROW ||
                    (r->type == R_ACTION && (r->arg == A_KEYS || r->arg == A_EXP || r->arg == A_CONSOLE))) {
             keys[*n] = "Enter"; words[(*n)++] = "Open";
@@ -1451,15 +1484,32 @@ static const char *LegendWord(const char *w) {
     return Ui_Tr(w);
 }
 
-// Stacked: the widest chip, the gap, the widest word.
-static S32 LegendWidth(const char **keys, const char **words, int n, S32 scale) {
-    S32 chipW = 0, wordW = 0;
-    for (int i = 0; i < n; i++) {
+// Stacked, the band holds three lines: four entries go in two columns, read down, so Back
+// stays last at the bottom right as on every other page.
+static int LegendPerColumn(int n) { return n > 3 ? (n + 1) / 2 : n; }
+
+// One column of the stack, entries i0..i1-1: the widest chip and the widest word.
+static void LegendColumn(const char **keys, const char **words, int i0, int i1, S32 scale, S32 *chipW, S32 *wordW) {
+    *chipW = *wordW = 0;
+    for (int i = i0; i < i1; i++) {
         S32 c = Ui_ChipWidth(keys[i], scale), t = Ui_WordWidth(LegendWord(words[i]), scale);
-        chipW = c > chipW ? c : chipW;
-        wordW = t > wordW ? t : wordW;
+        *chipW = c > *chipW ? c : *chipW;
+        *wordW = t > *wordW ? t : *wordW;
     }
-    return n ? chipW + 4 * scale + wordW : 0;
+}
+
+static const S32 LEGEND_COLUMN_GAP = 8;  // between two columns, at scale 1
+
+// Stacked: each column the widest chip, the gap, the widest word.
+static S32 LegendWidth(const char **keys, const char **words, int n, S32 scale) {
+    const int per = LegendPerColumn(n);
+    S32 w = 0;
+    for (int i0 = 0; i0 < n; i0 += per) {
+        S32 chipW, wordW;
+        LegendColumn(keys, words, i0, i0 + per < n ? i0 + per : n, scale, &chipW, &wordW);
+        w += (i0 ? LEGEND_COLUMN_GAP * scale : 0) + chipW + 4 * scale + wordW;
+    }
+    return w;
 }
 
 // A key as the record writes it: the arrows as <> and ^v, two keys joined by "/".
@@ -1484,7 +1534,7 @@ static void LegendPoint(S32 x0, S32 y0, S32 x1, S32 y1, const char *key, const c
         UiKey key;
     } kWordKeys[] = {
         {"Back", KEY_ESC},  {"Cancel", KEY_ESC},  {"Modern", KEY_ESC},     {"Close", KEY_ESC},
-        {"Open", KEY_ENTER}, {"Change", KEY_ENTER}, {"Answer", KEY_ENTER}, {"Choose", KEY_ENTER},
+        {"Open", KEY_ENTER}, {"Change", KEY_ENTER}, {"Answer", KEY_ENTER}, {"Choose", KEY_ENTER}, {"Restore", KEY_ENTER},
         {"Clear", KEY_DEL},  {"Defaults", KEY_DEL}, {"Keyboard", KEY_TAB}, {"Gamepad", KEY_TAB},
     };
     if ((key[0] == '\x11' || key[0] == '\x18') && !strchr(key, CHIP_AND[0]))
@@ -1506,22 +1556,25 @@ static void LegendRecord(int i, const char *key, const char *word) {
 // In a row: chip, word, chip, word, centred on yc.
 // Stacked (the review card's legend): one key a line from y0, the chips ending on
 // one column and the words starting on the next, so the words read as a list.
-static void DrawLegendStacked(S32 x, S32 y0, const char **keys, const char **words, int n, S32 scale) {
+static void DrawLegendStacked(S32 x0, S32 y0, const char **keys, const char **words, int n, S32 scale) {
     g_legend[0] = 0;
-    S32 chipW = 0;
-    for (int i = 0; i < n; i++) {
-        S32 c = Ui_ChipWidth(keys[i], scale);
-        chipW = c > chipW ? c : chipW;
-    }
+    const int per = LegendPerColumn(n);
+    S32 chipW = 0, wordW = 0, x = x0 - LEGEND_COLUMN_GAP * scale;
     S32 chipH = 12 * scale, pitch = chipH + 2;
     for (int i = 0; i < n; i++) {
-        S32 y = y0 + i * pitch;
+        if (i % per == 0) {  // a new column, after the last one's widest word
+            x += (i ? chipW + 4 * scale + wordW : 0) + LEGEND_COLUMN_GAP * scale;
+            LegendColumn(keys, words, i, i + per < n ? i + per : n, scale, &chipW, &wordW);
+        }
+        S32 y = y0 + (i % per) * pitch;
         S32 c = Ui_ChipWidth(keys[i], scale);
         Ui_Chip(x + chipW - c, y, keys[i], scale);
         Ui_Word(x + chipW + 4 * scale, y + chipH / 2 - 4 * scale, LegendWord(words[i]), INK_CONFIG_MENU, scale);
         LegendRecord(i, keys[i], words[i]);
         LegendPoint(x + chipW - c, y - 1, x + chipW + 4 * scale + Ui_WordWidth(LegendWord(words[i]), scale), y + chipH,
                     keys[i], words[i]);
+        LegendGrow(x + chipW - c, y, x + chipW + 4 * scale + Ui_WordWidth(LegendWord(words[i]), scale) - 1,
+                   y + chipH - 1, scale);
     }
 }
 
@@ -1607,6 +1660,8 @@ static S32 DrawLegendRow(S32 x, S32 y, const char **keys, const char **words, in
             LegendRecord(i, keys[i], words[i]);
             LegendPoint(x + w, y - 1, x + w + c + 4 * scale + Ui_WordWidth(LegendWord(words[i]), scale), y + 12 * scale,
                         keys[i], words[i]);
+            LegendGrow(x + w, y, x + w + c + 4 * scale + Ui_WordWidth(LegendWord(words[i]), scale) - 1,
+                       y + 12 * scale - 1, scale);
         }
         w += c + 4 * scale + Ui_WordWidth(LegendWord(words[i]), scale);
     }
@@ -1891,6 +1946,7 @@ void Menu_Draw() {
     g_helpBox.x0 = g_helpBox.y0 = g_helpBox.x1 = g_helpBox.y1 = 0;  // where it was is no help on a new screen
     g_voiceLines = g_voiceNeeded = g_voiceMax = g_voiceWidth = 0;
     g_legend[0] = 0;
+    g_legendBox.shown = false;
 
     Host_SetBackdrop(g_val[S_BACKGROUND]);
     Host_DrawBackground();
@@ -2066,6 +2122,9 @@ void Menu_Help(MenuHelp *h) {
     h->max = g_voiceMax;
     h->width = g_voiceWidth;
     h->text = g_voice.text;
+    h->legend = g_legendBox.shown;
+    h->lx0 = g_legendBox.x0, h->ly0 = g_legendBox.y0, h->lx1 = g_legendBox.x1, h->ly1 = g_legendBox.y1;
+    h->legendScale = g_legendBox.scale;
 }
 
 bool Menu_WantsQuit() { return g_quit; }
