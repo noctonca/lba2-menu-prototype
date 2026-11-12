@@ -1692,6 +1692,7 @@ struct Walker {
         PadNames();
         Pointer();
         Wheel();
+        PointerReach();
     }
 
     void Mouse(S32 x, S32 y) {
@@ -1704,6 +1705,56 @@ struct Walker {
         Host_InjectClick(false);
         Frame();
         Frame();
+    }
+
+    // Every row by the pointer alone (2026-11-12): a finger has no keys and no wheel, so on
+    // every page, the key groups' included, hovering what is drawn and tapping the scroll
+    // bar's groove below its thumb must put the cursor on each row the page shows.
+    void PointerReach() {
+        if (opt->only)
+            return;
+        std::vector<std::pair<const char *, int>> pages;  // page, key group (-1 none)
+        for (const char *p : kPages)
+            pages.push_back({p, -1});
+        pages.push_back({"Keys and buttons", -1});
+        pages.push_back({"More options", -1});
+        for (int g = 0; g < (int)(sizeof kGroupSizes / sizeof kGroupSizes[0]); g++)
+            pages.push_back({"Keys and buttons", g});
+        for (const auto &[page, group] : pages) {
+            Fresh(page);
+            if (group >= 0) {
+                for (int i = 0; i < 20 && Menu_TopRow() != group + 1; i++)
+                    Key("down");
+                Key("enter");
+            }
+            const std::string name = group >= 0 ? Fmt("%s, group %d", page, group + 1) : page;
+            const int want = Menu_TopShownCount();
+            std::set<int> reached;
+            for (int step = 0; step < 64; step++) {
+                const MenuPoint *pts;
+                const int n = Menu_Points(&pts);
+                const std::vector<MenuPoint> targets(pts, pts + n);
+                for (const MenuPoint &p : targets) {
+                    const int row = p.kind == POINT_ROW ? p.b : p.kind == POINT_CHIP ? p.a : -1;
+                    if (row < 0 || reached.count(row))
+                        continue;
+                    Mouse((p.x0 + p.x1) / 2, (p.y0 + p.y1) / 2);
+                    if (Menu_TopRow() == row)
+                        reached.insert(row);
+                }
+                const ScrollBarInfo bar = Menu_ScrollBar();
+                if (!bar.shown || bar.first + bar.visible >= bar.total || bar.ty1 + 1 > bar.y1 - 1)
+                    break;
+                Mouse((bar.x0 + bar.x1) / 2, bar.y1 - 1);  // the groove below the thumb
+                Click();
+                Expect(Menu_ScrollBar().first > bar.first,
+                       Fmt("pointer reach: a tap below the thumb on %s left the view at %d", name.c_str(), Menu_ScrollBar().first));
+                if (Menu_ScrollBar().first <= bar.first)
+                    break;
+            }
+            Expect((int)reached.size() == want, Fmt("pointer reach: %s shows %d rows, the pointer alone reached %d",
+                                                    name.c_str(), want, (int)reached.size()));
+        }
     }
 
     // The wheel (EPmager, 2026-11-12): it turns the view of a page that scrolls, a row a

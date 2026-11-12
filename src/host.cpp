@@ -828,7 +828,7 @@ S32 Host_PadFamily() {
 static HostPointer s_ptr;
 static bool s_ptrInjected;        // a script put it; a real move takes it back
 static S32 s_injX, s_injY;
-static bool s_injMoved, s_injDown, s_injRight;
+static bool s_injMoved, s_injDown, s_injRight, s_injHeld;
 static S32 s_injWheel;
 
 void Host_InjectPointer(S32 x, S32 y) {
@@ -843,6 +843,7 @@ void Host_InjectClick(bool right) {
         s_injDown = true;
 }
 void Host_InjectWheel(S32 notches) { s_injWheel += notches; }
+void Host_InjectButton(bool down) { s_injHeld = down; }
 void Host_Pointer(HostPointer *out) { *out = s_ptr; }
 
 // The pointer's arrow, by lba2cc's menu rules (LIB386 MOUSE.CPP): shown once a real mouse
@@ -945,7 +946,7 @@ static void ReadPointer() {
         s_ptr.y = s_ptr.y >= (S32)s_logH ? (S32)s_logH - 1 : s_ptr.y;
     }
 #endif
-    s_ptr.held = (Click & 1) != 0 || s_injDown;
+    s_ptr.held = (Click & 1) != 0 || s_injDown || s_injHeld;
     s_ptr.pressed = (s_ptr.held && !wasHeld) || s_leftDowns > 0;
     s_ptr.released = (!s_ptr.held && wasHeld) || (s_leftUps > 0 && !s_ptr.held);
     const bool right = (Click & 2) != 0;

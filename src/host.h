@@ -96,6 +96,8 @@ bool Host_PointerShown();
 // A script's mouse: `mouse X Y` moves it, `click [right]` presses and lets go a frame
 // later, `wheel N` turns it.
 void Host_InjectPointer(S32 x, S32 y);
+// `mousedown` / `mouseup`: the left button held until let go, for a drag.
+void Host_InjectButton(bool down);
 void Host_InjectClick(bool right);
 void Host_InjectWheel(S32 notches);
 const char *Host_KeyName(UiKey k);

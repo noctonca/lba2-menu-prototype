@@ -577,12 +577,13 @@ void Menu_NoteScreen() {
 
 static int TopPage() { return g_stack[g_depth - 1].page; }
 
-// A row as the layout shows it: no Return row, since the legend names Esc Back in both
-// layouts (EPmager, 2026-11-12: the one column showed both once it had a legend), and a
-// row with a "shown when" check is there only while it holds.
+// A row as the layout shows it: a wide page has no Return row (Esc goes back); the one
+// column keeps it under the page's title, as 1997 had it and as a big target for a finger
+// or the mouse (decided 2026-11-12). A row with a "shown when" check is there only while
+// it holds.
 static bool RowShown(const Page &p, int i) {
     const Row &r = p.rows[i];
-    if (r.type == R_RETURN && !g_first)
+    if (r.type == R_RETURN && Wide() && !g_first)
         return false;
     return !r.shown || r.shown();
 }
@@ -643,6 +644,10 @@ static const Row *CursorRow() {
 
 int Menu_TopPage() { return g_depth ? TopPage() : -1; }
 int Menu_TopRow() { return Top().row; }
+int Menu_TopShownCount() {
+    int shown[PAGE_ROWS_MAX];
+    return ShownRows(TopPage(), shown);
+}
 int &Menu_Scroll() { return g_scroll; }
 
 static void LegendFor(const Row *r, const char **keys, const char **words, int *n);
@@ -956,6 +961,10 @@ static int g_pointCount;
 static PointTarget g_press;  // what the left button went down on
 static bool g_pressOn;
 static int g_wheelView;      // notches turned this frame, for a page that scrolls (Menu_WheelView)
+static ScrollBarInfo g_bar;   // the last draw's scroll bar
+const ScrollBarInfo &Menu_ScrollBar() { return g_bar; }
+static int g_scrollTo = -1;  // the first line the scroll bar asked for this frame; -1 none
+static S32 g_barGrab = -1;   // dragging the thumb: where on it the pointer took it; -1 not
 
 void Menu_Point(PointKind kind, S32 x0, S32 y0, S32 x1, S32 y1, int a, int b) {
     if (g_pointCount < POINT_MAX)
@@ -994,16 +1003,22 @@ static void CursorTo(int page, int row) {
 void Menu_CursorTo(int row) { CursorTo(TopPage(), row); }
 
 int Menu_WheelView(int &scroll, int visible, int total, int cursor) {
-    const int n = g_wheelView;
+    const int n = g_wheelView, to = g_scrollTo;
     g_wheelView = 0;
-    if (!n || visible >= total)
+    g_scrollTo = -1;
+    if ((!n && to < 0) || visible >= total)
         return cursor;
+    const int from = scroll;
+    if (to >= 0)
+        scroll = to;
     scroll -= n;  // up is positive: the view goes toward the top
     if (scroll > total - visible)
         scroll = total - visible;
     if (scroll < 0)
         scroll = 0;
-    Trace("scroll %d (wheel)", scroll);
+    if (scroll == from)
+        return cursor;
+    Trace("scroll %d (%s)", scroll, to >= 0 ? "bar" : "wheel");
     return cursor < scroll ? scroll : cursor >= scroll + visible ? scroll + visible - 1 : cursor;
 }
 
@@ -1030,8 +1045,20 @@ static void PointTo(const PointTarget &p) {
         }
         break;
     case POINT_KEY:
+    case POINT_SCROLL:
         break;
     }
+}
+
+// The first line of the view with the thumb's top where the pointer puts it.
+static int BarFirstAt(S32 y) {
+    const ScrollBarInfo &b = g_bar;
+    const S32 h = b.y1 - b.y0 - 4;
+    if (h <= 0)
+        return b.first;
+    const S32 top = y - g_barGrab - (b.y0 + 2);
+    int first = (int)((top * b.total + h / 2) / h);
+    return first < 0 ? 0 : first > b.total - b.visible ? b.total - b.visible : first;
 }
 
 // A slider's value where the pointer is along its bar.
@@ -1078,15 +1105,28 @@ static void UpdatePointer() {
         PointTo(*at);
     if (in.pressed) {
         g_pressOn = at != NULL;
+        g_barGrab = -1;
         if (at) {
             g_press = *at;
             PointTo(*at);
             if (at->kind == POINT_SLIDER)
                 SlideTo(*at, in.x);
+            if (at->kind == POINT_SCROLL && g_bar.shown) {
+                if (in.y < g_bar.ty0)  // the groove above the thumb: a viewful up
+                    g_scrollTo = g_bar.first > g_bar.visible ? g_bar.first - g_bar.visible : 0;
+                else if (in.y > g_bar.ty1)  // below it: a viewful down
+                    g_scrollTo = g_bar.first + g_bar.visible;
+                else
+                    g_barGrab = in.y - g_bar.ty0;  // the thumb: dragged from here
+            }
         }
     } else if (in.held && in.moved && g_pressOn && g_press.kind == POINT_SLIDER) {
         SlideTo(g_press, in.x);  // dragged along the bar, even off it
+    } else if (in.held && in.moved && g_pressOn && g_press.kind == POINT_SCROLL && g_barGrab >= 0 && g_bar.shown) {
+        g_scrollTo = BarFirstAt(in.y);  // the thumb follows, even off the groove
     }
+    if (in.released)
+        g_barGrab = -1;
     if (in.released && g_pressOn) {
         g_pressOn = false;
         if (at && SameTarget(*at, g_press)) {
@@ -1103,6 +1143,7 @@ static void UpdatePointer() {
                 Host_PressNow((UiKey)at->a);
                 break;
             case POINT_SLIDER:
+            case POINT_SCROLL:
                 break;
             }
         }
@@ -1427,11 +1468,7 @@ static void DrawWideRow(const char *pane, const Row &r, int row, S32 x0, S32 y0,
     clip.Restore();
 }
 
-static bool g_scrollBarShown;
-bool Menu_ScrollBarShown() { return g_scrollBarShown; }
-
 void Menu_DrawScrollBar(S32 x0, S32 y0, S32 y1, int first, int visible, int total) {
-    g_scrollBarShown = true;
     // ScrollBarReview: 12 wide, thumb inset 2, in the margin.
     S32 x1 = x0 + 11;
     GamePieces_Shade(x0 + 1, y0 + 1, x1 - 1, y1 - 1, MENU_SHADE_LVL);
@@ -1446,6 +1483,11 @@ void Menu_DrawScrollBar(S32 x0, S32 y0, S32 y1, int first, int visible, int tota
     Line(x0 + 2, ty0, x0 + 2, ty1, COUL_UP_BLUE);
     Line(x1 - 2, ty0, x1 - 2, ty1, COUL_DOWN_BLUE);
     Line(x0 + 2, ty1, x1 - 2, ty1, COUL_DOWN_BLUE);
+    g_bar = ScrollBarInfo{true, x0, y0, x1, y1, ty0, ty1, first, visible, total};
+    // The target reaches past the groove into the margin, 12 px being thin for a finger;
+    // not left of it, where the rows end 9 px away.
+    const S32 reach = x1 + 8 < (S32)Host_LogicalW() - 1 ? x1 + 8 : (S32)Host_LogicalW() - 1;
+    Menu_Point(POINT_SCROLL, x0 - 2, y0, reach, y1, 0, 0);
 }
 
 // The legend: only the keys the selected row takes.
@@ -1766,8 +1808,8 @@ static void DrawColumn() {
         S32 top = 16, bottom = H - 1 - 137 - 16;
         if (g_first)
             top = 168 - 8;
-        // A page names itself in a title where its Return row was, as the wide pages do;
-        // the hub has none.
+        // A page names itself in a title above its Return row, as the wide pages do (EPmager,
+        // 2026-11-12); the hub has none.
         const bool titled = g_depth > 1 && !g_first;
         const S32 titleH = titled ? ROW_PITCH : 0;
         int visible = (bottom - top - titleH + ROW_GAP) / ROW_PITCH;
@@ -1995,7 +2037,7 @@ void Menu_Draw() {
     SyncView();
     g_drawnCount = 0;
     g_pointCount = 0;
-    g_scrollBarShown = false;
+    g_bar.shown = false;
     g_helpBox.shown = false;
     g_helpBox.x0 = g_helpBox.y0 = g_helpBox.x1 = g_helpBox.y1 = 0;  // where it was is no help on a new screen
     g_voiceLines = g_voiceNeeded = g_voiceMax = g_voiceWidth = 0;
@@ -2031,6 +2073,7 @@ void Menu_Draw() {
     else if (sw_overlay)
         DrawOverlay();
     g_wheelView = 0;  // turned where nothing scrolls: dropped
+    g_scrollTo = -1;
 }
 
 // ───────────────────────────── Switches and state ─────────────────────────────
@@ -2377,7 +2420,8 @@ void Menu_WriteState(FILE *f) {
     }
     fprintf(f, ",\"clip\":[%d,%d,%d,%d]", (int)ClipXMin, (int)ClipYMin, (int)ClipXMax, (int)ClipYMax);
     // What the pointer can point at, as the last draw placed it: [kind, x0, y0, x1, y1, a, b].
-    static const char *const kPointKinds[] = {"row", "chip", "answer", "step", "slider", "key"};
+    static const char *const kPointKinds[] = {"row", "chip", "answer", "step", "slider", "key", "scroll"};
+    static_assert(sizeof kPointKinds / sizeof kPointKinds[0] == POINT_SCROLL + 1, "a name for every PointKind");
     fprintf(f, ",\"points\":[");
     for (int i = 0; i < g_pointCount; i++) {
         const PointTarget &p = g_points[i];
@@ -2385,6 +2429,10 @@ void Menu_WriteState(FILE *f) {
                 (int)p.y1, p.a, p.b);
     }
     fprintf(f, "]");
+    if (g_bar.shown)  // groove, thumb, and the view it shows
+        fprintf(f, ",\"scrollbar\":{\"groove\":[%d,%d,%d,%d],\"thumb\":[%d,%d],\"first\":%d,\"visible\":%d,\"total\":%d}",
+                (int)g_bar.x0, (int)g_bar.y0, (int)g_bar.x1, (int)g_bar.y1, (int)g_bar.ty0, (int)g_bar.ty1, g_bar.first,
+                g_bar.visible, g_bar.total);
     fprintf(f, ",\"console\":\"%s\",\"console_bottom\":%d,\"version\":", g_console == CON_FULL ? "full" : g_console == CON_READONLY ? "read-only" : "closed",
             g_console ? (int)g_consoleBottom : -1);
     Menu_JsonString(f, kVersion);

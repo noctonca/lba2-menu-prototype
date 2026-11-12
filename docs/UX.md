@@ -27,10 +27,11 @@ the call is answered.
   monitor or a television, opens Options once for resolution and volume); the
   keeper of the rules (keyboard, desktop, wants to see what changed); the
   first-timer on a sofa or a handheld (a pad, text read from a few metres).
-- **Keys and a pad, no pointer.** Everything is reached with the arrows (or
+- **Keys and a pad first.** Everything is reached with the arrows (or
   the d-pad and left stick), Enter (A), Esc (B), Tab (the pad's View) and Del
-  (X). There is no hover and no touch in this menu. A key held repeats after
-  350 ms, every 90 ms (arrows only).
+  (X). A key held repeats after 350 ms, every 90 ms (arrows only). The mouse
+  and a finger point too (hover moves the cursor, a tap acts), and reach every
+  row without a key.
 - **The canvas.** 640x480 at 1x is the 1997 canvas and the one-column layout:
   it must look as today's Options do. Screens 3:2 or wider take the wide
   layout: one 960x540 composition (one pane at a time, centred, and a band) at
@@ -119,11 +120,16 @@ the call is answered.
 
 **Fitts's Law** (target size and distance) becomes *presses to reach*. There
 is no pointer, so the cost of a target is the number of key presses to it.
-- A page opens on its first row. No layout has a Return row: the legend names
-  Esc Back in both, and a one-column page has its title where the Return row
-  was (EPmager, 2026-11-12: with a legend the one column said Back twice and
-  had no title). Esc is always one press back, whatever row has the cursor.
-  **[self test: return]**
+- A page opens on its first row (one column: the Return row, as 1997, under the
+  page's title; wide: the first setting, as a wide page has no Return row).
+  The one column keeps the row beside its legend's Esc Back because a finger
+  or the mouse needs a target, and a 550 by 50 row is a better one than a
+  legend chip (decided 2026-11-12; EPmager had asked for the title). Esc is
+  always one press back, whatever row has the cursor. **[self test: return]**
+- **Every row by the pointer alone.** A finger has no keys and no wheel: the
+  scroll bar's thumb drags and its groove taps a viewful up or down, so on
+  every page each row can take the cursor by pointing (2026-11-12).
+  **[self test: pointer reach]**
 - The cursor wraps at both ends of a list, so the last row is one press up.
 - A slider crosses its range in about 16 steps; holding the key does it in
   under 2 s (350 ms, then 90 ms a step).
@@ -142,16 +148,16 @@ is no pointer, so the cost of a target is the number of key presses to it.
 - First launch asks one question with two answers.
 
 **Miller's Law, Chunking** (working memory holds about 7 chunks).
-- A page holds at most 7 rows (the brand book's "a plain menu does not
-  scroll"); on the wide canvas, 6 under the page's title, 7 on the hub. More
-  means a sub-page. The 640x480 canvas shows 4 under the title and scrolls the
-  rest, the same 4 it showed under the Return row before 2026-11-12.
+- A page holds at most 7 rows, 8 on the 640x480 canvas with its Return row
+  (the brand book's "a plain menu does not scroll"); on the wide canvas, 6
+  under the page's title, 7 on the hub. More means a sub-page. Since the help
+  and the title, a 640x480 sub-page shows its Return row and 3 more, the hub 5,
+  and the rest scroll.
 - The Controls page chunks 36 actions into 7 groups of 4 to 7.
 
 **Jakob's Law** (people expect it to work like what they know). Two things
 they know: the 1997 menus, and every console game's menu.
-- 1997: Return to previous menu on top of a one-column sub-page (dropped
-  2026-11-12 for the title and Esc Back in the legend); the plasma
+- 1997: Return to previous menu on top of a one-column sub-page; the plasma
   cursor; the current-value plasma on the entry in use; Enter opens; Esc goes
   back. The entry in use also says "(current)" after its name ("(changed)"
   once a setting it chose is changed; wide, the row's value Changed), and the green

@@ -26,6 +26,7 @@
 //   mouse <x> <y>        move the pointer there, in the canvas's logical pixels
 //   click [right]        press the left (or right) button and let go a frame later
 //   wheel <notches>      turn the wheel, up positive
+//   mousedown, mouseup   hold the left button, let it go (a drag: mousedown, mouse X Y, mouseup)
 //   state                print the state as one JSON line: "state {...}"
 //   shot <path> [scale]  write the screen as a PNG (logical size x scale)
 //   switch <name> <v>    overlay padnames keyboard whole
@@ -115,6 +116,9 @@ static bool RunCommand(Runner &r, const char *line) {
     } else if (!strcmp(cmd, "click")) {
         Host_InjectClick(n >= 2 && !strcmp(a, "right"));
         r.waitFrames = 2;  // down, then up
+    } else if (!strcmp(cmd, "mousedown") || !strcmp(cmd, "mouseup")) {
+        Host_InjectButton(!strcmp(cmd, "mousedown"));
+        r.waitFrames = 1;
     } else if (!strcmp(cmd, "wheel")) {
         int notches = n >= 2 ? atoi(a) : 1;
         Host_InjectWheel(notches);
