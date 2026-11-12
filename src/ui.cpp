@@ -13,6 +13,7 @@
 #include <SVGA/SCREEN.H>
 
 #include "lang.h"
+#include "pad_icons.h"
 
 #include <set>
 #include <string>
@@ -315,7 +316,7 @@ S32 Ui_ChipWidth(const char *key, S32 scale) {
     // A one-letter key is square, as a keycap or a pad's button (EPmager, 2026-11-12).
     if (key[0] && !key[1])
         return Ui_KeyChipHeight(scale);
-    return Ui_SmallWidth(key, scale) + 8 * scale;
+    return PadIcons_Width(key, scale) + 8 * scale;
 }
 
 S32 Ui_Chip(S32 x, S32 y, const char *key, S32 scale, bool lit) {
@@ -337,7 +338,7 @@ S32 Ui_Chip(S32 x, S32 y, const char *key, S32 scale, bool lit) {
     // The letters' ink in the middle, not their cells (EPmager, 2026-11-12).
     S32 tx, ty;
     CentreInk(x, y, w, h, key, scale, &tx, &ty);
-    Ui_Small(tx, ty, key, lit ? INK_WHITE : INK_CONFIG_MENU, scale);
+    PadIcons_Text(tx, ty, key, lit ? INK_WHITE : INK_CONFIG_MENU, scale, !lit);
     NoteChip(x, y, x1, y1, key, scale, !lit, true);
     return w;
 }
@@ -364,7 +365,7 @@ bool Ui_KeyChip(S32 x, S32 y, S32 w, const char *name, S32 scale, ChipFill fill,
     bool empty = !name || !name[0];
     const char *text = empty ? "......" : name;
     S32 inner = w - 8 * scale;
-    S32 tw = Ui_SmallWidth(text, scale);
+    S32 tw = PadIcons_Width(text, scale);
     S32 tx, ty;
     CentreInk(x, y, w, h, text, scale, &tx, &ty);
     if (tw > inner)  // too long: from the left, clipped
@@ -372,7 +373,7 @@ bool Ui_KeyChip(S32 x, S32 y, S32 w, const char *name, S32 scale, ChipFill fill,
     U8 ink = fill != CHIP_SHADE ? INK_WHITE : empty ? INK_DISABLED : INK_CONFIG_MENU;
     const ClipSave clip;
     SetClip(x + 2, y + 1, x1 - 2, y1 - 1);
-    Ui_Small(tx, ty, text, ink, scale);
+    PadIcons_Text(tx, ty, text, ink, scale, fill == CHIP_SHADE);
     clip.Restore();
     if (tw <= inner && !empty)
         NoteChip(x, y, x1, y1, text, scale, fill == CHIP_SHADE, false);

@@ -74,6 +74,7 @@ add_executable(lba2menu
     src/bindings.cpp
     src/more_options.cpp
     src/ui.cpp
+    src/pad_icons.cpp
     src/trace.cpp
     src/shot.cpp
     src/screen_picture.cpp

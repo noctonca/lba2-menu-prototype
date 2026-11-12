@@ -10,6 +10,7 @@
 #include "ui.h"
 #include "twinsun.h"
 #include "screen_font.h"
+#include "pad_icons.h"
 
 #include <SVGA/BOX.H>
 #include <SVGA/CLIP.H>
@@ -1863,6 +1864,7 @@ static void DrawOverlay() {
         "Drag the window's edge: any screen size",
         "F3 green plasma on the chosen preset: off / on",
         "F11 pad names: connected / Xbox / PlayStation / Nintendo",
+        "F12 the pad's button shapes on chips: on / off",
     };
     S32 n = (S32)(sizeof lines / sizeof lines[0]);
     S32 w = 8 * 50 + 16, h = n * 12 + 12;
@@ -1996,6 +1998,7 @@ static const SwitchDef kSwitches[] = {
     {"padnames", &g_val[S_PADNAMES], 0, 3, 0},  // the Button names row
     {"whole", &sw_whole, 0, 1, 0},
     {"greencurrent", &sw_greencurrent, 0, 1, 0},
+    {"padicons", &g_padIcons, 0, 1, 1},  // shapes for the pad's buttons on chips
 };
 
 bool Menu_SetSwitch(const char *name, int v) {

@@ -424,6 +424,8 @@ int Lba2Main(int argc, char *argv[]) {
             Menu_SetSwitch("greencurrent", !Menu_GetSwitch("greencurrent"));
         if (Host_Pressed(KEY_F11))
             Menu_SetSwitch("padnames", Menu_GetSwitch("padnames") + 1);
+        if (Host_Pressed(KEY_F12))
+            Menu_SetSwitch("padicons", !Menu_GetSwitch("padicons"));
         if (Host_Pressed(KEY_F2))
             if (Host_StepScreen(Host_ShiftHeld() ? -1 : 1))
                 Menu_NoteScreen();
