@@ -3,6 +3,7 @@
 // script spends waiting, and checks the same rules. Each problem comes with a
 // command line that opens the screen it was found on.
 #include <algorithm>
+#include <cstdlib>
 #include "selftest.h"
 
 #include "bindings.h"
@@ -13,6 +14,8 @@
 #include "menu_parts.h"
 #include "trace.h"
 #include "ui.h"
+
+#include <SVGA/SCREEN.H>
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -164,6 +167,32 @@ static void Check(std::vector<std::string> *found) {
                                  Repr(Menu_Legend()).c_str()));
         if (v.lx0 < 0 || v.ly0 < 0 || v.lx1 >= W || v.ly1 >= H)
             found->push_back(Fmt("legend: off the screen: %s", Repr(Menu_Legend()).c_str()));
+    }
+    // A chip's letters sit in its middle, as much space left as right and above as below,
+    // and a one-letter chip is square (EPmager, 2026-11-12). Read from the frame buffer: the
+    // ink is what was drawn, not what the layout meant.
+    const ChipBox *boxes;
+    const int nb = Ui_ChipBoxes(&boxes);
+    for (int i = 0; i < nb; i++) {
+        const ChipBox &c = boxes[i];
+        if (c.legend && strlen(c.key) == 1 && c.x1 - c.x0 != c.y1 - c.y0)
+            found->push_back(Fmt("chip %s not square: %dx%d", Repr(c.key).c_str(), c.x1 - c.x0 + 1, c.y1 - c.y0 + 1));
+        if (!c.plain || c.x0 < 0 || c.y0 < 0 || c.x1 >= W || c.y1 >= H)
+            continue;
+        S32 ix0 = W, iy0 = H, ix1 = -1, iy1 = -1;
+        for (S32 y = c.y0 + 1; y < c.y1; y++)
+            for (S32 x = c.x0 + 1; x < c.x1; x++)
+                if (((const U8 *)Log)[TabOffLine[y] + x] == INK_CONFIG_MENU)
+                    ix0 = std::min(ix0, x), ix1 = std::max(ix1, x), iy0 = std::min(iy0, y), iy1 = std::max(iy1, y);
+        if (ix1 < 0)
+            continue;  // covered (a question over the page)
+        const S32 left = ix0 - c.x0, right = c.x1 - ix1, top = iy0 - c.y0, bottom = c.y1 - iy1;
+        if (std::abs(left - right) > 1)
+            found->push_back(Fmt("chip %s off centre: %d px left of its letters, %d right", Repr(c.key).c_str(), left, right));
+        // Above and below, for names as tall as a capital: lower-case and descenders keep
+        // the capitals' baseline.
+        if (iy1 - iy0 + 1 == 7 * c.scale && std::abs(top - bottom) > 1)
+            found->push_back(Fmt("chip %s off centre: %d px above its letters, %d below", Repr(c.key).c_str(), top, bottom));
     }
     const DrawnRow *rows;
     int n = Menu_DrawnRows(&rows);
@@ -452,6 +481,10 @@ static void Frame(bool draw = true) {
     Trace_SetFrame(Host_Frame());
     Menu_Update();
     if (draw) {
+        // No screen here, so no background is drawn: clear the canvas, or what earlier
+        // frames drew stays under this one and the pixel checks read it.
+        for (U32 y = 0; y < Host_LogicalH(); y++)
+            memset((U8 *)Log + TabOffLine[y], 0, Host_LogicalW());
         Menu_Draw();
         Host_Present();
     }

@@ -85,6 +85,17 @@ enum { CHIP_AND_GAP = 3 };  // between the two chips, a step
 S32 Ui_ChipWidth(const char *key, S32 scale);
 S32 Ui_Chip(S32 x, S32 y, const char *key, S32 scale, bool lit = false);
 
+// Every chip drawn this frame with its whole name inside, for the self test: the frame's
+// box, the name, whether it is on the plain shade (its letters in INK_CONFIG_MENU) and
+// whether it is a legend's key (a binding chip is as wide as its column).
+struct ChipBox {
+    S32 x0, y0, x1, y1, scale;
+    bool plain, legend;
+    char key[32];
+};
+void Ui_BeginFrame();
+int Ui_ChipBoxes(const ChipBox **out);
+
 // A binding chip of a fixed width, the name centred: shade, the cursor plasma,
 // the current-value plasma while it waits for a key, or empty (a row of dots).
 // red: the alert pair, for a key on two actions. Returns false when the name

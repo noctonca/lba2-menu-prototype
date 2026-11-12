@@ -188,6 +188,11 @@ pad player on a 4:3 or 5:4 screen saw no buttons at all (EPmager,
   developer text (the frame rate, the screen-size notice, the console)
   (decided 2026-11-12, after a day with every small text in Zilla Slab:
   chips in the body face read as more words, not keys).
+- A chip centres its letters' ink, not their 8x8 cells (a cell leaves its
+  right column and bottom row empty), and centres a capital's height, so
+  chips side by side keep one baseline. A one-letter key's chip is square,
+  as a keycap or a pad's button (EPmager, 2026-11-12). **[self test: chip,
+  read from the frame buffer]**
 - A row that opens something (a category, the preset row, Keys and buttons)
   takes Enter and shows "Open" in the legend; a setting takes Left and Right.
   A choice or a switch also steps on Enter, so its legend line shows both

@@ -1939,6 +1939,7 @@ void Menu_Draw() {
     ScreenFont_Set(g_val[S_FONT]);  // before the layout: widths follow the font
     Ui_SetLang(g_val[S_TEXT_LANG]);  // and the language
     ScreenFont_BeginFrame();
+    Ui_BeginFrame();
     SyncView();
     g_drawnCount = 0;
     g_pointCount = 0;

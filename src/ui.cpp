@@ -247,11 +247,74 @@ void Ui_Small(S32 x, S32 y, const char *s, U8 colour, S32 scale) {
     }
 }
 
+// The columns of s that carry ink in the 8x8 font, from its first cell's left (a glyph
+// leaves its right column, and most their left, empty). False when nothing has ink.
+static bool InkColumns(const char *s, S32 *left, S32 *right) {
+    S32 l = -1, r = -1;
+    for (S32 i = 0; s[i]; i++) {
+        U8 bits = 0;
+        for (S32 row = 0; row < 8; row++)
+            bits |= Font8x8[(U8)s[i] * 8 + row];
+        for (S32 col = 0; col < 8; col++)
+            if (bits & (0x80 >> col)) {
+                if (l < 0)
+                    l = i * 8 + col;
+                r = i * 8 + col;
+            }
+    }
+    *left = l, *right = r;
+    return l >= 0;
+}
+
+// The rows a capital takes in the 8x8 font ('H'): a chip centres these, so every chip in a
+// row keeps one baseline whatever its letters.
+static void CapRows(S32 *top, S32 *bottom) {
+    S32 t = -1, b = -1;
+    for (S32 row = 0; row < 8; row++)
+        if (Font8x8['H' * 8 + row]) {
+            if (t < 0)
+                t = row;
+            b = row;
+        }
+    *top = t < 0 ? 0 : t, *bottom = b < 0 ? 7 : b;
+}
+
+// Where s's ink starts so that it sits in the middle of a w by h box at x, y.
+static void CentreInk(S32 x, S32 y, S32 w, S32 h, const char *s, S32 scale, S32 *tx, S32 *ty) {
+    S32 l, r, t, b;
+    if (!InkColumns(s, &l, &r))
+        l = 0, r = Ui_SmallWidth(s, 1) - 1;
+    CapRows(&t, &b);
+    *tx = x + (w - (r - l + 1) * scale) / 2 - l * scale;
+    *ty = y + (h - (b - t + 1) * scale) / 2 - t * scale;
+}
+
+static ChipBox s_chips[64];
+static int s_chipCount;
+
+void Ui_BeginFrame() { s_chipCount = 0; }
+
+int Ui_ChipBoxes(const ChipBox **out) {
+    *out = s_chips;
+    return s_chipCount;
+}
+
+static void NoteChip(S32 x0, S32 y0, S32 x1, S32 y1, const char *key, S32 scale, bool plain, bool legend) {
+    if (s_chipCount >= (int)(sizeof s_chips / sizeof s_chips[0]))
+        return;
+    ChipBox &c = s_chips[s_chipCount++];
+    c.x0 = x0, c.y0 = y0, c.x1 = x1, c.y1 = y1, c.scale = scale, c.plain = plain, c.legend = legend;
+    snprintf(c.key, sizeof c.key, "%s", key);
+}
+
 S32 Ui_ChipWidth(const char *key, S32 scale) {
     if (const char *and_ = strchr(key, CHIP_AND[0])) {
         std::string first(key, and_ - key);
         return Ui_ChipWidth(first.c_str(), scale) + CHIP_AND_GAP * scale + Ui_ChipWidth(and_ + 1, scale);
     }
+    // A one-letter key is square, as a keycap or a pad's button (EPmager, 2026-11-12).
+    if (key[0] && !key[1])
+        return Ui_KeyChipHeight(scale);
     return Ui_SmallWidth(key, scale) + 8 * scale;
 }
 
@@ -271,7 +334,11 @@ S32 Ui_Chip(S32 x, S32 y, const char *key, S32 scale, bool lit) {
     Line(x, y, x, y1, COUL_UP_BLUE);
     Line(x1, y + 1, x1, y1, COUL_DOWN_BLUE);
     Line(x + 1, y1, x1, y1, COUL_DOWN_BLUE);
-    Ui_Small(x + 4 * scale, y + 2 * scale, key, lit ? INK_WHITE : INK_CONFIG_MENU, scale);
+    // The letters' ink in the middle, not their cells (EPmager, 2026-11-12).
+    S32 tx, ty;
+    CentreInk(x, y, w, h, key, scale, &tx, &ty);
+    Ui_Small(tx, ty, key, lit ? INK_WHITE : INK_CONFIG_MENU, scale);
+    NoteChip(x, y, x1, y1, key, scale, !lit, true);
     return w;
 }
 
@@ -298,12 +365,17 @@ bool Ui_KeyChip(S32 x, S32 y, S32 w, const char *name, S32 scale, ChipFill fill,
     const char *text = empty ? "......" : name;
     S32 inner = w - 8 * scale;
     S32 tw = Ui_SmallWidth(text, scale);
-    S32 tx = tw <= inner ? x + w / 2 - tw / 2 : x + 4 * scale;
+    S32 tx, ty;
+    CentreInk(x, y, w, h, text, scale, &tx, &ty);
+    if (tw > inner)  // too long: from the left, clipped
+        tx = x + 4 * scale;
     U8 ink = fill != CHIP_SHADE ? INK_WHITE : empty ? INK_DISABLED : INK_CONFIG_MENU;
     const ClipSave clip;
     SetClip(x + 2, y + 1, x1 - 2, y1 - 1);
-    Ui_Small(tx, y + 2 * scale, text, ink, scale);
+    Ui_Small(tx, ty, text, ink, scale);
     clip.Restore();
+    if (tw <= inner && !empty)
+        NoteChip(x, y, x1, y1, text, scale, fill == CHIP_SHADE, false);
     return tw <= inner;
 }
 
