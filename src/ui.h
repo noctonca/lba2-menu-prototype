@@ -93,6 +93,7 @@ S32 Ui_Chip(S32 x, S32 y, const char *key, S32 scale, bool lit = false, int pad 
 struct ChipBox {
     S32 x0, y0, x1, y1, scale;
     bool plain, legend;
+    int pad;  // the pad family whose buttons key names, 0 for a key (pad_icons.h)
     char key[32];
 };
 void Ui_BeginFrame();

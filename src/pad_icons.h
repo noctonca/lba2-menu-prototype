@@ -16,3 +16,8 @@ S32 PadIcons_Width(const char *s, S32 scale, int pad);
 // coloured: in the pad's colours (a plain chip); otherwise in colour, as the letters
 // (white on a plasma chip).
 void PadIcons_Text(S32 x, S32 y, const char *s, U8 colour, S32 scale, bool coloured, int pad);
+// The columns of s that carry ink at scale 1, from its first cell's left: a letter's from the
+// 8x8 font, a button's from its drawing, so a chip centres either. False when nothing has ink.
+bool PadIcons_InkColumns(const char *s, int pad, S32 *left, S32 *right);
+// A colour a button takes on a plain chip (the self test finds a chip's ink by colour).
+bool PadIcons_IsColour(U8 c);

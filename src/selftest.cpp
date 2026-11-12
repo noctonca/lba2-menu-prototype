@@ -14,6 +14,7 @@
 #include "menu_parts.h"
 #include "trace.h"
 #include "ui.h"
+#include "pad_icons.h"
 
 #include <SVGA/SCREEN.H>
 
@@ -175,14 +176,15 @@ static void Check(std::vector<std::string> *found) {
     const int nb = Ui_ChipBoxes(&boxes);
     for (int i = 0; i < nb; i++) {
         const ChipBox &c = boxes[i];
-        if (c.legend && strlen(c.key) == 1 && c.x1 - c.x0 != c.y1 - c.y0)
+        if (c.legend && PadIcons_Width(c.key, 1, c.pad) == 8 && c.x1 - c.x0 != c.y1 - c.y0)
             found->push_back(Fmt("chip %s not square: %dx%d", Repr(c.key).c_str(), c.x1 - c.x0 + 1, c.y1 - c.y0 + 1));
         if (!c.plain || c.x0 < 0 || c.y0 < 0 || c.x1 >= W || c.y1 >= H)
             continue;
         S32 ix0 = W, iy0 = H, ix1 = -1, iy1 = -1;
         for (S32 y = c.y0 + 1; y < c.y1; y++)
             for (S32 x = c.x0 + 1; x < c.x1; x++)
-                if (((const U8 *)Log)[TabOffLine[y] + x] == INK_CONFIG_MENU)
+                if (((const U8 *)Log)[TabOffLine[y] + x] == INK_CONFIG_MENU ||
+                    (c.pad && PadIcons_IsColour(((const U8 *)Log)[TabOffLine[y] + x])))
                     ix0 = std::min(ix0, x), ix1 = std::max(ix1, x), iy0 = std::min(iy0, y), iy1 = std::max(iy1, y);
         if (ix1 < 0)
             continue;  // covered (a question over the page)

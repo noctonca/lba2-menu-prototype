@@ -248,25 +248,6 @@ void Ui_Small(S32 x, S32 y, const char *s, U8 colour, S32 scale) {
     }
 }
 
-// The columns of s that carry ink in the 8x8 font, from its first cell's left (a glyph
-// leaves its right column, and most their left, empty). False when nothing has ink.
-static bool InkColumns(const char *s, S32 *left, S32 *right) {
-    S32 l = -1, r = -1;
-    for (S32 i = 0; s[i]; i++) {
-        U8 bits = 0;
-        for (S32 row = 0; row < 8; row++)
-            bits |= Font8x8[(U8)s[i] * 8 + row];
-        for (S32 col = 0; col < 8; col++)
-            if (bits & (0x80 >> col)) {
-                if (l < 0)
-                    l = i * 8 + col;
-                r = i * 8 + col;
-            }
-    }
-    *left = l, *right = r;
-    return l >= 0;
-}
-
 // The rows a capital takes in the 8x8 font ('H'): a chip centres these, so every chip in a
 // row keeps one baseline whatever its letters.
 static void CapRows(S32 *top, S32 *bottom) {
@@ -281,10 +262,11 @@ static void CapRows(S32 *top, S32 *bottom) {
 }
 
 // Where s's ink starts so that it sits in the middle of a w by h box at x, y.
-static void CentreInk(S32 x, S32 y, S32 w, S32 h, const char *s, S32 scale, S32 *tx, S32 *ty) {
+// pad: the family whose buttons s names (pad_icons.h), whose cells ink as the buttons do.
+static void CentreInk(S32 x, S32 y, S32 w, S32 h, const char *s, S32 scale, int pad, S32 *tx, S32 *ty) {
     S32 l, r, t, b;
-    if (!InkColumns(s, &l, &r))
-        l = 0, r = Ui_SmallWidth(s, 1) - 1;
+    if (!PadIcons_InkColumns(s, pad, &l, &r))
+        l = 0, r = PadIcons_Width(s, 1, pad) - 1;
     CapRows(&t, &b);
     *tx = x + (w - (r - l + 1) * scale) / 2 - l * scale;
     *ty = y + (h - (b - t + 1) * scale) / 2 - t * scale;
@@ -300,11 +282,11 @@ int Ui_ChipBoxes(const ChipBox **out) {
     return s_chipCount;
 }
 
-static void NoteChip(S32 x0, S32 y0, S32 x1, S32 y1, const char *key, S32 scale, bool plain, bool legend) {
+static void NoteChip(S32 x0, S32 y0, S32 x1, S32 y1, const char *key, S32 scale, bool plain, bool legend, int pad) {
     if (s_chipCount >= (int)(sizeof s_chips / sizeof s_chips[0]))
         return;
     ChipBox &c = s_chips[s_chipCount++];
-    c.x0 = x0, c.y0 = y0, c.x1 = x1, c.y1 = y1, c.scale = scale, c.plain = plain, c.legend = legend;
+    c.x0 = x0, c.y0 = y0, c.x1 = x1, c.y1 = y1, c.scale = scale, c.plain = plain, c.legend = legend, c.pad = pad;
     snprintf(c.key, sizeof c.key, "%s", key);
 }
 
@@ -313,8 +295,9 @@ S32 Ui_ChipWidth(const char *key, S32 scale, int pad) {
         std::string first(key, and_ - key);
         return Ui_ChipWidth(first.c_str(), scale, pad) + CHIP_AND_GAP * scale + Ui_ChipWidth(and_ + 1, scale, pad);
     }
-    // A one-letter key is square, as a keycap or a pad's button (EPmager, 2026-11-12).
-    if (key[0] && !key[1])
+    // A one-letter key is square, as a keycap or a pad's button (EPmager, 2026-11-12); a
+    // button drawn as the pad shows it is one letter.
+    if (PadIcons_Width(key, 1, pad) == 8)
         return Ui_KeyChipHeight(scale);
     return PadIcons_Width(key, scale, pad) + 8 * scale;
 }
@@ -337,9 +320,9 @@ S32 Ui_Chip(S32 x, S32 y, const char *key, S32 scale, bool lit, int pad) {
     Line(x + 1, y1, x1, y1, COUL_DOWN_BLUE);
     // The letters' ink in the middle, not their cells (EPmager, 2026-11-12).
     S32 tx, ty;
-    CentreInk(x, y, w, h, key, scale, &tx, &ty);
+    CentreInk(x, y, w, h, key, scale, pad, &tx, &ty);
     PadIcons_Text(tx, ty, key, lit ? INK_WHITE : INK_CONFIG_MENU, scale, !lit, pad);
-    NoteChip(x, y, x1, y1, key, scale, !lit, true);
+    NoteChip(x, y, x1, y1, key, scale, !lit, true, pad);
     return w;
 }
 
@@ -367,7 +350,7 @@ bool Ui_KeyChip(S32 x, S32 y, S32 w, const char *name, S32 scale, ChipFill fill,
     S32 inner = w - 8 * scale;
     S32 tw = PadIcons_Width(text, scale, empty ? 0 : pad);
     S32 tx, ty;
-    CentreInk(x, y, w, h, text, scale, &tx, &ty);
+    CentreInk(x, y, w, h, text, scale, empty ? 0 : pad, &tx, &ty);
     if (tw > inner)  // too long: from the left, clipped
         tx = x + 4 * scale;
     U8 ink = fill != CHIP_SHADE ? INK_WHITE : empty ? INK_DISABLED : INK_CONFIG_MENU;
@@ -376,7 +359,7 @@ bool Ui_KeyChip(S32 x, S32 y, S32 w, const char *name, S32 scale, ChipFill fill,
     PadIcons_Text(tx, ty, text, ink, scale, fill == CHIP_SHADE, empty ? 0 : pad);
     clip.Restore();
     if (tw <= inner && !empty)
-        NoteChip(x, y, x1, y1, text, scale, fill == CHIP_SHADE, false);
+        NoteChip(x, y, x1, y1, text, scale, fill == CHIP_SHADE, false, pad);
     return tw <= inner;
 }
 

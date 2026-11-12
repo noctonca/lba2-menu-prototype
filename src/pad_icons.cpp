@@ -7,6 +7,8 @@
 
 #include <string.h>
 
+extern "C" U8 Font8x8[256 * 8];
+
 int g_padIcons = 1;
 
 enum { PAD_XBOX = 1, PAD_PLAYSTATION = 2 };
@@ -119,4 +121,44 @@ S32 PadIcons_Width(const char *s, S32 scale, int pad) {
 
 void PadIcons_Text(S32 x, S32 y, const char *s, U8 colour, S32 scale, bool coloured, int pad) {
     Walk(s, x, y, colour, scale, coloured, pad, true);
+}
+
+// The columns one cell inks: a button's drawing, or the font's glyph.
+static U8 CellInk(int b, U8 ch) {
+    U8 bits = 0;
+    if (b >= 0 && HasRows(b)) {
+        for (int r = 0; r < 7; r++)
+            bits |= kButtons[b].rows[r];
+        return bits;
+    }
+    if (b >= 0)
+        ch = (U8)kButtons[b].name[0];
+    for (int r = 0; r < 8; r++)
+        bits |= Font8x8[ch * 8 + r];
+    return bits;
+}
+
+bool PadIcons_InkColumns(const char *s, int pad, S32 *left, S32 *right) {
+    S32 l = -1, r = -1, cell = 0;
+    for (const char *p = s; *p; cell++) {
+        size_t len;
+        int b = (p == s || p[-1] == ' ') ? ButtonAt(p, pad, &len) : -1;
+        U8 bits = CellInk(b, (U8)*p);
+        p += b >= 0 ? len : 1;
+        for (S32 col = 0; col < 8; col++)
+            if (bits & (0x80 >> col)) {
+                if (l < 0)
+                    l = cell * 8 + col;
+                r = cell * 8 + col;
+            }
+    }
+    *left = l, *right = r;
+    return l >= 0;
+}
+
+bool PadIcons_IsColour(U8 c) {
+    for (int i = 0; i < BUTTON_COUNT; i++)
+        if (kButtons[i].colour && kButtons[i].colour == c)
+            return true;
+    return false;
 }
