@@ -318,14 +318,28 @@ S32 Ui_Chip(S32 x, S32 y, const char *key, S32 scale, bool lit, int pad, int rol
     }
     S32 w = Ui_ChipWidth(key, scale, pad), h = 8 * scale + 4 * scale;
     S32 x1 = x + w - 1, y1 = y + h - 1;
+    // Rounded as the rows are (EPmager, 2026-11-12): at 2x the rows' frame, INVENT.CPP
+    // DrawCadre with its 5-pixel corners. A 1x chip is 12 pixels tall, and those corners
+    // close round its letters like brackets, so it cuts its corners by 2 pixels.
+    const bool cadre = scale > 1;
+    if (cadre)
+        GamePieces_BackupCorners(x, y, x1, y1);
     if (lit)
         GamePieces_FireBar(x + 1, y + 1, x1, y1 - 1, PLASMA_CURRENT);
     else
         GamePieces_Shade(x + 1, y + 1, x1 - 1, y1 - 1, MENU_SHADE_LVL);
-    Line(x, y, x1, y, COUL_UP_BLUE);
-    Line(x, y, x, y1, COUL_UP_BLUE);
-    Line(x1, y + 1, x1, y1, COUL_DOWN_BLUE);
-    Line(x + 1, y1, x1, y1, COUL_DOWN_BLUE);
+    if (cadre) {
+        GamePieces_Frame(x, y, x1, y1);
+    } else {
+        Line(x + 2, y, x1 - 2, y, COUL_UP_BLUE);
+        Line(x, y + 2, x, y1 - 2, COUL_UP_BLUE);
+        Line(x1, y + 2, x1, y1 - 2, COUL_DOWN_BLUE);
+        Line(x + 2, y1, x1 - 2, y1, COUL_DOWN_BLUE);
+        Plot(x + 1, y + 1, COUL_UP_BLUE);
+        Plot(x + 1, y1 - 1, COUL_UP_BLUE);
+        Plot(x1 - 1, y + 1, COUL_DOWN_BLUE);
+        Plot(x1 - 1, y1 - 1, COUL_DOWN_BLUE);
+    }
     // The letters' ink in the middle, not their cells (EPmager, 2026-11-12).
     S32 tx, ty;
     CentreInk(x, y, w, h, key, scale, pad, &tx, &ty);

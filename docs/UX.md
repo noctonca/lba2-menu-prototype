@@ -207,7 +207,10 @@ frame. A pane is the rows in it; the band is one frame holding the voice and
 the legend. Nothing nests a frame inside another with no gap.
 
 **Law of Prägnanz.** One frame, chamfered 5 px, the same everywhere; no
-second border, no shadow on a framed label. Joins checked at 3x.
+second border, no shadow on a framed label. Joins checked at 3x. The
+legend's chips take the frame too (EPmager, 2026-11-12); at 1x a chip is 12
+px tall and 5 px corners close round its letters like brackets, so it is
+chamfered 2 px.
 
 **Von Restorff Effect** (the one that differs gets noticed).
 - Exactly one cursor plasma on the screen. **[self test: N cursors]**
