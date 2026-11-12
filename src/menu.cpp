@@ -1887,7 +1887,7 @@ static void DrawOverlay() {
         "Drag the window's edge: any screen size",
         "F3 green plasma on the chosen preset: off / on",
         "F11 pad names: connected / Xbox / PlayStation / Nintendo",
-        "F10 legend keys in their role's colour: off / on",
+        "F10 legend keys in their role's colour: on / off",
         "F12 the pad's button shapes on chips: on / off",
     };
     S32 n = (S32)(sizeof lines / sizeof lines[0]);
@@ -2023,7 +2023,7 @@ static const SwitchDef kSwitches[] = {
     {"whole", &sw_whole, 0, 1, 0},
     {"greencurrent", &sw_greencurrent, 0, 1, 0},
     {"padicons", &g_padIcons, 0, 1, 1},  // shapes for the pad's buttons on chips
-    {"roleink", &g_roleInk, 0, 1, 0},    // Enter green, Esc red in the legend
+    {"roleink", &g_roleInk, 0, 1, 1},    // Enter green, Esc red in the legend
 };
 
 bool Menu_SetSwitch(const char *name, int v) {

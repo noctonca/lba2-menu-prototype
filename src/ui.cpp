@@ -302,7 +302,7 @@ S32 Ui_ChipWidth(const char *key, S32 scale, int pad) {
     return PadIcons_Width(key, scale, pad) + 8 * scale;
 }
 
-int g_roleInk = 0;
+int g_roleInk = 1;
 
 // The Xbox pad's A green and B red (pad_icons.cpp), so a keyboard's Enter and Esc read as
 // the pad's A and B do.
