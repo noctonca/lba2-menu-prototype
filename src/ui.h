@@ -68,15 +68,15 @@ void Ui_Steps(S32 xRight, S32 yCentre, S32 count, S32 lit, S32 *outLeft);
 // A small slider for the value column, x0..x1. Dimmed: no plasma, the filled part
 // flat in the dimmed label's grey (3:1 from the live plasma), the rest dark.
 
-// Small text (legend words, key chips, column heads, More options, FPS): in the menu's
-// face at the 8x8 font's size (capitals 7 a step) when the menu draws in Zilla Slab,
-// else in the 8x8 font, the game's own small letters. One face everywhere the player
-// looks (2026-11-12; before, chips and More options stayed 8x8 beside Zilla Slab).
+// 8x8 font, drawn at a whole-step scale.
 S32 Ui_SmallWidth(const char *s, S32 scale);
 void Ui_Small(S32 x, S32 y, const char *s, U8 colour, S32 scale);
-// Always the 8x8 font, at a whole-step scale: the console and the prototype's key list.
-S32 Ui_Font8Width(const char *s, S32 scale);
-void Ui_Font8(S32 x, S32 y, const char *s, U8 colour, S32 scale);
+// A small word (legend words, column heads, "1/2"): in the menu's face at the 8x8 font's
+// size (capitals 7 a step) when the menu draws in Zilla Slab, else in the 8x8 font, the
+// game's own small letters. Keys (chips), the More options table and developer text (frame
+// rate, the corner notice, the console) stay 8x8 either way (decided 2026-11-12).
+S32 Ui_WordWidth(const char *s, S32 scale);
+void Ui_Word(S32 x, S32 y, const char *s, U8 colour, S32 scale);
 // A key chip: the key name in the 8x8 font inside a frame. Returns its width.
 // A key of two keys, "<one>" CHIP_AND "<two>", is two chips side by side (the
 // legend's "<> / Enter Change": either changes the value).

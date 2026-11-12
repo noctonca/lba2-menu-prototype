@@ -32,18 +32,7 @@ static const U16 kCp850[128] = {
     0x00DE, 0x00DA, 0x00DB, 0x00D9, 0x00FD, 0x00DD, 0x00AF, 0x00B4, 0x00AD, 0x00B1, 0x2017, 0x00BE, 0x00B6,
     0x00A7, 0x00F7, 0x00B8, 0x00B0, 0x00A8, 0x00B7, 0x00B9, 0x00B3, 0x00B2, 0x25A0, 0x00A0};
 
-// The 8x8 font's arrows (CP437 0x10, 0x11, 0x18-0x1B), used in key chips.
-static int Unicode(U8 c) {
-    switch (c) {
-    case 0x10: return 0x25BA;  // right-pointing triangle
-    case 0x11: return 0x25C4;  // left-pointing triangle
-    case 0x18: return 0x2191;  // up arrow
-    case 0x19: return 0x2193;
-    case 0x1A: return 0x2192;
-    case 0x1B: return 0x2190;
-    default: return c < 128 ? c : kCp850[c - 128];
-    }
-}
+static int Unicode(U8 c) { return c < 128 ? c : kCp850[c - 128]; }
 
 static stbtt_fontinfo s_font[1];  // bold
 static bool s_ready;

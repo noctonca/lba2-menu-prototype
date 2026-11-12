@@ -778,7 +778,7 @@ struct DrawnChip {
 };
 static DrawnChip g_chips[32];
 static int g_chipCount;
-// The column heads, above the actions or inside the first row, in the 8x8 font.
+// The column heads, above the actions or inside the first row, in the legend words' face.
 static struct {
     const char *text;
     int x0, y0, x1, y1;
@@ -859,11 +859,11 @@ static void DrawActionRow(int action, int row, S32 x0, S32 y0, S32 x1, S32 y1, c
 
 static void DrawHead(S32 x, S32 y, const char *text, S32 s) {
     const char *shown = Ui_Tr(text);  // the record keeps the English
-    Ui_Small(x, y, shown, INK_CONFIG_HEAD, s);
+    Ui_Word(x, y, shown, INK_CONFIG_HEAD, s);  // words, in the menu's face
     if (g_headCount < 4) {
         g_heads[g_headCount].text = text;
         g_heads[g_headCount].x0 = x, g_heads[g_headCount].y0 = y;
-        g_heads[g_headCount].x1 = x + Ui_SmallWidth(shown, s) - 1, g_heads[g_headCount].y1 = y + 8 * s - 1;
+        g_heads[g_headCount].x1 = x + Ui_WordWidth(shown, s) - 1, g_heads[g_headCount].y1 = y + 8 * s - 1;
         g_headCount++;
     }
 }
