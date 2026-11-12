@@ -93,7 +93,9 @@ the call is answered.
   six English labels and their values need (up to 556); one pane is 640 wide
   and holds them with 84 to spare. A page's name is its title (the brand
   book's Title, +4,+4 shadow), in the seventh row's place: a page shows six
-  rows under it, the hub seven and no title. A longer page scrolls (Weapons,
+  rows under it, the hub too (titled Options since 2026-11-13, as the column's
+  hub is: rows keep their height between the hub and a page, and the corner
+  Back sits beside a title, not against the first row). A longer page scrolls (Weapons,
   seven actions). The hub no longer previews a category's rows.
 
 ## Vertical rhythm
@@ -120,12 +122,26 @@ the call is answered.
 
 **Fitts's Law** (target size and distance) becomes *presses to reach*. There
 is no pointer, so the cost of a target is the number of key presses to it.
-- A page opens on its first row (one column: the Return row, as 1997, under the
-  page's title; wide: the first setting, as a wide page has no Return row).
-  The one column keeps the row beside its legend's Esc Back because a finger
-  or the mouse needs a target, and a 550 by 50 row is a better one than a
-  legend chip (decided 2026-11-12; EPmager had asked for the title). Esc is
-  always one press back, whatever row has the cursor. **[self test: return]**
+- A page opens on its first setting. No page has a Return row (decided
+  2026-11-12, EPmager: clutter): Esc is always one press back, whatever row
+  has the cursor. **[self test: return]**
+- **A mouse or a finger gets a Back button** on the title's line, a row's
+  height (in the one column at the rows' left edge, wide in the margin left
+  of the rows), shown once the pointer was used last and gone at a key or a
+  pad's button, which have Esc and B. It always says Back, on a question
+  too, where it does what Esc Cancel does. Every page has a title line for it, the one
+  column's hub too, so nothing moves when it comes; a title too wide beside
+  it swings, as a long 1997 row does (decided 2026-11-12). Back is an option:
+  while the mouse is on it no row is lit and the help is quiet (a question
+  still asks); it stays lit over empty space, as a row keeps the cursor. The
+  first key while on Back only brings the cursor back to its row; the next
+  one moves (decided 2026-11-13).
+- A legend entry that takes a click lights under the mouse (its chip in the
+  current plasma, its word white), so it reads as a button; a finger has no
+  hover, so it lights only while pressed. No chips for the mouse's buttons:
+  wide, the help shares the band with the legend, and two more chips there
+  pushed ten translated help texts onto a second window (decided
+  2026-11-12). **[self test: hover, pointer]**
 - **Every row by the pointer alone.** A finger has no keys and no wheel: the
   scroll bar's thumb drags and its groove taps a viewful up or down, so on
   every page each row can take the cursor by pointing (2026-11-12).
@@ -148,16 +164,15 @@ is no pointer, so the cost of a target is the number of key presses to it.
 - First launch asks one question with two answers.
 
 **Miller's Law, Chunking** (working memory holds about 7 chunks).
-- A page holds at most 7 rows, 8 on the 640x480 canvas with its Return row
-  (the brand book's "a plain menu does not scroll"); on the wide canvas, 6
-  under the page's title, 7 on the hub. More means a sub-page. Since the help
-  and the title, a 640x480 sub-page shows its Return row and 3 more, the hub 5,
-  and the rest scroll.
+- A page holds at most 7 rows (the brand book's "a plain menu does not
+  scroll"); on the wide canvas, 6 under the page's title, the hub's too. More
+  means a sub-page. Since the help and the title, a 640x480 page shows 4 rows,
+  the hub too, and the rest scroll.
 - The Controls page chunks 36 actions into 7 groups of 4 to 7.
 
 **Jakob's Law** (people expect it to work like what they know). Two things
 they know: the 1997 menus, and every console game's menu.
-- 1997: Return to previous menu on top of a one-column sub-page; the plasma
+- 1997: the plasma
   cursor; the current-value plasma on the entry in use; Enter opens; Esc goes
   back. The entry in use also says "(current)" after its name ("(changed)"
   once a setting it chose is changed; wide, the row's value Changed), and the green

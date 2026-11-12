@@ -341,6 +341,10 @@ static int sw_greencurrent = 0;
 // Space or the pad's Y ("More" in the legend); no 750 px cap. 0: the short help alone, as the
 // 2026-11-03 cap left it. F4.
 static int sw_longhelp = 1;
+// The pointer used last, as the host has it, or fixed for a test: switch pointer, 1 the mouse,
+// 2 a finger (the self test's combos lay every screen out as each shows it).
+static int sw_pointer = 0;
+static int LastPointer() { return sw_pointer ? sw_pointer : Host_LastPointer(); }
 
 // What a build off main says: lba2cc's LBA2_VERSION_STRING and the commit's first 7. A release
 // says its number alone. An example; the prototype has no build of its own to name.
@@ -582,13 +586,13 @@ void Menu_NoteScreen() {
 
 static int TopPage() { return g_stack[g_depth - 1].page; }
 
-// A row as the layout shows it: a wide page has no Return row (Esc goes back); the one
-// column keeps it under the page's title, as 1997 had it and as a big target for a finger
-// or the mouse (decided 2026-11-12). A row with a "shown when" check is there only while
-// it holds.
+// A row as the layout shows it. No page shows a Return row (decided 2026-11-12, EPmager:
+// clutter): Esc goes back, and a mouse or a finger has the corner Back (DrawBack). The
+// "original" fixture keeps it, as today's lba2cc page has it. A row with a "shown when"
+// check is there only while it holds.
 static bool RowShown(const Page &p, int i) {
     const Row &r = p.rows[i];
-    if (r.type == R_RETURN && Wide() && !g_first)
+    if (r.type == R_RETURN && &p != &g_pages[P_ORIGINAL])
         return false;
     return !r.shown || r.shown();
 }
@@ -815,6 +819,10 @@ static void UpdateVoice() {
     }
     if (MoreOptions_Active()) {
         MoreOptions_Say();
+        return;
+    }
+    if (!g_confirm && !Menu_CursorLit()) {  // on Back: no row to speak of; a question still asks
+        Menu_SayAsIs("");
         return;
     }
     const Row *r = CursorRow();
@@ -1068,8 +1076,26 @@ int Menu_WheelView(int &scroll, int visible, int total, int cursor) {
     return cursor < scroll ? scroll : cursor >= scroll + visible ? scroll + visible - 1 : cursor;
 }
 
+// The corner Back is an option a mouse can stand on: while it is, no row is lit (decided
+// 2026-11-13). It stays on Back over empty space, as a row keeps the cursor; a key hides Back
+// and the cursor is on its row again.
+static bool g_onBack;
+static bool BackShown();
+
+bool Menu_CursorLit() {
+    if (!g_onBack || !BackShown())
+        return true;
+    HostPointer in;
+    Host_Pointer(&in);
+    return !(LastPointer() == POINTER_MOUSE || in.held);  // a finger is on Back only while pressing it
+}
+
 // The cursor where the pointer is.
 static void PointTo(const PointTarget &p) {
+    const bool wasBack = g_onBack;
+    g_onBack = p.kind == POINT_KEY && p.b == POINT_KEY_BACK;
+    if (g_onBack && !wasBack)
+        Trace("cursor Back (pointer)");
     switch (p.kind) {
     case POINT_ROW:
         CursorTo(p.a, p.b);
@@ -1107,11 +1133,24 @@ static int BarFirstAt(S32 y) {
     return first < 0 ? 0 : first > b.total - b.visible ? b.total - b.visible : first;
 }
 
-// A slider's value where the pointer is along its bar.
+// A slider moves by a drag, never by a press: the 1997 slider is its whole row, label and
+// all, so a press set Master volume from 100 to 5 when it landed on the word (2026-11-12).
+// Past a few pixels sideways the value follows the pointer by how far it went, from where it
+// was, across the row's width for the whole range.
+enum { SLIDE_START_PX = 6 };
+static S32 g_slideFromX, g_slideFromValue;
+static bool g_sliding;
+
 static void SlideTo(const PointTarget &p, S32 x) {
     const Setting &st = kSettings[p.a];
+    if (!g_sliding) {
+        if (x - g_slideFromX < SLIDE_START_PX && g_slideFromX - x < SLIDE_START_PX)
+            return;
+        g_sliding = true;
+    }
     S32 w = p.x1 - p.x0;
-    int v = w > 0 ? (int)(((x - p.x0) * st.max + w / 2) / w) : 0;
+    int v = w > 0 ? (int)(g_slideFromValue + ((x - g_slideFromX) * st.max + (x >= g_slideFromX ? w / 2 : -w / 2)) / w)
+                  : g_slideFromValue;
     v = v < 0 ? 0 : v > st.max ? st.max : v;
     if (v != g_val[p.a]) {
         g_val[p.a] = v;
@@ -1124,6 +1163,17 @@ static void UpdatePointer() {
     HostPointer in;
     Host_Pointer(&in);
     const PointTarget *at = PointAt(in.x, in.y);
+    if (g_onBack && LastPointer() == POINTER_NONE && !g_first && !g_closed && !g_console) {
+        // A key while on Back only brings the cursor back to its row (decided 2026-11-13); Esc
+        // still goes back, as Back would have.
+        g_onBack = false;
+        for (int k = 0; k < KEY_COUNT; k++)
+            if (k != KEY_ESC)
+                Host_Unpress((UiKey)k);
+        Trace("cursor back on its row (key)");
+    } else if (!BackShown()) {
+        g_onBack = false;
+    }
     if (Bindings_Waiting()) {
         // A click is not a key to bind: only the legend's Cancel and the right button act.
         if (in.pressed) {
@@ -1155,8 +1205,11 @@ static void UpdatePointer() {
         if (at) {
             g_press = *at;
             PointTo(*at);
-            if (at->kind == POINT_SLIDER)
-                SlideTo(*at, in.x);
+            if (at->kind == POINT_SLIDER) {
+                g_slideFromX = in.x;
+                g_slideFromValue = g_val[at->a];
+                g_sliding = false;
+            }
             if (at->kind == POINT_SCROLL && g_bar.shown) {
                 if (in.y < g_bar.ty0)  // the groove above the thumb: a viewful up
                     g_scrollTo = g_bar.first > g_bar.visible ? g_bar.first - g_bar.visible : 0;
@@ -1653,7 +1706,7 @@ static void KeyText(const char *key, char *out, size_t n) {
 
 // A legend entry the pointer can press: the key its word stands for. The arrows' entries
 // (Adjust, and Choose on a question) take no click: the rows and arrows are pointed at.
-static void LegendPoint(S32 x0, S32 y0, S32 x1, S32 y1, const char *key, const char *word) {
+static int LegendKeyOf(const char *key, const char *word) {
     static const struct {
         const char *word;
         UiKey key;
@@ -1664,12 +1717,23 @@ static void LegendPoint(S32 x0, S32 y0, S32 x1, S32 y1, const char *key, const c
         {"More", KEY_MORE},
     };
     if ((key[0] == '\x11' || key[0] == '\x18') && !strchr(key, CHIP_AND[0]))
-        return;
+        return -1;
     for (const auto &w : kWordKeys)
-        if (!strcmp(word, w.word)) {
-            Menu_Point(POINT_KEY, x0, y0, x1, y1, w.key);
-            return;
-        }
+        if (!strcmp(word, w.word))
+            return w.key;
+    return -1;
+}
+
+// The entry's target, and whether it is lit: the mouse over it, or a finger pressing it.
+static bool LegendPoint(S32 x0, S32 y0, S32 x1, S32 y1, const char *key, const char *word) {
+    const int k = LegendKeyOf(key, word);
+    if (k < 0)
+        return false;
+    Menu_Point(POINT_KEY, x0, y0, x1, y1, k);
+    HostPointer in;
+    Host_Pointer(&in);
+    return LastPointer() != POINTER_NONE && (LastPointer() == POINTER_MOUSE || in.held) && in.x >= x0 && in.x <= x1 &&
+           in.y >= y0 && in.y <= y1;
 }
 
 static void LegendRecord(int i, const char *key, const char *word) {
@@ -1716,11 +1780,12 @@ static void DrawLegendStacked(S32 x0, S32 y0, const char **keys, const char **ra
         }
         S32 y = y0 + (i % per) * pitch;
         S32 c = Ui_ChipWidth(keys[i], scale, Bindings_LegendPadFamily());
-        Ui_Chip(x + chipW - c, y, keys[i], scale, false, Bindings_LegendPadFamily(), LegendRoles(raws[i], words[i]));
-        Ui_Word(x + chipW + 4 * scale, y + chipH / 2 - 4 * scale, LegendWord(words[i]), INK_CONFIG_MENU, scale);
+        const bool lit = LegendPoint(x + chipW - c, y - 1, x + chipW + 4 * scale + Ui_WordWidth(LegendWord(words[i]), scale),
+                                     y + chipH, keys[i], words[i]);
+        Ui_Chip(x + chipW - c, y, keys[i], scale, lit, Bindings_LegendPadFamily(), LegendRoles(raws[i], words[i]));
+        Ui_Word(x + chipW + 4 * scale, y + chipH / 2 - 4 * scale, LegendWord(words[i]), lit ? INK_WHITE : INK_CONFIG_MENU,
+                scale);
         LegendRecord(i, keys[i], words[i]);
-        LegendPoint(x + chipW - c, y - 1, x + chipW + 4 * scale + Ui_WordWidth(LegendWord(words[i]), scale), y + chipH,
-                    keys[i], words[i]);
         LegendGrow(x + chipW - c, y, x + chipW + 4 * scale + Ui_WordWidth(LegendWord(words[i]), scale) - 1,
                    y + chipH - 1, scale);
     }
@@ -1734,7 +1799,7 @@ static void DrawConfirm(const char *pane, S32 x0, S32 x1, S32 y0) {
     const char *const *answers = kQuestions[g_question].answers;
     for (int i = 0; i < 2; i++) {
         S32 ry0 = y0 + i * ROW_PITCH, yc = ry0 + ROW_H / 2;
-        RowFill fill = i == g_confirmCursor ? FILL_CURSOR : FILL_SHADE;
+        RowFill fill = i == g_confirmCursor && Menu_CursorLit() ? FILL_CURSOR : FILL_SHADE;
         Ui_RowBackground(x0, ry0, x1, ry0 + ROW_H, fill);
         DrawnRow &d = Menu_Record(pane, answers[i], "", fill, x0, ry0, x1, ry0 + ROW_H);
         Menu_Point(POINT_ANSWER, x0, ry0, x1, ry0 + ROW_H, i);
@@ -1800,11 +1865,11 @@ static S32 DrawLegendRow(S32 x, S32 y, const char **keys, const char **raws, con
             w += 12 * scale;
         S32 c = Ui_ChipWidth(keys[i], scale, Bindings_LegendPadFamily());
         if (draw) {
-            Ui_Chip(x + w, y, keys[i], scale, false, Bindings_LegendPadFamily(), LegendRoles(raws[i], words[i]));
-            Ui_Word(x + w + c + 4 * scale, y + 2 * scale, LegendWord(words[i]), INK_CONFIG_MENU, scale);
+            const bool lit = LegendPoint(x + w, y - 1, x + w + c + 4 * scale + Ui_WordWidth(LegendWord(words[i]), scale),
+                                         y + 12 * scale, keys[i], words[i]);
+            Ui_Chip(x + w, y, keys[i], scale, lit, Bindings_LegendPadFamily(), LegendRoles(raws[i], words[i]));
+            Ui_Word(x + w + c + 4 * scale, y + 2 * scale, LegendWord(words[i]), lit ? INK_WHITE : INK_CONFIG_MENU, scale);
             LegendRecord(i, keys[i], words[i]);
-            LegendPoint(x + w, y - 1, x + w + c + 4 * scale + Ui_WordWidth(LegendWord(words[i]), scale), y + 12 * scale,
-                        keys[i], words[i]);
             LegendGrow(x + w, y, x + w + c + 4 * scale + Ui_WordWidth(LegendWord(words[i]), scale) - 1,
                        y + 12 * scale - 1, scale);
         }
@@ -1848,6 +1913,44 @@ void Menu_DrawDialogueIn(S32 x0, S32 y0, S32 x1, S32 y1, const char **keysGiven,
     g_helpBox.x0 = x0; g_helpBox.y0 = y0; g_helpBox.x1 = x1; g_helpBox.y1 = y1;
 }
 
+// ── The corner Back (decided 2026-11-12) ──
+// For a mouse or a finger only: shown once the pointer was used last, gone at a key or a
+// pad's button, which have Esc and B. It sits on the title's line: in the one column at the
+// rows' left edge (the title moves right of it when it must), wide in the frame's margin left
+// of the rows. A row's height, as big a target as a row; it presses Esc.
+static bool BackShown() { return LastPointer() != POINTER_NONE && !g_first && !g_closed && !g_console; }
+// Always Back, one look and one width on every screen (decided 2026-11-12; on a question it
+// does what the legend's Esc Cancel does). In the Text language as the legend has it
+// ("legend|Back": the plain "Back" is the walk-back key).
+static const char *BackWord() { return LegendWord("Back"); }
+static S32 BackWidth() { return 44 + Ui_TextWidthAsIs(BackWord()) + 20; }
+// In the one column at the rows' left edge (1997's LargeurMenu 550, centred); wide on the
+// frame's side margin, left of the rows.
+static S32 BackLeft() { return Wide() && !g_first ? Menu_WideFrame().x0 + 32 : (S32)Host_LogicalW() / 2 - 275; }
+static struct {
+    bool shown;
+    S32 x0, y0, x1, y1;
+} g_backBox;
+
+static void DrawBack() {
+    S32 tx, ty;
+    const bool titled = Ui_FirstTitle(&tx, &ty);
+    (void)tx;
+    const S32 x0 = BackLeft();
+    // The title's 38 in a row's 50, so the word sits on the title's line (wide, 6 into the
+    // top margin: lined up with the title reads better than kept out of it).
+    const S32 y0 = (titled ? ty : Wide() ? Menu_WideFrame().y0 + 24 : 16) - 6;
+    const S32 x1 = x0 + BackWidth(), y1 = y0 + ROW_H, yc = (y0 + y1) / 2;
+    HostPointer in;
+    Host_Pointer(&in);
+    const bool lit = !Menu_CursorLit();  // it has the cursor
+    Ui_RowBackground(x0, y0, x1, y1, lit ? FILL_CURSOR : FILL_SHADE);
+    Ui_Arrow(x0 + 18, yc, -1);
+    Ui_TextAsIs(x0 + 44, yc - 18, BackWord(), INK_WHITE);
+    Menu_Point(POINT_KEY, x0, y0, x1, y1, KEY_ESC, POINT_KEY_BACK);
+    g_backBox = {true, x0, y0, x1, y1};
+}
+
 static void DrawColumn() {
     S32 W = (S32)Host_LogicalW(), H = (S32)Host_LogicalH();
     const Place &t = Top();
@@ -1877,9 +1980,10 @@ static void DrawColumn() {
         S32 top = 16, bottom = H - 1 - 137 - 16;
         if (g_first)
             top = 168 - 8;
-        // A page names itself in a title above its Return row, as the wide pages do (EPmager,
-        // 2026-11-12); the hub has none.
-        const bool titled = g_depth > 1 && !g_first;
+        // A page names itself in a title above its rows, as the wide pages do (EPmager,
+        // 2026-11-12). The hub too, so the corner Back has its line and nothing moves when
+        // it comes (decided 2026-11-12).
+        const bool titled = !g_first;
         const S32 titleH = titled ? ROW_PITCH : 0;
         int visible = (bottom - top - titleH + ROW_GAP) / ROW_PITCH;
         if (visible > count)
@@ -1906,7 +2010,7 @@ static void DrawColumn() {
         // The 1997 width: LargeurMenu 550, centred.
         S32 x0 = W / 2 - 275, x1 = W / 2 + 275;
         for (int i = g_scroll; i < g_scroll + visible; i++) {
-            DrawColumnRow(p.rows[shown[i]], shown[i], x0, y, x1, y + ROW_H, i == cursor);
+            DrawColumnRow(p.rows[shown[i]], shown[i], x0, y, x1, y + ROW_H, i == cursor && Menu_CursorLit());
             y += ROW_PITCH;
         }
         if (visible < count)
@@ -1923,7 +2027,7 @@ static void DrawColumn() {
 }
 
 // Wide: one page at a time, centred and as wide as the 1997 canvas: the hub, then a page,
-// as the 1997 menu goes. A page names itself in a title; the hub has none.
+// as the 1997 menu goes. Every page names itself in a title, the hub too (1997's had none).
 static void DrawWide() {
     WideFrame f = Menu_WideFrame();
     const S32 top = f.y0 + 24;
@@ -1939,7 +2043,7 @@ static void DrawWide() {
         const int n = ShownRows(t.page, shown);
         int cursor = Position(t.page, t.row);
         S32 rowsTop = top;
-        if (g_depth > 1) {
+        {  // the hub too, as the column has it: rows keep their height between pages (decided 2026-11-13)
             rowsTop = Ui_Title(x0, x1, top, page.name);
             Menu_Record("title", page.name, "", FILL_SHADE, x0, top, x1, top + 38).textLeft =
                 (x0 + x1 + 1) / 2 - Ui_TextWidth(page.name) / 2;
@@ -1961,7 +2065,7 @@ static void DrawWide() {
         for (int i = g_scroll; i < g_scroll + visible; i++) {
             const Row &row = page.rows[shown[i]];
             RowFill fill = FILL_SHADE;
-            if (i == cursor)
+            if (i == cursor && Menu_CursorLit())
                 fill = FILL_CURSOR;
             else if (sw_greencurrent && row.type == R_PRESET_CHOICE && !g_first && row.arg == g_preset)
                 fill = FILL_CURRENT;  // the chosen preset wears the current-value plasma, as in the column
@@ -2115,6 +2219,8 @@ void Menu_Draw() {
     Host_DrawBackground();
     GamePieces_AnimatePlasma();
 
+    Ui_SetBackRight(BackShown() ? BackLeft() + BackWidth() : 0);
+    g_backBox.shown = false;
     if (g_closed) {
         // Two lines at the voice's pitch: on one, 784 wide, it would not fit 640.
         const char *lines[2] = {"Options closed.", "<ENTER> opens them again. <ESC> quits."};
@@ -2130,6 +2236,8 @@ void Menu_Draw() {
     } else {
         DrawColumn();
     }
+    if (BackShown())
+        DrawBack();
 
     if (g_console)
         DrawConsole();
@@ -2159,6 +2267,7 @@ static const SwitchDef kSwitches[] = {
     {"padicons", &g_padIcons, 0, 1, 1},  // shapes for the pad's buttons on chips
     {"roleink", &g_roleInk, 0, 1, 1},    // Enter green, Esc red in the legend
     {"longhelp", &sw_longhelp, 0, 1, 1},  // a second window of help, turned with Space or Y
+    {"pointer", &sw_pointer, 0, 2, 0},   // for tests: as if the mouse (1) or a finger (2) was used last
 };
 
 bool Menu_SetSwitch(const char *name, int v) {
@@ -2490,6 +2599,9 @@ void Menu_WriteState(FILE *f) {
     // What the pointer can point at, as the last draw placed it: [kind, x0, y0, x1, y1, a, b].
     static const char *const kPointKinds[] = {"row", "chip", "answer", "step", "slider", "key", "scroll"};
     static_assert(sizeof kPointKinds / sizeof kPointKinds[0] == POINT_SCROLL + 1, "a name for every PointKind");
+    fprintf(f, ",\"pointer\":\"%s\"", LastPointer() == POINTER_TOUCH ? "touch" : LastPointer() == POINTER_MOUSE ? "mouse" : "none");
+    if (g_backBox.shown)
+        fprintf(f, ",\"back\":[%d,%d,%d,%d]", (int)g_backBox.x0, (int)g_backBox.y0, (int)g_backBox.x1, (int)g_backBox.y1);
     fprintf(f, ",\"points\":[");
     for (int i = 0; i < g_pointCount; i++) {
         const PointTarget &p = g_points[i];

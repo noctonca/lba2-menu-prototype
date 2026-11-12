@@ -25,6 +25,7 @@
 //   wait <frames>        let frames pass
 //   mouse <x> <y>        move the pointer there, in the canvas's logical pixels
 //   click [right]        press the left (or right) button and let go a frame later
+//   tap <x> <y>          a finger there: pressed and let go a frame later, as touch
 //   wheel <notches>      turn the wheel, up positive
 //   mousedown, mouseup   hold the left button, let it go (a drag: mousedown, mouse X Y, mouseup)
 //   state                print the state as one JSON line: "state {...}"
@@ -113,6 +114,13 @@ static bool RunCommand(Runner &r, const char *line) {
         }
         Host_InjectPointer(atoi(a), atoi(b));
         r.waitFrames = 1;
+    } else if (!strcmp(cmd, "tap")) {
+        if (n < 3) {
+            printf("err tap needs x y\n");
+            return false;
+        }
+        Host_InjectTap(atoi(a), atoi(b));
+        r.waitFrames = 2;  // down, then up
     } else if (!strcmp(cmd, "click")) {
         Host_InjectClick(n >= 2 && !strcmp(a, "right"));
         r.waitFrames = 2;  // down, then up

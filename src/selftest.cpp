@@ -30,7 +30,7 @@
 
 // The switch combinations tools/sweep.py runs, in its order: the pad's names of each
 // family (0 is the connected pad's, Xbox without one), and the green plasma on the chosen preset.
-static const char *kCombos[] = {"padnames=0", "padnames=2", "padnames=3", "greencurrent=1"};
+static const char *kCombos[] = {"padnames=0", "padnames=2", "padnames=3", "greencurrent=1", "pointer=1", "pointer=2"};
 
 static const char *kPages[] = {
     "Options", "Preset", "Language and interface", "Display and graphics", "Sound",
@@ -417,10 +417,10 @@ static void Check(std::vector<std::string> *found) {
     for (int i = 0; i < n; i++)
         if (rows[i].setting && !rows[i].value[0])
             found->push_back(Fmt("value: setting %s shows no value", Repr(rows[i].label).c_str()));
-    // Wide, a page has no Return row: Esc goes back (docs/UX.md, Fitts's Law).
-    for (int i = 0; wide && i < n; i++)
+    // No page has a Return row: Esc goes back, a pointer has the corner Back (docs/UX.md, Fitts's Law).
+    for (int i = 0; i < n; i++)
         if (!strncmp(rows[i].label, "Return to ", 10))
-            found->push_back(Fmt("return: the wide layout shows %s", Repr(rows[i].label).c_str()));
+            found->push_back(Fmt("return: the %s layout shows %s", wide ? "wide" : "one-column", Repr(rows[i].label).c_str()));
     // Proximity: a pane's last row is further from the help below than rows are apart (5).
     if (help) {
         for (size_t p = 0; p < paneNames.size(); p++) {
@@ -1696,6 +1696,7 @@ struct Walker {
         Languages();
         PadNames();
         Pointer();
+        Sliders();
         Wheel();
         PointerReach();
     }
@@ -1710,6 +1711,51 @@ struct Walker {
         Host_InjectClick(false);
         Frame();
         Frame();
+    }
+
+    void Button(bool down) {
+        path.push_back(down ? "mousedown" : "mouseup");
+        Host_InjectButton(down);
+        Frame();
+    }
+
+    // A slider by the pointer (2026-11-12): the 1997 slider is its whole row, so a click on
+    // its label must not set it (it set Master volume from 100 to 5), and a drag along the
+    // row must move it.
+    void Sliders() {
+        if (opt->only)
+            return;
+        Fresh("Sound");
+        const MenuPoint *pts;
+        int n = Menu_Points(&pts);
+        std::vector<MenuPoint> rowTargets;
+        for (int i = 0; i < n; i++)
+            if (pts[i].kind == POINT_ROW)
+                rowTargets.push_back(pts[i]);
+        int sliders = 0;
+        for (const MenuPoint &row : rowTargets) {
+            const S32 y = (row.y0 + row.y1) / 2, x = row.x0 + 24;  // on the label's first letters
+            Mouse(x, y);
+            n = Menu_Points(&pts);
+            bool isSlider = false;
+            for (int i = 0; i < n; i++)
+                isSlider = isSlider || (pts[i].kind == POINT_SLIDER && pts[i].b == row.b);
+            if (!isSlider)
+                continue;
+            sliders++;
+            const std::string label = Menu_CursorLabel(), v0 = Menu_CursorValue();
+            Click();
+            Expect(Menu_CursorValue() == v0, Fmt("slider: a click on %s's label set it from %s to %s", Repr(label.c_str()).c_str(),
+                                                v0.c_str(), Menu_CursorValue()));
+            const S32 to = atoi(v0.c_str()) > 50 ? x : row.x1 - 24, from = to == x ? row.x1 - 24 : x;
+            Mouse(from, y);
+            Button(true);
+            Mouse((from + to) / 2, y);
+            Mouse(to, y);
+            Button(false);
+            Expect(Menu_CursorValue() != v0, Fmt("slider: a drag along %s left it at %s", Repr(label.c_str()).c_str(), v0.c_str()));
+        }
+        Expect(sliders > 0, "slider: no slider on Sound takes the pointer");
     }
 
     // Every row by the pointer alone (2026-11-12): a finger has no keys and no wheel, so on
@@ -1863,25 +1909,45 @@ struct Walker {
                     Expect(Menu_TopRow() == p.b, Fmt("pointer: over More options row %d, the cursor is on %d", p.b, Menu_TopRow()));
             }
             Expect(rowsSeen > 0, Fmt("pointer: no row on %s takes the pointer", page));
-            // Back, from the legend.
-            Frame();
-            n = Menu_Points(&pts);
-            int depth0 = 0;
-            Where(&depth0);
-            bool back = false;
-            for (int i = 0; i < n && !back; i++) {
-                if (pts[i].kind == POINT_KEY && pts[i].a == KEY_ESC) {
-                    back = true;
-                    const MenuPoint p = pts[i];
-                    Mouse((p.x0 + p.x1) / 2, (p.y0 + p.y1) / 2);
-                    Click();
-                    int depth1 = 0;
-                    Where(&depth1);
-                    Expect(depth1 == depth0 - 1 || (depth0 == 1 && depth1 == 0),
-                           Fmt("pointer: Back in the legend on %s leaves depth %d, not %d", page, depth1, depth0 - 1));
-                }
+            // Back: every way the pointer has, the legend's and the corner button (shown once
+            // the pointer was used), each a click going back one, as Esc does; the legend's
+            // lights under the mouse first (2026-11-12).
+            int ways = 0;
+            for (int k = 0;; k++) {
+                Fresh(page);
+                Mouse(0, 0);  // the pointer used last: the corner Back shows
+                n = Menu_Points(&pts);
+                MenuPoint p{};
+                bool found = false;
+                for (int i = 0, seen = 0; i < n && !found; i++)
+                    if (pts[i].kind == POINT_KEY && pts[i].a == KEY_ESC && seen++ == k)
+                        p = pts[i], found = true;
+                if (!found)
+                    break;
+                ways++;
+                int depth0 = 0;
+                Where(&depth0);
+                Mouse((p.x0 + p.x1) / 2, (p.y0 + p.y1) / 2);
+                const ChipBox *chips;
+                const int nc = Ui_ChipBoxes(&chips);
+                bool chip = false, lit = false;
+                for (int c = 0; c < nc; c++)
+                    if (chips[c].legend && chips[c].x0 >= p.x0 && chips[c].x1 <= p.x1 && chips[c].y0 >= p.y0 - 1 &&
+                        chips[c].y1 <= p.y1) {
+                        chip = true;
+                        lit = lit || !chips[c].plain;
+                    }
+                // A finger has no hover (the combo pointer=2 plays one).
+                Expect(!chip || lit || Menu_GetSwitch("pointer") == 2,
+                       Fmt("hover: the legend's Back on %s does not light under the mouse", page));
+                Click();
+                int depth1 = 0;
+                Where(&depth1);
+                Expect(depth1 == depth0 - 1 || (depth0 == 1 && depth1 == 0),
+                       Fmt("pointer: the %s Back on %s leaves depth %d, not %d", chip ? "legend's" : "corner", page, depth1,
+                           depth0 - 1));
             }
-            Expect(back, Fmt("pointer: no Back in the legend on %s takes a click", page));
+            Expect(ways >= 2, Fmt("pointer: %s has %d ways back by the pointer, not the legend's and the corner's", page, ways));
         }
     }
 

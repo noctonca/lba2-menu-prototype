@@ -164,13 +164,55 @@ void Ui_TextShadow(S32 x, S32 y, const char *s, U8 colour) {
     Ui_Text(x, y, s, colour);
 }
 
+static S32 s_backRight;
+static bool s_titled;
+static S32 s_titleX0, s_titleY;
+
+void Ui_SetBackRight(S32 x1) { s_backRight = x1; }
+
+bool Ui_FirstTitle(S32 *x0, S32 *y) {
+    *x0 = s_titleX0, *y = s_titleY;
+    return s_titled;
+}
+
+// A title's own swing, so it and the cursor's row each keep their place.
+static char s_titleSwingText[256];
+static U32 s_titleSwingStart;
+
+// Centred on its span; with the corner Back on its line, right of the button: centred on the
+// span still when that clears it, else on what the button leaves. Too wide for that room (a
+// translation), it swings in it as a long 1997 row does (GAMEMENU.CPP DrawOneChoice), its
+// shadow with it.
 S32 Ui_Title(S32 x0, S32 x1, S32 y, const char *s, bool asIs) {
     if (!asIs)
         s = Ui_Tr(s);
-    S32 x = (x0 + x1 + 1) / 2 - Ui_TextWidthAsIs(s) / 2;
-    Ui_TextAsIs(x + 4, y + 4, s, INK_BLACK);
-    Ui_TextAsIs(x, y, s, INK_WHITE);
-    return y + 56;  // the title takes one row's pitch
+    if (!s_titled) {
+        s_titled = true;
+        s_titleX0 = x0, s_titleY = y;
+    }
+    const S32 w = Ui_TextWidthAsIs(s);
+    const S32 from = s_backRight > 0 && s_backRight + 16 > x0 ? s_backRight + 16 : x0;  // the button's edge and a gap
+    S32 x = (x0 + x1 + 1) / 2 - w / 2;
+    if (x < from)
+        x = (from + x1 + 1) / 2 - w / 2;
+    if (x >= from) {
+        Ui_TextAsIs(x + 4, y + 4, s, INK_BLACK);
+        Ui_TextAsIs(x, y, s, INK_WHITE);
+        return y + 56;  // the title takes one row's pitch
+    }
+    if (strcmp(s, s_titleSwingText) != 0) {
+        snprintf(s_titleSwingText, sizeof s_titleSwingText, "%s", s);
+        s_titleSwingStart = Host_TimeMs();
+    }
+    const S32 travel = w - (x1 - from + 1);
+    const S32 d = (S32)((Host_TimeMs() - s_titleSwingStart) * SWING_PX_PER_S / 1000) % (2 * travel);
+    const S32 off = d <= travel ? -d : -(2 * travel - d);
+    const ClipSave clip;
+    SetClip(from > ClipXMin ? from : ClipXMin, ClipYMin, x1 + 4 < ClipXMax ? x1 + 4 : ClipXMax, ClipYMax);
+    Ui_TextAsIs(from + off + 4, y + 4, s, INK_BLACK);
+    Ui_TextAsIs(from + off, y, s, INK_WHITE);
+    clip.Restore();
+    return y + 56;
 }
 
 static void Triangle(S32 tipX, S32 yc, S32 dir, U8 colour) {
@@ -180,6 +222,11 @@ static void Triangle(S32 tipX, S32 yc, S32 dir, U8 colour) {
         S32 x = tipX - dir * i;
         Line(x, yc - i, x, yc + i, colour);
     }
+}
+
+void Ui_Arrow(S32 tipX, S32 yc, S32 dir) {
+    Triangle(tipX + 1, yc + 2, dir, INK_BLACK);
+    Triangle(tipX, yc, dir, INK_WHITE);
 }
 
 void Ui_ChangeMarks(S32 leftX, S32 rightX, S32 yc) {
@@ -275,7 +322,10 @@ static void CentreInk(S32 x, S32 y, S32 w, S32 h, const char *s, S32 scale, int 
 static ChipBox s_chips[64];
 static int s_chipCount;
 
-void Ui_BeginFrame() { s_chipCount = 0; }
+void Ui_BeginFrame() {
+    s_chipCount = 0;
+    s_titled = false;
+}
 
 int Ui_ChipBoxes(const ChipBox **out) {
     *out = s_chips;
