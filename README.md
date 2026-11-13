@@ -465,13 +465,17 @@ screen it was found on:
 - `--layout-only` leaves out the walks by keys.
 - Add `--headless` and `; shot x.png` to an `again` line for a picture.
 
-`tools/sweep.py` runs the self test for seven screen sizes and the three
-combinations, one process each, in parallel (about 3 seconds on the Mac), and
+`tools/sweep.py` runs the self test for seven screen sizes and the six
+combinations, one process each, in parallel (about 10 seconds on the Mac), and
 takes `--sizes`, `--combo`, `--only`, `--again` and `--layout-only` the same way.
+It and `tools/resize-check.sh` first build `build-test/`, a RelWithDebInfo copy
+(`tools/test_build.py`), so they never test a binary older than the source; the
+self test runs about twice as fast there as in the Debug `build/`. `--bin` tests
+another binary.
 
 - `--scripts` walks the same screens as `--layout-only` from outside: a script
   per run, read back through `state`, checked by the same rules written in
-  Python. It is slower (about 10 seconds) and must list the same problems as
+  Python. It is slower (about 6 seconds against 2 for `--layout-only`) and must list the same problems as
   `sweep.py --layout-only`; it is the only way to take `--shots`. A rule
   change goes in both `check()` in sweep.py and `Check()` in selftest.cpp.
 - `--check-again` replays every problem's `again` line and checks that the
@@ -481,7 +485,8 @@ takes `--sizes`, `--combo`, `--only`, `--again` and `--layout-only` the same way
 `tools/resize-check.sh` checks that a size changed in place shows what a fresh
 start at that size shows on the same row: seven pages (Keys and buttons and
 More options among them) from four sizes to nine, compared through `state`,
-and F2 round the list and back (253 runs).
+and F2 round the list and back (253 runs, about 30 seconds). Both runs start at the
+first size, as a headless run's native size is its launch size.
 
 `tools/baseline.py` checks a change meant to move code without changing what a
 player sees. `record DIR` runs 28 scripts under a fixed clock (seeded walks of

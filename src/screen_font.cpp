@@ -52,6 +52,14 @@ void ScreenFont_Init() {
     SetSizePercent(s_sizePercent);
 }
 
+// Advances and kerning in logical pixels, looked up once: stb_truetype searches the font's
+// tables on every call, and widths are asked for every frame (wrapping the help asks for
+// each prefix of a line). Filled as letters are met; SetSizePercent empties them.
+static float s_advance[1][256];
+static bool s_advanceKnown[1][256];
+static float s_kern[1][256][256];
+static bool s_kernKnown[1][256][256];
+
 static void SetSizePercent(int percent) {
     if (!s_ready)
         return;
@@ -60,6 +68,8 @@ static void SetSizePercent(int percent) {
         stbtt_GetCodepointBox(&s_font[f], 'H', &x0, &y0, &x1, &y1);
         s_unit[f] = (float)GAME_CAP * percent / 100.0f / (float)y1;
     }
+    memset(s_advanceKnown, 0, sizeof s_advanceKnown);
+    memset(s_kernKnown, 0, sizeof s_kernKnown);
 }
 
 void ScreenFont_Set(int face) { s_face = s_ready ? face : SCREEN_FONT_GAME; }
@@ -73,13 +83,22 @@ static const float SMALL_SPACE_MIN = 3.0f;
 
 // Advance of c (and kerning before the next letter) in logical pixels, before scale.
 static float Advance(int f, U8 c, U8 next, float scale = 1.0f) {
-    int aw, lsb;
-    stbtt_GetCodepointHMetrics(&s_font[f], Unicode(c), &aw, &lsb);
-    float a = aw * s_unit[f];
+    if (!s_advanceKnown[f][c]) {
+        int aw, lsb;
+        stbtt_GetCodepointHMetrics(&s_font[f], Unicode(c), &aw, &lsb);
+        s_advance[f][c] = aw * s_unit[f];
+        s_advanceKnown[f][c] = true;
+    }
+    float a = s_advance[f][c];
     if (c == ' ' && scale < 1.0f && a * scale < SMALL_SPACE_MIN)
         a = SMALL_SPACE_MIN / scale;
-    if (next)
-        a += stbtt_GetCodepointKernAdvance(&s_font[f], Unicode(c), Unicode(next)) * s_unit[f];
+    if (next) {
+        if (!s_kernKnown[f][c][next]) {
+            s_kern[f][c][next] = stbtt_GetCodepointKernAdvance(&s_font[f], Unicode(c), Unicode(next)) * s_unit[f];
+            s_kernKnown[f][c][next] = true;
+        }
+        a += s_kern[f][c][next];
+    }
     return a;
 }
 
@@ -165,7 +184,8 @@ static void Queue(S32 x, S32 y, const char *s, U8 ink, S32 width, float scale = 
     it.by1 = y + cellH < it.cy1 ? y + cellH : it.cy1;
     if (it.bx0 > it.bx1 || it.by0 > it.by1)
         return;  // clipped away
-    it.sum = CanvasSum(it.bx0, it.by0, it.bx1, it.by1);
+    // Only Paint reads the sum, and with pixels off (the self test) nothing is painted.
+    it.sum = Host_Pixels() ? CanvasSum(it.bx0, it.by0, it.bx1, it.by1) : 0;
     s_count++;
 }
 

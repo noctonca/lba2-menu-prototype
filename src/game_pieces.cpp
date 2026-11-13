@@ -36,6 +36,8 @@ void GamePieces_AnimatePlasma() {
 
 // GAMEMENU.CPP DrawFireBar, with the bank passed in.
 void GamePieces_FireBar(S32 xmin, S32 ymin, S32 xmax, S32 ymax, S32 bank) {
+    if (!Host_Pixels())
+        return;
     Struc_Point p[4];
     p[0].Pt_XE = (S16)xmin;
     p[0].Pt_YE = (S16)ymin;

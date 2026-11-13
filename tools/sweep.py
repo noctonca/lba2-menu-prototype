@@ -8,9 +8,12 @@ only one of the two actions shows, and the screen rules of docs/UX.md (edge,
 margin, trailing, pitch, current, value, proximity). The self test then walks the
 menu by its keys and lists what they do wrong (see README "Testing").
 
-    tools/sweep.py [--bin build/lba2menu] [--sizes 640x480,1920x1080] [--jobs N]
+    tools/sweep.py [--bin build-test/lba2menu] [--sizes 640x480,1920x1080] [--jobs N]
                    [--combo padnames=2 ...] [--only PAGE] [--again]
                    [--layout-only] [--scripts [--shots DIR]] [--check-again]
+
+Without --bin it first builds build-test (tools/test_build.py), the optimised copy
+the tests run, so the binary is never older than the source.
 
 By default each (size, combo) is one `lba2menu --selftest` process, and --jobs
 of them run at once. --again prints, under each problem, the command line that
@@ -376,7 +379,7 @@ def check_again(line, again):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--bin", default=os.path.join(os.path.dirname(__file__), "..", "build", "lba2menu"))
+    ap.add_argument("--bin", help="the binary to test (default: build-test, built first)")
     ap.add_argument("--sizes", default="640x480,768x480,1024x480,1280x720,1280x800,1920x1080,2400x1080")
     ap.add_argument("--combo", action="append", help="name=v,name=v (repeat; default: the seven)")
     ap.add_argument("--only", help="one page by name")
@@ -387,6 +390,10 @@ def main():
     ap.add_argument("--check-again", action="store_true", help="replay every problem's command line")
     ap.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     a = ap.parse_args()
+    if not a.bin:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import test_build
+        a.bin = test_build.ensure()
     if a.shots and not a.scripts:
         ap.error("--shots needs --scripts")
     if a.check_again and a.scripts:

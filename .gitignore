@@ -6,3 +6,4 @@ build-uwp/
 out/
 .claude/
 build-web/
+build-test/
