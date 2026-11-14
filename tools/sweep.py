@@ -263,7 +263,7 @@ def check(state):
             x0, x1 = r["rect"][0], r["rect"][2]
             if (x0, x1) != (px0, px1):
                 problems.append(f"edge: {r['label']!r} at x {x0}..{x1}, its pane's rows at {px0}..{px1}")
-            if wide and pane not in ("column", "confirm") and r["text_left"] != x0 + 16:
+            if wide and pane not in ("column", "confirm", "picture") and r["text_left"] != x0 + 16:
                 problems.append(f"edge: {r['label']!r} starts at x {r['text_left']}, not {x0 + 16}")
     # The Controls page's first column head (the action names') starts on its rows' label edge,
     # when the heads are a line above the rows.

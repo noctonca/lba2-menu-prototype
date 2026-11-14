@@ -311,11 +311,21 @@ static void Check(std::vector<std::string> *found) {
             paneNames.push_back(rows[i].pane);
         panes[rows[i].pane].push_back(&rows[i]);
     }
+    // The save picture clear of the title and the rows.
+    for (int i = 0; i < n; i++) {
+        if (strcmp(rows[i].pane, "picture"))
+            continue;
+        for (int j = 0; j < n; j++)
+            if (j != i && rows[j].x0 <= rows[i].x1 && rows[j].x1 >= rows[i].x0 && rows[j].y0 <= rows[i].y1 &&
+                rows[j].y1 >= rows[i].y0)
+                found->push_back(Fmt("picture: at y %d..%d, over %s at y %d..%d", rows[i].y0, rows[i].y1,
+                                     Repr(rows[j].label).c_str(), rows[j].y0, rows[j].y1));
+    }
     const bool wide = !strcmp(Menu_Layout(), "wide");
     // One edge per pane: its rows share x0 and x1; wide labels start 16 in.
     for (size_t p = 0; p < paneNames.size(); p++) {
         const std::vector<const DrawnRow *> &pr = panes[paneNames[p]];
-        bool centred = paneNames[p] == "column" || paneNames[p] == "confirm";
+        bool centred = paneNames[p] == "column" || paneNames[p] == "confirm" || paneNames[p] == "picture";
         for (size_t i = 0; i < pr.size(); i++) {
             const DrawnRow &r = *pr[i];
             if (r.x0 != pr[0]->x0 || r.x1 != pr[0]->x1)
@@ -557,6 +567,14 @@ struct Walker {
                 return true;
         return false;
     }
+    bool PictureDrawn() const {
+        const DrawnRow *rows;
+        int n = Menu_DrawnRows(&rows);
+        for (int i = 0; i < n; i++)
+            if (!strcmp(rows[i].pane, "picture"))
+                return true;
+        return false;
+    }
     // The label of a drawn row that starts with prefix, or "".
     std::string RowStarting(const std::string &prefix) const {
         const DrawnRow *rows;
@@ -763,17 +781,29 @@ struct Walker {
         }
     }
 
-    // The game menu's pages, every row: the save lists scroll.
+    // The game menu's pages, every row: the save lists scroll. The lists open on their last
+    // row, the game menu on its first, so the walk goes up to the top and back down. Each
+    // from a fresh start, as its again line starts (an earlier walk can leave a game in play,
+    // and the first game menu, with the picture, went unchecked: 2026-11-14); then the game
+    // menu in play, from Save game.
     void GamePages() {
-        for (size_t p = 0; p < sizeof kGamePages / sizeof kGamePages[0]; p++) {
-            if (!Wanted(kGamePages[p]))
+        for (size_t p = 0; p <= sizeof kGamePages / sizeof kGamePages[0]; p++) {
+            const bool inPlay = p == sizeof kGamePages / sizeof kGamePages[0];
+            const char *page = inPlay ? kGamePages[0] : kGamePages[p];
+            if (!Wanted(page))
                 continue;
-            Open(kGamePages[p]);
-            Check(kGamePages[p]);
-            for (int i = Menu_TopShownCount(); i > 0; i--) {
-                Key("down");
-                Check();
-            }
+            Start();
+            if (inPlay) {
+                Open("Save game");
+                Key("esc");
+            } else
+                Open(page);
+            Check(page);
+            for (const char *key : {"up", "down"})
+                for (int i = Menu_TopShownCount(); i > 0; i--) {
+                    Key(key);
+                    Check();
+                }
         }
     }
 
@@ -1722,20 +1752,42 @@ struct Walker {
         path.clear();
         OnPage("Game menu", "Resume game", "start");
         Expect(!Drawn("Save game") && Drawn("Load game"), "flow: start: Save game shown, or Load game not, before a game");
-        // Load game: a row for each save (20 at a start), no more.
+        // Resume game's picture in place of the title, as 1997's first menu.
+        Expect(PictureDrawn() && !Drawn("Game menu"), "flow: start: no picture, or the title with it");
+        // Load game: a row for each save (20 at a start) and AUTOSAVE last, as 1997; it opens on
+        // AUTOSAVE, as nothing is in play.
         Choose("Load game");
-        Expect(Menu_TopShownCount() == 20, Fmt("flow: start: Load game has %d rows, not the 20 saves", Menu_TopShownCount()));
+        Expect(Menu_TopShownCount() == 21, Fmt("flow: start: Load game has %d rows, not the 20 saves and AUTOSAVE", Menu_TopShownCount()));
+        OnPage("Load game", "AUTOSAVE", "Load game at the start");
+        Expect(PictureDrawn() && Drawn("Load game"), "flow: Load game: no picture, or no title");
+        // AUTOSAVE cannot be deleted: Del does not ask, nor does the legend offer it.
+        Key("del");
+        OnPage("Load game", "AUTOSAVE", "Del on AUTOSAVE");
+        Expect(strstr(Menu_Legend(), "Del") == NULL, Fmt("flow: AUTOSAVE: the legend offers Del (%s)", Menu_Legend()));
+        // Saves in alphabetical order, as 1997 lists them.
+        Key("up");
+        std::string below = Menu_CursorLabel();
+        for (int i = 2; i < 21; i++) {
+            Key("up");
+            const std::string at = Menu_CursorLabel();
+            if (!Expect(at < below, Fmt("flow: Load game: %s above %s", Repr(at.c_str()).c_str(), Repr(below.c_str()).c_str())))
+                break;
+            below = Menu_CursorLabel();
+        }
         Key("esc");
         Key("up", 2);
         Expect(strstr(Menu_Legend(), "Esc") == NULL, Fmt("flow: start: the legend offers Esc (%s)", Menu_Legend()));
+        // Esc with no game to go back to puts the cursor on Quit, as 1997.
         Key("esc");
-        OnPage("Game menu", "Resume game", "Esc at the start");
-        // Resume game plays the latest save; Esc in play opens the game menu, now with Save game.
-        Key("enter");
+        OnPage("Game menu", "Quit", "Esc at the start");
+        // Resume game plays the current save; Esc in play opens the game menu, now with Save game.
+        Choose("Resume game");
         InGameScreen("Resume game");
+        const std::string resumed = Menu_PlayingWhat();
         Key("esc");
         OnPage("Game menu", "Resume game", "Esc in play");
         Expect(Drawn("Save game"), "flow: in play: no Save game");
+        Expect(!PictureDrawn() && Drawn("Game menu"), "flow: in play: a picture, or no title");
         // Its six rows fit every screen, as 1997's did: no scroll bar.
         Expect(!Menu_ScrollBarShown(), "flow: in play: the game menu scrolls");
         Key("esc");
@@ -1746,23 +1798,28 @@ struct Walker {
         Expect(Where().find("| confirm") != std::string::npos, "flow: New game after play did not ask");
         Key("esc");
         OnPage("Game menu", "New game", "Esc on New game's question");
-        // A save: New save puts it first, back on Save game, and the voice says so; then New
-        // game no longer asks.
+        // Save game opens on the save in play; New save is last. A save: back on Save game, the
+        // voice says so, and Save game opens on it; then New game no longer asks.
         Choose("Save game");
-        OnPage("Save game", "New save", "Save game");
+        OnPage("Save game", resumed.c_str(), "Save game in play");
+        MoveTo("New save");
+        OnPage("Save game", "New save", "Save game's last row");
         const int before = Menu_TopShownCount();
         Key("enter");
         OnPage("Game menu", "Save game", "New save");
         Expect(Voice() == Menu_Tr("Game saved."), Fmt("flow: New save: the voice says %s", Repr(Voice().c_str()).c_str()));
         Key("enter");
         Expect(Menu_TopShownCount() == before + 1, Fmt("flow: New save: %d rows, not %d", Menu_TopShownCount(), before + 1));
+        OnPage("Save game", Menu_PlayingWhat(), "Save game after a save");
         Key("esc");
         Choose("New game");
         InGameScreen("New game just after a save");
         Key("esc");
-        // Save over a save asks (a save would be lost), No first.
+        // Save over a save asks (a save would be lost), No first. A new game was saved from
+        // nothing: Save game opens on New save.
         Choose("Save game");
-        Key("down");
+        OnPage("Save game", "New save", "Save game in a new game");
+        Key("up");
         const std::string over = Menu_CursorLabel();
         Key("enter");
         Expect(Where().find("| No | confirm") != std::string::npos, "flow: Save over did not ask, No first");
@@ -1772,7 +1829,9 @@ struct Walker {
         // Delete: Del asks; Yes takes that save away, the one above stays, and the cursor goes
         // to the next.
         Choose("Load game");
+        OnPage("Load game", "AUTOSAVE", "Load game in a new game");
         const int saves = Menu_TopShownCount();
+        Key("up", 2);
         const std::string above = Menu_CursorLabel();
         Key("down");
         const std::string gone = Menu_CursorLabel();
@@ -1805,20 +1864,40 @@ struct Walker {
         Expect(!strcmp(Menu_PageName(), "Game menu") && !Drawn("Save game"),
                "flow: Enter on Quit's screen: not the first game menu");
 
-        // Deleting every save on Load game goes back to the game menu, which drops Load game
-        // and Resume game.
+        // Deleting every named save leaves AUTOSAVE, and Load game with it.
         Start();
         path.clear();
         Choose("Load game");
-        for (int n = Menu_TopShownCount(); n > 0 && !strcmp(Menu_PageName(), "Load game"); n--) {
+        for (int n = Menu_TopShownCount(); n > 1; n--) {
+            Key("up");
             Key("del");
             Key("down");
             Key("enter");
         }
-        Expect(!strcmp(Menu_PageName(), "Game menu") && !Drawn("Load game") && !Drawn("Resume game"),
-               Fmt("flow: no saves left: on %s, Load game %s, Resume game %s", Menu_PageName(),
-                   Drawn("Load game") ? "shown" : "gone", Drawn("Resume game") ? "shown" : "gone"));
+        Expect(!strcmp(Menu_PageName(), "Load game") && Menu_TopShownCount() == 1 && std::string(Menu_CursorLabel()) == "AUTOSAVE",
+               Fmt("flow: every named save deleted: on %s | %s with %d rows, not AUTOSAVE alone", Menu_PageName(),
+                   Repr(Menu_CursorLabel()).c_str(), Menu_TopShownCount()));
+        Check("Load game");
+        // AUTOSAVE loads.
+        Key("enter");
+        InGameScreen("Enter on AUTOSAVE");
+        Expect(!strcmp(Menu_PlayingWhat(), "AUTOSAVE"), Fmt("flow: Enter on AUTOSAVE plays %s", Repr(Menu_PlayingWhat()).c_str()));
+
+        // A player with no saves: New game first, no Resume game, no Load game.
+        Menu_SetSavesAtStart(0);
+        Start();
+        path.clear();  // the again line lacks --saves 0: add it by hand
+        OnPage("Game menu", "New game", "no saves");
+        Expect(!Drawn("Load game") && !Drawn("Resume game"),
+               Fmt("flow: no saves: Load game %s, Resume game %s", Drawn("Load game") ? "shown" : "gone",
+                   Drawn("Resume game") ? "shown" : "gone"));
         Check("Game menu");
+        // The first game writes the autosave: Load game comes, AUTOSAVE alone.
+        Key("enter");
+        InGameScreen("New game with no saves");
+        Key("esc");
+        Expect(Drawn("Load game") && Drawn("Resume game"), "flow: after a first game: no Load game or no Resume game");
+        Menu_SetSavesAtStart(20);
 
         // First launch: one question, then play.
         Start();

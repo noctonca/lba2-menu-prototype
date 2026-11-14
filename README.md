@@ -102,20 +102,32 @@ rule there that breaks a promise changes the panel too.
 
 It starts as the game does for a returning player: on the game menu (1997's
 main menu, GAMEMENU.CPP), before any game. Its rows come and go as 1997's do:
-Resume game when there is a save (it plays the latest), Load game when there
-are saves, Save game only in a game; New game, Options and Quit always. There
-is nothing for Esc to go back to before a game, so it does nothing there and
-the legend leaves it out.
+Resume game when there is a current save (1997's current.lba: the game last
+started, loaded or resumed), Load game when there are saves, Save game only in
+a game; New game, Options and Quit always. There is nothing for Esc to go back
+to before a game, so the legend leaves it out and Esc puts the cursor on Quit,
+as 1997's does.
 
 The game is a black screen that names what it plays (a save, or a new game).
 Esc there opens the game menu over it, on Resume game, as the Menus key does in
 play; Esc on the game menu goes back to the game. The first launch's question
 ends in a new game: one question, then play.
 
-Load game and Save game are lists of 20 fake saves, newest first, named as
-lba2cc names a save it makes, shorter (see docs/UX.md); they scroll. Save
-game's first row, New save, adds one and goes back to the game menu, where the
-voice says "Game saved." Del on a save deletes it.
+Load game and Save game are lists of 20 fake saves in alphabetical order, as
+1997 lists them, named as lba2cc names a save it makes, shorter (see
+docs/UX.md); they scroll. Load game's last row is AUTOSAVE, the save the game
+writes as it goes: it loads like the others and cannot be deleted, and Save
+game does not list it. Save game's last row, New save, adds one and goes back
+to the game menu, where the voice says "Game saved." Del on a save deletes
+it. Both lists open on the save the game in play came from, otherwise on
+their last row, as 1997's do.
+
+The save picture is where 1997 shows it: Resume game's on the first game
+menu, in place of the title, and on Load game the picture of the save under
+the cursor, under the title. In play the game menu has none: six rows and a
+picture do not fit 640x480. The game data has no screenshots of play, so a
+save's picture is its island's arrival picture from screen.hqr, shrunk to
+160x120 and fitted to the menu palette as 1997 fits a save's.
 
 The game menu asks only where something would be lost, starting on No: New
 game, Load game and Quit after playing since the last save; saving over a
@@ -431,18 +443,25 @@ Then it walks the menu by its keys and checks what they do. Each problem a
 walk finds starts with the walk's name:
 
 - `flow:` the game menu around Options. At a start: Resume game first, no
-  Save game, Load game with a row for each of the 20 saves, Esc does nothing
-  and the legend has no Esc. Resume game plays; Esc in play opens the game
-  menu on Resume game, now with Save game and no scroll bar, and Esc goes back
-  to the game. New game after play asks and Esc keeps playing; New save goes
-  back on Save game, the voice says "Game saved." and Save game has one row
-  more, and New game then plays without asking. Saving over a save asks, on
-  No. Del on a save asks; Yes takes that save away, the one above stays and
-  the cursor goes to the next. Load after play asks and Yes plays. Options
-  opens on the preset row and Esc comes back to Options. Quit after play asks;
-  Yes shows Quit's screen and Enter starts again on the game menu without
-  Save game. Deleting every save leaves Load game for the game menu, without
-  Load game and Resume game. The first launch's question ends in the game.
+  Save game, Load game with a row for each of the 20 saves in alphabetical
+  order and AUTOSAVE last, opening on AUTOSAVE, where Del does nothing and the
+  legend has no Del. The first game menu has Resume game's picture and no
+  title, Load game its title and a picture; in play the game menu has its
+  title and no picture. The legend has no Esc, and Esc puts the cursor on Quit.
+  Resume game plays; Esc in play opens the game menu on Resume game, now with
+  Save game and no scroll bar, and Esc goes back to the game. Save game opens
+  on the save in play. New game after play asks and Esc keeps playing; New
+  save, the last row, goes back on Save game, the voice says "Game saved.",
+  Save game has one row more and opens on the new save, and New game then
+  plays without asking. In a new game the lists open on their last row.
+  Saving over a save asks, on No. Del on a save asks; Yes takes that save
+  away, the one above stays and the cursor goes to the next. Load after play
+  asks and Yes plays. Options opens on the preset row and Esc comes back to
+  Options. Quit after play asks; Yes shows Quit's screen and Enter starts
+  again on the game menu without Save game. Deleting every named save leaves
+  AUTOSAVE alone on Load game. With no saves (`--saves 0`) the game menu
+  starts on New game without Resume game and Load game, and both come after
+  the first game. The first launch's question ends in the game.
 
 - `esc:` from every row of every page, opened from the hub with Enter, Esc
   puts the cursor back where it was (the Controls page, its groups, the

@@ -6,6 +6,8 @@
 void Menu_Init(bool firstLaunch);
 // How many fake saves Menu_Init and Menu_Reset make (20 unless --saves says).
 void Menu_SetSavesAtStart(int n);
+// What the pretend game plays (a save's name, AUTOSAVE, or "" for a new game), for the self test.
+const char *Menu_PlayingWhat();
 // Everything back as a fresh start has it: switches, settings, bindings, pages.
 void Menu_Reset();
 void Menu_Update();  // reads this frame's keys

@@ -20,6 +20,7 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 // ───────────────────────────── The fake settings ─────────────────────────────
@@ -448,28 +449,45 @@ static const Row kOriginalRows[] = {
 
 // ───────────────────────────── The game around the menu ─────────────────────────────
 // Fakes, as the settings are: no game runs and nothing is written. A game is going on or not
-// (the 1997 menu's firstloop), and the saves are a list of names in memory, newest first, named
-// as lba2cc names a save it makes ("<island> - <date time>", GAMEMENU.CPP MakeAutoSaveName),
-// shorter: "Celebration Island - 2026-11-08 15-57-23" spills a 640x480 row by up to 33 px, and
-// without the seconds still by 8 (self test, 2026-11-14), so neither seconds nor the dash.
-// Enough of them that the lists scroll.
+// (the 1997 menu's firstloop). The saves, as 1997 keeps them (333929a GAMEMENU.CPP, and the GOG
+// DOS LBA2.EXE seen 2026-11-14):
+//   - named saves, in alphabetical order as PlayerGameList sorts them, named as lba2cc names a
+//     save it makes ("<island> - <date time>", GAMEMENU.CPP MakeAutoSaveName), shorter:
+//     "Celebration Island - 2026-11-08 15-57-23" spills a 640x480 row by up to 33 px, and
+//     without the seconds still by 8 (self test, 2026-11-14), so neither seconds nor the dash;
+//   - the current save (current.lba), written as a game starts, loads or is left for the menu:
+//     Resume game plays it;
+//   - the autosave (autosave.lba), written at every scene change: Load game's last row,
+//     "AUTOSAVE" (its player name), never in Save game's list and never deleted.
+// Enough named saves that the lists scroll.
 
 enum { SAVES_MAX = 32 };
 static_assert(SAVES_MAX + 1 <= MORE_OPTIONS_MAX, "Save game's rows fit PAGE_ROWS_MAX");
 static char g_saves[SAVES_MAX][64];
 static int g_saveCount;
 static int g_savesAtStart = 20;  // --saves N; 0: a player with no saves (no Resume game, no Load game)
+static bool g_haveCurrent;  // current.lba: Resume game is offered
+static char g_currentWhat[64];  // what Resume game plays at a start
+static char g_currentIsland[32];
+static bool g_haveAutosave; // autosave.lba: Load game's AUTOSAVE row
+static char g_autosaveIsland[32];
 static bool g_inGame;    // a game is going on: Resume game goes back to it, Save game is offered
 static bool g_unsaved;   // played since the last save or load: leaving the game loses something
 static bool g_playing;   // the pretend game is on screen, the menu closed
 static bool g_quitShown; // Quit chosen: the screen that says the game would close
-static char g_playingWhat[64];  // what the pretend game plays: a save's name, or a new game
+static char g_playingWhat[64];  // what the pretend game plays: a save's name, AUTOSAVE, or a new game
+static char g_island[32];       // where it is, for the next save's name
 static int g_saveClock;  // the minutes the fake clock moved since the first save made here
 
 static const char *const kIslands[] = {"Citadel Island", "Desert Island", "Emerald Moon", "Otringal",
                                        "Celebration Island"};
+static const char *const kAutosaveName = "AUTOSAVE";  // the autosave's player name, as 1997 lists it
 
-// The fake saves a run starts with: a week of play, a few hours apart, the newest first.
+static int CompareSaves(const void *a, const void *b) { return strcmp((const char *)a, (const char *)b); }
+static void SortSaves() { qsort(g_saves, (size_t)g_saveCount, sizeof g_saves[0], CompareSaves); }
+
+// The fake saves a run starts with: a week of play, a few hours apart. The newest is where the
+// current save and the autosave are too.
 static void MakeSaves(int n) {
     g_saveCount = n < SAVES_MAX ? n : SAVES_MAX;
     int day = 14, hour = 21, minute = 40;
@@ -483,34 +501,39 @@ static void MakeSaves(int n) {
             day--;
         }
     }
+    g_haveCurrent = g_haveAutosave = g_saveCount > 0;
+    snprintf(g_currentWhat, sizeof g_currentWhat, "%s", g_saveCount ? g_saves[0] : "");
+    snprintf(g_currentIsland, sizeof g_currentIsland, "%s", kIslands[0]);
+    snprintf(g_autosaveIsland, sizeof g_autosaveIsland, "%s", kIslands[0]);
+    SortSaves();
 }
 
-// A save made now: on the island the game is on, at the fake clock's time, first in the list.
-static void SaveNow(int over) {
-    if (over >= 0) {  // Save over a save: it goes, the new one comes first
+static int FindSave(const char *name) {
+    for (int i = 0; i < g_saveCount; i++)
+        if (!strcmp(g_saves[i], name))
+            return i;
+    return -1;
+}
+
+// A save made now: on the island the game is on, at the fake clock's time. Returns its place.
+static int SaveNow(int over) {
+    if (over >= 0) {  // Save over a save: it goes, and the new one takes its place in the order
         for (int i = over; i + 1 < g_saveCount; i++)
             memcpy(g_saves[i], g_saves[i + 1], sizeof g_saves[i]);
         g_saveCount--;
     }
     if (g_saveCount == SAVES_MAX)
-        g_saveCount--;  // the oldest goes
-    for (int i = g_saveCount; i > 0; i--)
-        memcpy(g_saves[i], g_saves[i - 1], sizeof g_saves[i]);
+        g_saveCount--;  // the list is full: the last goes
     g_saveClock += 7;
-    char island[32];
-    snprintf(island, sizeof island, "%s", g_playingWhat);
-    char *date = strstr(island, " 2026-");
-    if (date)
-        *date = 0;
-    else
-        snprintf(island, sizeof island, "%s", kIslands[0]);  // a new game starts on Citadel Island
     const int minutes = 22 * 60 + g_saveClock;  // from 22:00, after the newest fake save
-    snprintf(g_saves[0], sizeof g_saves[0], "%s 2026-11-%02d %02d:%02d", island, 14 + minutes / (24 * 60),
+    char *made = g_saves[g_saveCount++];
+    snprintf(made, sizeof g_saves[0], "%s 2026-11-%02d %02d:%02d", g_island, 14 + minutes / (24 * 60),
              minutes / 60 % 24, minutes % 60);
-    g_saveCount++;
-    snprintf(g_playingWhat, sizeof g_playingWhat, "%s", g_saves[0]);  // the game goes on from it
+    snprintf(g_playingWhat, sizeof g_playingWhat, "%s", made);  // the game goes on from it
+    SortSaves();
     g_unsaved = false;
-    Trace("save %s", g_saves[0]);
+    Trace("save %s", g_playingWhat);
+    return FindSave(g_playingWhat);
 }
 
 static void DeleteSave(int i) {
@@ -521,10 +544,12 @@ static void DeleteSave(int i) {
 }
 
 void Menu_SetSavesAtStart(int n) { g_savesAtStart = n < 0 ? 0 : n; }
+const char *Menu_PlayingWhat() { return g_playingWhat; }
 
-static bool HaveSaves() { return g_saveCount > 0; }
+static bool HaveSaves() { return g_saveCount > 0 || g_haveAutosave; }  // 1997 counts the autosave
 static bool InGame() { return g_inGame; }
-static bool CanResume() { return g_inGame || g_saveCount > 0; }  // the 1997 CURRENTSAVE: the latest save
+static bool HaveAutosave() { return g_haveAutosave; }
+static bool CanResume() { return g_inGame || g_haveCurrent; }
 
 enum { M_RESUME, M_NEW, M_LOAD, M_SAVE, M_OPTIONS, M_QUIT };
 
@@ -544,9 +569,10 @@ static const Row kMainRows[] = {
 #define SAVE_ROWS_8(i) SAVE_ROW(i), SAVE_ROW(i + 1), SAVE_ROW(i + 2), SAVE_ROW(i + 3), SAVE_ROW(i + 4), \
     SAVE_ROW(i + 5), SAVE_ROW(i + 6), SAVE_ROW(i + 7)
 #define SAVE_ROWS SAVE_ROWS_8(0), SAVE_ROWS_8(8), SAVE_ROWS_8(16), SAVE_ROWS_8(24)
-static const Row kLoadRows[] = {SAVE_ROWS};
-static const Row kSaveRows[] = {{R_NEW_SAVE, "New save", 0, "", NULL, NULL, NULL}, SAVE_ROWS};
-static_assert(sizeof kLoadRows / sizeof kLoadRows[0] == SAVES_MAX, "a row for every save");
+// 1997's order: the named saves, then AUTOSAVE in Load game and the new save's row in Save game.
+static const Row kLoadRows[] = {SAVE_ROWS, {R_AUTOSAVE, NULL, 0, "", HaveAutosave, NULL, NULL}};
+static const Row kSaveRows[] = {SAVE_ROWS, {R_NEW_SAVE, "New save", 0, "", NULL, NULL, NULL}};
+static_assert(sizeof kLoadRows / sizeof kLoadRows[0] == SAVES_MAX + 1, "a row for every save, and the autosave");
 #undef SAVE_ROWS
 #undef SAVE_ROWS_8
 #undef SAVE_ROW
@@ -574,6 +600,8 @@ static const char *RowLabel(const Row &r) {
         return kSettings[r.arg].label;
     if (r.type == R_SAVE)
         return g_saves[r.arg];
+    if (r.type == R_AUTOSAVE)
+        return kAutosaveName;
     if (r.type == R_PRESET_CHOICE && !g_first && r.arg == g_preset) {
         static char marked[2][64];  // two rows can be drawn before the first is used
         static int next;
@@ -989,6 +1017,12 @@ static void Play() {
     g_playing = true;
     g_inGame = true;
     g_unsaved = true;
+    // Started, loaded or resumed: 1997 writes the current save then (CurrentSaveGame), and the
+    // first scene change the autosave.
+    g_haveCurrent = g_haveAutosave = true;
+    snprintf(g_currentWhat, sizeof g_currentWhat, "%s", g_playingWhat);
+    snprintf(g_currentIsland, sizeof g_currentIsland, "%s", g_island);
+    snprintf(g_autosaveIsland, sizeof g_autosaveIsland, "%s", g_island);
     g_confirm = false;
     g_menuNote = "";
     Trace(TopPage() == P_HUB && g_depth == 1 ? "close options" : "close menu");
@@ -996,14 +1030,50 @@ static void Play() {
 
 static void NewGame() {
     g_playingWhat[0] = 0;
+    snprintf(g_island, sizeof g_island, "%s", kIslands[0]);  // a new game starts on Citadel Island
     Trace("new game");
     Play();
 }
 
+// A named save (i >= 0) or the autosave (i < 0).
 static void LoadSave(int i) {
-    snprintf(g_playingWhat, sizeof g_playingWhat, "%s", g_saves[i]);
-    Trace("load %s", g_saves[i]);
+    if (i < 0) {
+        snprintf(g_playingWhat, sizeof g_playingWhat, "%s", kAutosaveName);
+        snprintf(g_island, sizeof g_island, "%s", g_autosaveIsland);
+    } else {
+        snprintf(g_playingWhat, sizeof g_playingWhat, "%s", g_saves[i]);
+        snprintf(g_island, sizeof g_island, "%s", g_saves[i]);
+        if (char *date = strstr(g_island, " 2026-"))
+            *date = 0;
+    }
+    Trace("load %s", g_playingWhat);
     Play();
+}
+
+// Resume game at a start: the current save.
+static void ResumeCurrent() {
+    snprintf(g_playingWhat, sizeof g_playingWhat, "%s", g_currentWhat);
+    snprintf(g_island, sizeof g_island, "%s", g_currentIsland);
+    Trace("resume %s", g_playingWhat);
+    Play();
+}
+
+// Load game and Save game open as 1997's ChoosePlayerName does: on the save the game in play
+// came from or was last saved as, otherwise on the last row (AUTOSAVE, or New save).
+static void OpenList(int page) {
+    Push(page);
+    Place &t = g_stack[g_depth - 1];
+    const int at = g_inGame && g_playingWhat[0] ? FindSave(g_playingWhat) : -1;
+    if (at >= 0) {
+        t.row = at;
+        return;
+    }
+    const Page &p = g_pages[page];
+    for (int i = p.count - 1; i >= 0; i--)
+        if (RowShown(p, i)) {
+            t.row = i;
+            return;
+        }
 }
 
 // The game menu over the game, as the Menus key opens it in play: on Resume game.
@@ -1019,13 +1089,18 @@ static void OpenGameMenu() {
 // Esc goes somewhere: everywhere but the game menu before a game (1997's first menu).
 static bool EscGoesBack() { return g_first || !(g_depth == 1 && TopPage() == P_MAIN && !g_inGame); }
 
+static void PutCursorOn(RowType type, int arg);
+
 static void Pop() {
     if (g_depth > 1) {
         Trace("close page=%s", g_pages[TopPage()].name);
         g_depth--;
         g_scroll = 0;
     } else if (TopPage() == P_MAIN && !g_inGame) {
-        Trace("esc: no game to go back to");  // 1997 too: Esc on the first menu does nothing
+        // Nothing to go back to: 1997 puts the cursor on Quit (firstloop 2), so a second Esc
+        // and Enter leave.
+        PutCursorOn(R_GAME, M_QUIT);
+        Trace("esc: cursor on Quit");
     } else {
         Play();  // the game menu, or Options as the Options key opens them in play
     }
@@ -1043,6 +1118,7 @@ void Menu_Init(bool firstLaunch) {
     MakeSaves(g_savesAtStart);
     g_inGame = g_unsaved = g_playing = g_quitShown = false;
     g_playingWhat[0] = 0;
+    snprintf(g_island, sizeof g_island, "%s", kIslands[0]);
     g_saveClock = 0;
     g_menuNote = "";
     g_first = firstLaunch;
@@ -1140,8 +1216,8 @@ static void Activate(const Row &r) {
         g_menuNote = "";
         switch (r.arg) {
         case M_RESUME:
-            if (!g_inGame)  // at the start: the latest save, as 1997's CURRENTSAVE
-                LoadSave(0);
+            if (!g_inGame)  // at the start: the current save
+                ResumeCurrent();
             else
                 Play();
             break;
@@ -1152,10 +1228,10 @@ static void Activate(const Row &r) {
                 NewGame();
             break;
         case M_LOAD:
-            Push(P_LOAD);
+            OpenList(P_LOAD);
             break;
         case M_SAVE:
-            Push(P_SAVE);
+            OpenList(P_SAVE);
             break;
         case M_OPTIONS:
             Push(P_HUB);
@@ -1170,14 +1246,15 @@ static void Activate(const Row &r) {
             break;
         }
         break;
+    case R_AUTOSAVE:
     case R_SAVE:
-        g_questionSave = r.arg;
+        g_questionSave = r.type == R_AUTOSAVE ? -1 : r.arg;
         if (TopPage() == P_SAVE)
             Ask(Q_SAVE_OVER);  // a save would be lost
         else if (g_inGame && g_unsaved)
             Ask(Q_LOAD);
         else
-            LoadSave(r.arg);
+            LoadSave(g_questionSave);
         break;
     case R_NEW_SAVE:
         SaveNow(-1);
@@ -1543,7 +1620,7 @@ void Menu_Update() {
                     break;
                 case Q_DELETE:
                     DeleteSave(g_questionSave);
-                    if (TopPage() == P_LOAD && !g_saveCount)
+                    if (TopPage() == P_LOAD && !HaveSaves())
                         Pop();  // nothing left to load: Load game goes from the game menu too
                     break;
                 case Q_QUIT:
@@ -1713,7 +1790,7 @@ static void DrawColumnRow(const Row &r, int row, S32 x0, S32 y0, S32 x1, S32 y1,
     else
         snprintf(text, sizeof text, "%s", RowLabel(r));
     // A save's name is the player's, not a text to translate.
-    const bool asIs = r.type == R_SAVE;
+    const bool asIs = r.type == R_SAVE || r.type == R_AUTOSAVE;
     const S32 textW = asIs ? Ui_TextWidthAsIs(text) : Ui_TextWidth(text);
     Menu_RowLabelCentred(x0, x1, yc, text, active ? INK_WHITE : INK_DISABLED, asIs, cursor);
 
@@ -1768,7 +1845,7 @@ static void DrawWideRow(const char *pane, const Row &r, int row, S32 x0, S32 y0,
     DrawnRow &d = Menu_Record(pane, label, "", fill, x0, y0, x1, y1);
     d.dim = !active;
     d.setting = r.type == R_SETTING;
-    const bool asIs = r.type == R_SAVE;  // a save's name is the player's, not a text to translate
+    const bool asIs = r.type == R_SAVE || r.type == R_AUTOSAVE;  // a save's name is the player's, not a text to translate
     d.textLeft = x0 + 16;
     d.textRight = x0 + 16 + (asIs ? Ui_TextWidthAsIs(label) : Ui_TextWidth(label));
     Menu_Point(POINT_ROW, x0, y0, x1, y1, TopPage(), row);
@@ -1888,6 +1965,8 @@ static void LegendFor(const Row *r, const char **keys, const char **words, int *
         } else if (r->type == R_SAVE) {
             keys[*n] = "Enter"; words[(*n)++] = TopPage() == P_SAVE ? "Save" : "Load";
             keys[*n] = "Del"; words[(*n)++] = "Delete";
+        } else if (r->type == R_AUTOSAVE) {
+            keys[*n] = "Enter"; words[(*n)++] = "Load";  // the autosave cannot be deleted
         } else if (r->type == R_NEW_SAVE) {
             keys[*n] = "Enter"; words[(*n)++] = "Save";
         } else if (r->type == R_CATEGORY || r->type == R_PRESET_ROW ||
@@ -2227,6 +2306,47 @@ static void DrawBack() {
 // The game menu and its save lists: no help, so in the one column a strip one voice line tall
 // (a note such as "Game saved.", and the legend at its right) in place of the dialogue window.
 // A question there still asks in the dialogue window.
+// The save picture, where 1997 shows one: on the first game menu, Resume game's (the
+// current save's), in place of the title; on Load game, the save under the cursor's, under
+// the title. Not in play: six rows and a picture don't fit (387 px at 640x480; decided
+// 2026-11-14), and the game it would show is behind the menu.
+enum { PICTURE_H = SAVE_PICTURE_H + 2 + ROW_GAP };  // framed, then a row gap
+
+static int IslandOf(const char *where) {
+    for (int i = 0; i < SAVE_PICTURE_ISLANDS; i++)
+        if (!strncmp(where, kIslands[i], strlen(kIslands[i])))
+            return i;
+    return 0;
+}
+
+// The picture this page shows, NULL for none.
+static const U8 *PagePicture() {
+    if (g_confirm || g_first)
+        return NULL;
+    if (TopPage() == P_MAIN)
+        return !g_inGame && g_haveCurrent ? Host_SavePicture(IslandOf(g_currentIsland)) : NULL;
+    if (TopPage() == P_LOAD) {
+        const Row *r = CursorRow();
+        if (r && r->type == R_SAVE)
+            return Host_SavePicture(IslandOf(g_saves[r->arg]));
+        if (r && r->type == R_AUTOSAVE)
+            return Host_SavePicture(IslandOf(g_autosaveIsland));
+    }
+    return NULL;
+}
+
+// The picture with 1997's frame round it (DrawScreenSave: DrawCadre one pixel outside),
+// its top left at x, y.
+static void DrawPicture(const U8 *pic, S32 x, S32 y) {
+    const S32 x1 = x + SAVE_PICTURE_W - 1, y1 = y + SAVE_PICTURE_H - 1;
+    GamePieces_BackupCorners(x - 1, y - 1, x1 + 1, y1 + 1);
+    U8 *dst = (U8 *)Log;
+    for (S32 j = 0; j < SAVE_PICTURE_H; j++)
+        memcpy(dst + TabOffLine[y + j] + x, pic + j * SAVE_PICTURE_W, SAVE_PICTURE_W);
+    GamePieces_Frame(x - 1, y - 1, x1 + 1, y1 + 1);
+    Menu_Record("picture", "", "", FILL_SHADE, x - 1, y - 1, x1 + 1, y1 + 1);
+}
+
 enum { STRIP_H = 60 };  // the voice line at 12 in, 10 under it: six rows and a title fit 640x480
 static bool StripPage() {
     const int p = TopPage();
@@ -2285,14 +2405,22 @@ static void DrawColumn() {
         // Help in the dialogue window on every one-column page (decided 2026-11-03); the game
         // menu's pages, which have none, take a strip one line tall, so its six rows fit at
         // 640x480 as 1997's did.
+        const U8 *pic = PagePicture();
         S32 top = 16, bottom = H - 1 - (StripPage() ? STRIP_H : 137) - 16;
+        if (pic && TopPage() == P_MAIN) {
+            // The first game menu's picture and five rows take 402 px: at 640x480 they fit
+            // with the frame 4 from the top and the last row 6 above the strip, one more than
+            // between rows (the proximity rule). 1997's frame was 9 from the top.
+            top = 4;
+            bottom = H - 1 - STRIP_H - 14;
+        }
         if (g_first)
             top = 168 - 8;
         // A page names itself in a title above its rows, as the wide pages do (EPmager,
         // 2026-11-12). The hub too, so the corner Back has its line and nothing moves when
         // it comes (decided 2026-11-12).
-        const bool titled = !g_first;
-        const S32 titleH = titled ? ROW_PITCH : 0;
+        const bool titled = !g_first && !(pic && TopPage() == P_MAIN);  // the picture in its place
+        const S32 titleH = (titled ? ROW_PITCH : 0) + (pic ? PICTURE_H : 0);
         int visible = (bottom - top - titleH + ROW_GAP) / ROW_PITCH;
         if (visible > count)
             visible = count;
@@ -2315,6 +2443,8 @@ static void DrawColumn() {
             Menu_Record("title", p.name, "", FILL_SHADE, W / 2 - 275, y - titleH, W / 2 + 275, y - titleH + 38).textLeft =
                 W / 2 - Ui_TextWidth(p.name) / 2;
         }
+        if (pic)
+            DrawPicture(pic, W / 2 - SAVE_PICTURE_W / 2, y - PICTURE_H + 1);
         // The 1997 width: LargeurMenu 550, centred.
         S32 x0 = W / 2 - 275, x1 = W / 2 + 275;
         for (int i = g_scroll; i < g_scroll + visible; i++) {
@@ -2352,13 +2482,22 @@ static void DrawWide() {
         int shown[PAGE_ROWS_MAX];
         const int n = ShownRows(t.page, shown);
         int cursor = Position(t.page, t.row);
+        const U8 *pic = PagePicture();
+        // The first game menu: the picture in the title's place, and five rows under it with
+        // 8 px less above the band (the top margin stays 24).
+        const bool inPlace = pic && t.page == P_MAIN;
         S32 rowsTop = top;
-        {  // the hub too, as the column has it: rows keep their height between pages (decided 2026-11-13)
+        if (!inPlace) {  // the hub too, as the column has it: rows keep their height between pages (decided 2026-11-13)
             rowsTop = Ui_Title(x0, x1, top, page.name);
             Menu_Record("title", page.name, "", FILL_SHADE, x0, top, x1, top + 38).textLeft =
                 (x0 + x1 + 1) / 2 - Ui_TextWidth(page.name) / 2;
         }
-        int visible = (Menu_WideRowsLimit() - rowsTop + ROW_GAP) / ROW_PITCH;
+        if (pic) {
+            DrawPicture(pic, (x0 + x1 + 1) / 2 - SAVE_PICTURE_W / 2, rowsTop + 1);
+            rowsTop += PICTURE_H;
+        }
+        const S32 limit = Menu_WideRowsLimit() + (inPlace ? 8 : 0);
+        int visible = (limit - rowsTop + ROW_GAP) / ROW_PITCH;
         if (visible > n)
             visible = n;
         if (g_scroll > n - visible)

@@ -160,3 +160,9 @@ bool Host_ShotScreen(const char *path);
 
 // Palette work: switch between the menu palette and an island's.
 void Host_UseMenuPalette();
+
+// Stand-ins for the pictures 1997 keeps with a save (160x120, in the menu palette): the
+// game's arrival picture of each island in screen.hqr, scaled down. island: 0 Citadel,
+// 1 Desert, 2 Emerald Moon, 3 Otringal, 4 Celebration. NULL when the data lacks it.
+enum { SAVE_PICTURE_W = 160, SAVE_PICTURE_H = 120, SAVE_PICTURE_ISLANDS = 5 };
+const U8 *Host_SavePicture(int island);

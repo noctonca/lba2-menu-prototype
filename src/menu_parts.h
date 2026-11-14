@@ -13,7 +13,8 @@ enum RowType {
     R_RETURN, R_CATEGORY, R_PRESET_ROW, R_SETTING, R_PRESET_CHOICE, R_BACK_TO_MINE, R_ACTION, R_BINDING, R_TUNING,
     R_GAME,      // a game menu row: Resume game, New game, Load game, Save game, Options, Quit (arg: which)
     R_SAVE,      // a save on the Load game or Save game page (arg: its place in the list, newest first)
-    R_NEW_SAVE,  // Save game's first row: a save of its own
+    R_NEW_SAVE,  // Save game's last row: a save of its own
+    R_AUTOSAVE,  // Load game's last row: the autosave, which loads and is never deleted
 };
 
 // A check on the menu's state, for the menu plan's "shown when" and "active when".

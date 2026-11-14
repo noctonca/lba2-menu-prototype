@@ -319,9 +319,27 @@ explains itself in the voice as the cursor lands on it; there is no help page.
   137 px window only 4 rows fit at 640x480, and the game menu's six would
   scroll where 1997 showed them all. A question there asks in the dialogue
   window, as everywhere. Wide, the band stays as it is.
-- Before a game the game menu has nothing for Esc to go back to (1997's first
-  menu did nothing either), so the legend shows no Esc and the corner Back is
-  not drawn.
+- Before a game the game menu has nothing for Esc to go back to, so the
+  legend shows no Esc and the corner Back is not drawn. Esc there puts the
+  cursor on Quit, as 1997's first menu does (GAMEMENU.CPP, firstloop 2), so
+  Esc then Enter leaves.
+- The save lists are 1997's (Jakob's Law, for the players who know it):
+  alphabetical; AUTOSAVE, the save written at each scene change, last in Load
+  game, never in Save game and never deleted; Resume game plays the current
+  save, written as a game starts, loads or is resumed. Each list opens on the
+  save the game in play came from or was last saved as, otherwise on its last
+  row, so Save game's New save is last. Checked in the retail DOS game
+  (2026-11-14). **[self test: flow]**
+- The save picture, 160x120 framed, is where 1997 has it: in place of the
+  title on the first game menu (Resume game's), under the title on Load game
+  (the save under the cursor's). It takes 128 px with its gap. The first game
+  menu's five rows then fit 640x480 with the frame 4 px from the top (1997:
+  9) and the last row 6 px above the strip, one more than between rows (the
+  proximity rule); the wide frame keeps its 24 px top margin and takes 8 px
+  from the gap above the band. In play the six rows would be
+  71 px over, so the game menu shows no picture there, and the game it would
+  show is behind the menu anyway (decided 2026-11-14). Load game shows 3 rows
+  at a time with it, in both layouts. **[self test: flow, picture]**
 - A save is named as lba2cc names one it makes, `<island> <date> <time>`,
   shorter than lba2cc's `<island> - <date> <hours-minutes-seconds>`: that
   spilled a 640x480 row by up to 33 px with the longest island, and 8 without

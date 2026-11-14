@@ -436,6 +436,8 @@ bool Host_WindowResized(U32 *w, U32 *h) {
 
 bool Host_ShiftHeld() { return (g_platform.input.modifiers() & PLATFORM_KMOD_SHIFT) != 0; }
 
+static void LoadSavePictures();
+
 bool Host_Init(const HostConfig &cfg) {
     if (!InitEvents()) {
         fprintf(stderr, "events failed\n");
@@ -501,6 +503,7 @@ bool Host_Init(const HostConfig &cfg) {
         fprintf(stderr, "could not read the game data in %s\n", dir);
         return false;
     }
+    LoadSavePictures();
     FromLE32InPlace(s_xplBoot, sizeof(XplHeader) / 4);
     // ShadeBoxBlk darkens through PtrCLUTGouraud. Checked against lba2cc's
     // `ui menu-main-options` capture: identical outside the plasma with citabau.
@@ -513,6 +516,51 @@ bool Host_Init(const HostConfig &cfg) {
     GamePieces_InitPlasma();
     Host_UseMenuPalette();
     return true;
+}
+
+// The save pictures' stand-ins. 1997 shrinks the screen into 160x120 (ScaleBox) and fits it
+// to the normal palette (RemapPicture, SearchBoundColRGB); here each 4x4 block is averaged
+// in the picture's own palette, then given the nearest colour of the menu palette.
+static U8 s_savePicture[SAVE_PICTURE_ISLANDS][SAVE_PICTURE_W * SAVE_PICTURE_H];
+static bool s_savePictureLoaded[SAVE_PICTURE_ISLANDS];
+
+static void LoadSavePictures() {
+    // screen.hqr: a 640x480 picture, then its palette. Citadel's lighthouse, Desert Island's
+    // cove, the Emerald Moon, a ship at Zeelich for Otringal, the fire planet for Celebration.
+    static const int kPicture[SAVE_PICTURE_ISLANDS] = {24, 20, 32, 56, 40};
+    U8 *image = (U8 *)malloc(640 * 480 + 4096);
+    U8 pal[768 + 64];
+    if (!image)
+        return;
+    for (int island = 0; island < SAVE_PICTURE_ISLANDS; island++) {
+        if (!Load_HQR(s_screen, image, kPicture[island]) || !Load_HQR(s_screen, pal, kPicture[island] + 1))
+            continue;
+        U8 *out = s_savePicture[island];
+        for (int y = 0; y < SAVE_PICTURE_H; y++)
+            for (int x = 0; x < SAVE_PICTURE_W; x++) {
+                int r = 0, g = 0, b = 0;
+                for (int dy = 0; dy < 4; dy++)
+                    for (int dx = 0; dx < 4; dx++) {
+                        const U8 *c = pal + 3 * image[(y * 4 + dy) * 640 + x * 4 + dx];
+                        r += c[0], g += c[1], b += c[2];
+                    }
+                r /= 16, g /= 16, b /= 16;
+                int best = 0, bestD = 1 << 30;
+                for (int i = 0; i < 256; i++) {
+                    const U8 *m = s_palMenu + 3 * i;
+                    const int d = (m[0] - r) * (m[0] - r) + (m[1] - g) * (m[1] - g) + (m[2] - b) * (m[2] - b);
+                    if (d < bestD)
+                        bestD = d, best = i;
+                }
+                out[y * SAVE_PICTURE_W + x] = (U8)best;
+            }
+        s_savePictureLoaded[island] = true;
+    }
+    free(image);
+}
+
+const U8 *Host_SavePicture(int island) {
+    return island >= 0 && island < SAVE_PICTURE_ISLANDS && s_savePictureLoaded[island] ? s_savePicture[island] : NULL;
 }
 
 void Host_Shutdown() {
