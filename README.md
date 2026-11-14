@@ -1,11 +1,12 @@
 # LBA2 menu prototype
 
 A playable prototype of the Modern Options menu from lba2cc's menu plan
-(docs/plan/MENU_PLAN.md) and its design review, drawn with the game's own
-pieces: the menu palette, the LBA font, the plasma, the chamfered frames and
-the darkening, read from the real game data.
+(docs/plan/MENU_PLAN.md) and its design review, with the game menu around it,
+drawn with the game's own pieces: the menu palette, the LBA font, the plasma,
+the chamfered frames and the darkening, read from the real game data.
 
-Settings are fakes held in memory. Nothing here writes `lba2.cfg`.
+Settings and saves are fakes held in memory, and no game is played. Nothing
+here writes `lba2.cfg` or a save.
 
 ## What it is built from
 
@@ -94,6 +95,33 @@ rule there that breaks a promise changes the panel too.
     ./play.sh                      # 640x480, one column
     ./play.sh --size 1920x1080     # the wide layout (logical 960x540 at 2x)
     ./play.sh --first              # the first-launch question
+    ./play.sh --saves 0            # a player with no saves
+    ./play.sh --options            # in a game, Options open as the Options key opens them
+
+### The game menu
+
+It starts as the game does for a returning player: on the game menu (1997's
+main menu, GAMEMENU.CPP), before any game. Its rows come and go as 1997's do:
+Resume game when there is a save (it plays the latest), Load game when there
+are saves, Save game only in a game; New game, Options and Quit always. There
+is nothing for Esc to go back to before a game, so it does nothing there and
+the legend leaves it out.
+
+The game is a black screen that names what it plays (a save, or a new game).
+Esc there opens the game menu over it, on Resume game, as the Menus key does in
+play; Esc on the game menu goes back to the game. The first launch's question
+ends in a new game: one question, then play.
+
+Load game and Save game are lists of 20 fake saves, newest first, named as
+lba2cc names a save it makes, shorter (see docs/UX.md); they scroll. Save
+game's first row, New save, adds one and goes back to the game menu, where the
+voice says "Game saved." Del on a save deletes it.
+
+The game menu asks only where something would be lost, starting on No: New
+game, Load game and Quit after playing since the last save; saving over a
+save; deleting one. A save makes the next New game, load or Quit ask nothing.
+Quit shows a screen saying the game would close here: Enter starts it again,
+Esc ends the prototype.
 
 Game data: `LBA2_GAME_DIR`, or `--data DIR`; the default is
 `~/code/lba-hacking/assets/lba2-activision-us-cd` (a disc image is mounted as
@@ -156,8 +184,9 @@ from the trace afterwards.
 When a change crosses between the one column and the wide layout, the place is
 carried across: the page you were on stays open, on the same row.
 
-To quit, Esc out of the Options, then Esc again on "Options closed" (Enter
-opens them again); in fullscreen there is no close box. Cmd+Q works too.
+To quit, choose Quit on the game menu, then Esc on the screen that follows
+(Enter starts the game again); in fullscreen there is no close box. Cmd+Q
+works too.
 
 Keys: arrows, Enter, Esc; a pad's d-pad or left stick, A and B. Space (the pad's
 Y) turns the help to its next window when the legend shows More. The prototype's
@@ -259,6 +288,10 @@ Commands, one per line: `key <up|down|left|right|enter|esc|tab|del|f1..f12> [cou
 `Keypad 5`, or `pad:a`, `pad:lb`, `pad:lstick-up` ...),
 `wait <frames>`, `mouse <x> <y>` (logical pixels), `click [right]`, `tap <x> <y>` (a click as touch), `wheel <notches>`, `mousedown`, `mouseup`, `state`, `measure`, `widths <file> [voice width]`, `shot <path.png> [scale]`, `switch <name> <value>`,
 `set <setting> <value>`, `open <page name>`, `size <WxH>`, `quit`.
+
+`open` takes an Options page as the Options key opens it in a game (Esc from
+Options goes back to the game), `Game menu`, `Load game` or `Save game` as the
+game menu opens them (Save game puts you in a game), or `First launch`.
 
 `measure` prints the width in the game font of every setting's label, its
 widest value and its help, and of the hub's rows, for sizing panes.
@@ -396,6 +429,20 @@ the cursor on the group's first row.
 
 Then it walks the menu by its keys and checks what they do. Each problem a
 walk finds starts with the walk's name:
+
+- `flow:` the game menu around Options. At a start: Resume game first, no
+  Save game, Load game with a row for each of the 20 saves, Esc does nothing
+  and the legend has no Esc. Resume game plays; Esc in play opens the game
+  menu on Resume game, now with Save game and no scroll bar, and Esc goes back
+  to the game. New game after play asks and Esc keeps playing; New save goes
+  back on Save game, the voice says "Game saved." and Save game has one row
+  more, and New game then plays without asking. Saving over a save asks, on
+  No. Del on a save asks; Yes takes that save away, the one above stays and
+  the cursor goes to the next. Load after play asks and Yes plays. Options
+  opens on the preset row and Esc comes back to Options. Quit after play asks;
+  Yes shows Quit's screen and Enter starts again on the game menu without
+  Save game. Deleting every save leaves Load game for the game menu, without
+  Load game and Resume game. The first launch's question ends in the game.
 
 - `esc:` from every row of every page, opened from the hub with Enter, Esc
   puts the cursor back where it was (the Controls page, its groups, the

@@ -36,6 +36,8 @@ static const char *kPages[] = {
     "Options", "Preset", "Language and interface", "Display and graphics", "Sound",
     "Controls and camera", "Advanced and reset",
 };
+// The game menu and its save lists (reached from the game menu, not from Options).
+static const char *kGamePages[] = {"Game menu", "Load game", "Save game"};
 
 // Actions per group on the Controls page (bindings.cpp kActions).
 static const int kGroupSizes[] = {5, 6, 4, 7, 4, 4, 6};
@@ -758,6 +760,20 @@ struct Walker {
         for (int i = 0; i < MoreOptions_Count(); i++) {
             Key("down");
             Check();
+        }
+    }
+
+    // The game menu's pages, every row: the save lists scroll.
+    void GamePages() {
+        for (size_t p = 0; p < sizeof kGamePages / sizeof kGamePages[0]; p++) {
+            if (!Wanted(kGamePages[p]))
+                continue;
+            Open(kGamePages[p]);
+            Check(kGamePages[p]);
+            for (int i = Menu_TopShownCount(); i > 0; i--) {
+                Key("down");
+                Check();
+            }
         }
     }
 
@@ -1679,7 +1695,143 @@ struct Walker {
         Expect(Bindings_Active(), "padonly: A does not reopen Keys and buttons with every pad binding cleared");
     }
 
+    // ── flow: the game menu around Options ──
+
+    bool Drawn(const char *label) const { return RowDrawn(label); }
+    bool OnPage(const char *page, const char *row, const char *what) {
+        return Expect(!strcmp(Menu_PageName(), page) && Menu_CursorLabel() == std::string(row) &&
+                          strcmp(Menu_Layout(), "game") && strcmp(Menu_Layout(), "quit"),
+                      Fmt("flow: %s: on %s | %s (%s), not %s | %s", what, Repr(Menu_PageName()).c_str(),
+                          Repr(Menu_CursorLabel()).c_str(), Menu_Layout(), page, row));
+    }
+    bool InGameScreen(const char *what) {
+        return Expect(!strcmp(Menu_Layout(), "game"), Fmt("flow: %s: on %s, not the game", what, Menu_Layout()));
+    }
+    // Enter on a row of the game menu found by its label.
+    void Choose(const char *label) {
+        if (MoveTo(label))
+            Key("enter");
+    }
+
+    void Flow() {
+        if (opt->only)
+            return;
+        // A returning player: the game menu, Resume game first, no Save game, and Esc goes
+        // nowhere, nor does the legend offer it.
+        Start();
+        path.clear();
+        OnPage("Game menu", "Resume game", "start");
+        Expect(!Drawn("Save game") && Drawn("Load game"), "flow: start: Save game shown, or Load game not, before a game");
+        // Load game: a row for each save (20 at a start), no more.
+        Choose("Load game");
+        Expect(Menu_TopShownCount() == 20, Fmt("flow: start: Load game has %d rows, not the 20 saves", Menu_TopShownCount()));
+        Key("esc");
+        Key("up", 2);
+        Expect(strstr(Menu_Legend(), "Esc") == NULL, Fmt("flow: start: the legend offers Esc (%s)", Menu_Legend()));
+        Key("esc");
+        OnPage("Game menu", "Resume game", "Esc at the start");
+        // Resume game plays the latest save; Esc in play opens the game menu, now with Save game.
+        Key("enter");
+        InGameScreen("Resume game");
+        Key("esc");
+        OnPage("Game menu", "Resume game", "Esc in play");
+        Expect(Drawn("Save game"), "flow: in play: no Save game");
+        // Its six rows fit every screen, as 1997's did: no scroll bar.
+        Expect(!Menu_ScrollBarShown(), "flow: in play: the game menu scrolls");
+        Key("esc");
+        InGameScreen("Esc on the game menu in play");
+        Key("esc");
+        // Leaving a game that was played asks; Esc and No keep it.
+        Choose("New game");
+        Expect(Where().find("| confirm") != std::string::npos, "flow: New game after play did not ask");
+        Key("esc");
+        OnPage("Game menu", "New game", "Esc on New game's question");
+        // A save: New save puts it first, back on Save game, and the voice says so; then New
+        // game no longer asks.
+        Choose("Save game");
+        OnPage("Save game", "New save", "Save game");
+        const int before = Menu_TopShownCount();
+        Key("enter");
+        OnPage("Game menu", "Save game", "New save");
+        Expect(Voice() == Menu_Tr("Game saved."), Fmt("flow: New save: the voice says %s", Repr(Voice().c_str()).c_str()));
+        Key("enter");
+        Expect(Menu_TopShownCount() == before + 1, Fmt("flow: New save: %d rows, not %d", Menu_TopShownCount(), before + 1));
+        Key("esc");
+        Choose("New game");
+        InGameScreen("New game just after a save");
+        Key("esc");
+        // Save over a save asks (a save would be lost), No first.
+        Choose("Save game");
+        Key("down");
+        const std::string over = Menu_CursorLabel();
+        Key("enter");
+        Expect(Where().find("| No | confirm") != std::string::npos, "flow: Save over did not ask, No first");
+        Key("enter");
+        OnPage("Save game", over.c_str(), "No to Save over");
+        Key("esc");
+        // Delete: Del asks; Yes takes that save away, the one above stays, and the cursor goes
+        // to the next.
+        Choose("Load game");
+        const int saves = Menu_TopShownCount();
+        const std::string above = Menu_CursorLabel();
+        Key("down");
+        const std::string gone = Menu_CursorLabel();
+        Key("del");
+        Expect(Where().find("| confirm") != std::string::npos, "flow: Del on a save did not ask");
+        Key("down");
+        Key("enter");
+        Expect(!strcmp(Menu_PageName(), "Load game") && Menu_TopShownCount() == saves - 1,
+               Fmt("flow: Delete: on %s with %d rows, not Load game with %d", Menu_PageName(), Menu_TopShownCount(), saves - 1));
+        Expect(Menu_CursorLabel() != gone, Fmt("flow: Delete: %s is still there", Repr(gone.c_str()).c_str()));
+        Key("up");
+        Expect(Menu_CursorLabel() == above, Fmt("flow: Delete: %s went too, or moved", Repr(above.c_str()).c_str()));
+        // Loading after play asks; Yes plays it.
+        Key("enter");
+        Key("down");
+        Key("enter");
+        InGameScreen("Yes to Load");
+        Key("esc");
+        // Options from the game menu, and Esc back to its row.
+        Choose("Options");
+        OnPage("Options", "Preset: Modern", "Options from the game menu");
+        Key("esc");
+        OnPage("Game menu", "Options", "Esc from Options");
+        // Quit after play asks; Yes shows Quit's screen; Enter starts the game again.
+        Choose("Quit");
+        Key("down");
+        Key("enter");
+        Expect(!strcmp(Menu_Layout(), "quit"), Fmt("flow: Yes to Quit: on %s", Menu_Layout()));
+        Key("enter");
+        Expect(!strcmp(Menu_PageName(), "Game menu") && !Drawn("Save game"),
+               "flow: Enter on Quit's screen: not the first game menu");
+
+        // Deleting every save on Load game goes back to the game menu, which drops Load game
+        // and Resume game.
+        Start();
+        path.clear();
+        Choose("Load game");
+        for (int n = Menu_TopShownCount(); n > 0 && !strcmp(Menu_PageName(), "Load game"); n--) {
+            Key("del");
+            Key("down");
+            Key("enter");
+        }
+        Expect(!strcmp(Menu_PageName(), "Game menu") && !Drawn("Load game") && !Drawn("Resume game"),
+               Fmt("flow: no saves left: on %s, Load game %s, Resume game %s", Menu_PageName(),
+                   Drawn("Load game") ? "shown" : "gone", Drawn("Resume game") ? "shown" : "gone"));
+        Check("Game menu");
+
+        // First launch: one question, then play.
+        Start();
+        path.assign(1, "open First launch");
+        Menu_Open("First launch");
+        Frame();
+        Expect(!strcmp(Menu_Layout(), "first-launch"), Fmt("flow: first launch: on %s", Menu_Layout()));
+        Key("enter");
+        InGameScreen("first launch");
+    }
+
     void Behavior() {
+        Flow();
         Reach();
         for (size_t p = 0; p < sizeof kPages / sizeof kPages[0]; p++)
             Settings(kPages[p]);
@@ -2089,6 +2241,7 @@ int Selftest_Run(const SelftestOptions &opt, const char *self) {
         w.Start();
         w.Controls();
         w.Pages();
+        w.GamePages();
         w.MoreOptionsPage();
         if (!opt.layoutOnly)
             w.Behavior();

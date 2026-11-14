@@ -446,6 +446,111 @@ static const Row kOriginalRows[] = {
     {R_ACTION, "Controls", 0, "", NULL, NULL, NULL},
 };
 
+// ───────────────────────────── The game around the menu ─────────────────────────────
+// Fakes, as the settings are: no game runs and nothing is written. A game is going on or not
+// (the 1997 menu's firstloop), and the saves are a list of names in memory, newest first, named
+// as lba2cc names a save it makes ("<island> - <date time>", GAMEMENU.CPP MakeAutoSaveName),
+// shorter: "Celebration Island - 2026-11-08 15-57-23" spills a 640x480 row by up to 33 px, and
+// without the seconds still by 8 (self test, 2026-11-14), so neither seconds nor the dash.
+// Enough of them that the lists scroll.
+
+enum { SAVES_MAX = 32 };
+static_assert(SAVES_MAX + 1 <= MORE_OPTIONS_MAX, "Save game's rows fit PAGE_ROWS_MAX");
+static char g_saves[SAVES_MAX][64];
+static int g_saveCount;
+static int g_savesAtStart = 20;  // --saves N; 0: a player with no saves (no Resume game, no Load game)
+static bool g_inGame;    // a game is going on: Resume game goes back to it, Save game is offered
+static bool g_unsaved;   // played since the last save or load: leaving the game loses something
+static bool g_playing;   // the pretend game is on screen, the menu closed
+static bool g_quitShown; // Quit chosen: the screen that says the game would close
+static char g_playingWhat[64];  // what the pretend game plays: a save's name, or a new game
+static int g_saveClock;  // the minutes the fake clock moved since the first save made here
+
+static const char *const kIslands[] = {"Citadel Island", "Desert Island", "Emerald Moon", "Otringal",
+                                       "Celebration Island"};
+
+// The fake saves a run starts with: a week of play, a few hours apart, the newest first.
+static void MakeSaves(int n) {
+    g_saveCount = n < SAVES_MAX ? n : SAVES_MAX;
+    int day = 14, hour = 21, minute = 40;
+    for (int i = 0; i < g_saveCount; i++) {
+        snprintf(g_saves[i], sizeof g_saves[i], "%s 2026-11-%02d %02d:%02d", kIslands[(i / 4) % 5], day, hour,
+                 minute);
+        hour -= 3 + i % 4;
+        minute = (minute + 23) % 60;
+        if (hour < 9) {
+            hour += 13;
+            day--;
+        }
+    }
+}
+
+// A save made now: on the island the game is on, at the fake clock's time, first in the list.
+static void SaveNow(int over) {
+    if (over >= 0) {  // Save over a save: it goes, the new one comes first
+        for (int i = over; i + 1 < g_saveCount; i++)
+            memcpy(g_saves[i], g_saves[i + 1], sizeof g_saves[i]);
+        g_saveCount--;
+    }
+    if (g_saveCount == SAVES_MAX)
+        g_saveCount--;  // the oldest goes
+    for (int i = g_saveCount; i > 0; i--)
+        memcpy(g_saves[i], g_saves[i - 1], sizeof g_saves[i]);
+    g_saveClock += 7;
+    char island[32];
+    snprintf(island, sizeof island, "%s", g_playingWhat);
+    char *date = strstr(island, " 2026-");
+    if (date)
+        *date = 0;
+    else
+        snprintf(island, sizeof island, "%s", kIslands[0]);  // a new game starts on Citadel Island
+    const int minutes = 22 * 60 + g_saveClock;  // from 22:00, after the newest fake save
+    snprintf(g_saves[0], sizeof g_saves[0], "%s 2026-11-%02d %02d:%02d", island, 14 + minutes / (24 * 60),
+             minutes / 60 % 24, minutes % 60);
+    g_saveCount++;
+    snprintf(g_playingWhat, sizeof g_playingWhat, "%s", g_saves[0]);  // the game goes on from it
+    g_unsaved = false;
+    Trace("save %s", g_saves[0]);
+}
+
+static void DeleteSave(int i) {
+    Trace("delete %s", g_saves[i]);
+    for (; i + 1 < g_saveCount; i++)
+        memcpy(g_saves[i], g_saves[i + 1], sizeof g_saves[i]);
+    g_saveCount--;
+}
+
+void Menu_SetSavesAtStart(int n) { g_savesAtStart = n < 0 ? 0 : n; }
+
+static bool HaveSaves() { return g_saveCount > 0; }
+static bool InGame() { return g_inGame; }
+static bool CanResume() { return g_inGame || g_saveCount > 0; }  // the 1997 CURRENTSAVE: the latest save
+
+enum { M_RESUME, M_NEW, M_LOAD, M_SAVE, M_OPTIONS, M_QUIT };
+
+// The 1997 main menu (GAMEMENU.CPP RealGameMainMenu, texts 70 to 75), each row there only when
+// BuildGameMainMenu would show it. No help: each row's name says what it does (docs/UX.md,
+// "Rows that say what they do"); the voice speaks only when something would be lost.
+static const Row kMainRows[] = {
+    {R_GAME, "Resume game", M_RESUME, "", CanResume, NULL, NULL},
+    {R_GAME, "New game", M_NEW, "", NULL, NULL, NULL},
+    {R_GAME, "Load game", M_LOAD, "", HaveSaves, NULL, NULL},
+    {R_GAME, "Save game", M_SAVE, "", InGame, NULL, NULL},
+    {R_GAME, "Options", M_OPTIONS, "", NULL, NULL, NULL},
+    {R_GAME, "Quit", M_QUIT, "", NULL, NULL, NULL},
+};
+
+#define SAVE_ROW(i) {R_SAVE, NULL, i, "", NULL, NULL, NULL}
+#define SAVE_ROWS_8(i) SAVE_ROW(i), SAVE_ROW(i + 1), SAVE_ROW(i + 2), SAVE_ROW(i + 3), SAVE_ROW(i + 4), \
+    SAVE_ROW(i + 5), SAVE_ROW(i + 6), SAVE_ROW(i + 7)
+#define SAVE_ROWS SAVE_ROWS_8(0), SAVE_ROWS_8(8), SAVE_ROWS_8(16), SAVE_ROWS_8(24)
+static const Row kLoadRows[] = {SAVE_ROWS};
+static const Row kSaveRows[] = {{R_NEW_SAVE, "New save", 0, "", NULL, NULL, NULL}, SAVE_ROWS};
+static_assert(sizeof kLoadRows / sizeof kLoadRows[0] == SAVES_MAX, "a row for every save");
+#undef SAVE_ROWS
+#undef SAVE_ROWS_8
+#undef SAVE_ROW
+
 // The Options pages; Keys and buttons and its groups are filled in from bindings.cpp's tables.
 #define PAGE(name, rows) {name, rows, (int)(sizeof rows / sizeof rows[0])}
 static Page g_pages[P_COUNT] = {
@@ -459,6 +564,7 @@ static Page g_pages[P_COUNT] = {
     PAGE("First launch", kFirstRows),
     PAGE("original", kOriginalRows),
 };
+static const Page kGamePages[3] = {PAGE("Game menu", kMainRows), PAGE("Load game", kLoadRows), PAGE("Save game", kSaveRows)};
 #undef PAGE
 
 static bool g_first;       // first-launch screen
@@ -466,6 +572,8 @@ static bool g_first;       // first-launch screen
 static const char *RowLabel(const Row &r) {
     if (r.type == R_SETTING)
         return kSettings[r.arg].label;
+    if (r.type == R_SAVE)
+        return g_saves[r.arg];
     if (r.type == R_PRESET_CHOICE && !g_first && r.arg == g_preset) {
         static char marked[2][64];  // two rows can be drawn before the first is used
         static int next;
@@ -524,10 +632,11 @@ struct Place {
 static Place g_stack[8];
 static int g_depth;
 static int g_scroll;       // the first shown row drawn: the view's, counted as its layout shows rows
-static bool g_confirm;     // a question is up: Classic, or Reset settings
+static bool g_confirm;     // a question is up: Classic, Reset settings, or one of the game menu's
 static int g_confirmCursor;
-enum Question { Q_CLASSIC, Q_RESET };
+enum Question { Q_CLASSIC, Q_RESET, Q_NEW_GAME, Q_LOAD, Q_SAVE_OVER, Q_DELETE, Q_QUIT, Q_COUNT };
 static Question g_question;
+static int g_questionSave;  // the save Q_LOAD, Q_SAVE_OVER and Q_DELETE are about
 
 // A question's title (in place of the page's, so the screen says it is a question:
 // EPmager, 2026-11-11), what it says in the voice, and its answers: the safe one first.
@@ -536,19 +645,29 @@ struct QuestionText {
     const char *voice;
     const char *answers[2];
 };
-static const QuestionText kQuestions[2] = {
+// The game menu asks only where something would be lost: what was played since the last save,
+// or a save. 1997 asked none of these; lba2cc asks before a delete (SavedConfirmMenu).
+static const QuestionText kQuestions[Q_COUNT] = {
     {"Confirm Classic preset", "Play as in 1997? Sound and keys stay as they are.", {"No, keep Modern", "Yes, play Classic"}},
     {"Confirm settings reset", "Put every setting back as a fresh install has it?", {"No, keep my settings", "Yes, reset settings"}},
+    {"Confirm new game", "Start again? What you did since your last save is lost.", {"No, keep playing", "Yes, start again"}},
+    {"Confirm load", "Load this save? What you did since your last save is lost.", {"No, keep playing", "Yes, load it"}},
+    {"Confirm save", "Save over this save? It becomes the game as it is now.", {"No, keep it", "Yes, save over it"}},
+    {"Confirm delete", "Delete this save? It cannot be brought back.", {"No, keep it", "Yes, delete it"}},
+    {"Confirm quit", "Quit? What you did since your last save is lost.", {"No, keep playing", "Yes, quit"}},
 };
+static const char *const kQuestionNames[Q_COUNT] = {"classic", "reset", "new game", "load", "save over", "delete", "quit"};
 
 static void Ask(Question q) {
     g_confirm = true;
     g_question = q;
     g_confirmCursor = 0;  // the safe answer first
-    Trace("ask %s", q == Q_RESET ? "reset" : "classic");
+    Trace("ask %s", kQuestionNames[q]);
 }
-static bool g_closed;      // left the Options (shown as a note)
-static bool g_quit;        // Esc on that note: the prototype ends (a fullscreen window has no close box)
+static bool g_quit;        // Esc on the Quit screen: the prototype ends (a fullscreen window has no close box)
+// What the voice says on the game menu until the cursor moves: "Game saved." (1997 showed a
+// brief overlay after a save, ShowGameSaveResult).
+static const char *g_menuNote = "";
 // The console (#679), opened from its row: by the device used last, the full console
 // (keyboard, touch) or read-only (pad: the messages, and any button closes it).
 enum { CON_CLOSED, CON_FULL, CON_READONLY };
@@ -593,6 +712,8 @@ static int TopPage() { return g_stack[g_depth - 1].page; }
 static bool RowShown(const Page &p, int i) {
     const Row &r = p.rows[i];
     if (r.type == R_RETURN && &p != &g_pages[P_ORIGINAL])
+        return false;
+    if (r.type == R_SAVE && r.arg >= g_saveCount)
         return false;
     return !r.shown || r.shown();
 }
@@ -709,6 +830,8 @@ static const char *HelpFor(const Row *r) {
         }
         return RowHelp(*r);
     }
+    if (r->type == R_GAME && g_menuNote[0])
+        return g_menuNote;
     // The preset in use, changed since: Enter puts its settings back, and says so.
     if (r->type == R_PRESET_CHOICE && !g_first && r->arg == g_preset && PresetChanged())
         return "You changed some of its settings. Restore puts them back.";
@@ -858,14 +981,53 @@ static void SyncView() {
     Trace("layout %s page=%s cursor=%d", wide ? "wide" : "column", g_pages[t.page].name, Position(t.page, t.row));
 }
 
+static bool MenuClosed() { return g_playing || g_quitShown; }
+
+// The menu closes on the game. The pretend game counts as played the moment it shows: leaving
+// it for another game loses something until the next save.
+static void Play() {
+    g_playing = true;
+    g_inGame = true;
+    g_unsaved = true;
+    g_confirm = false;
+    g_menuNote = "";
+    Trace(TopPage() == P_HUB && g_depth == 1 ? "close options" : "close menu");
+}
+
+static void NewGame() {
+    g_playingWhat[0] = 0;
+    Trace("new game");
+    Play();
+}
+
+static void LoadSave(int i) {
+    snprintf(g_playingWhat, sizeof g_playingWhat, "%s", g_saves[i]);
+    Trace("load %s", g_saves[i]);
+    Play();
+}
+
+// The game menu over the game, as the Menus key opens it in play: on Resume game.
+static void OpenGameMenu() {
+    g_playing = false;
+    g_depth = 1;
+    g_stack[0].page = P_MAIN;
+    g_stack[0].row = ResolveRow(P_MAIN, 0);
+    g_scroll = 0;
+    Trace("open page=%s", g_pages[P_MAIN].name);
+}
+
+// Esc goes somewhere: everywhere but the game menu before a game (1997's first menu).
+static bool EscGoesBack() { return g_first || !(g_depth == 1 && TopPage() == P_MAIN && !g_inGame); }
+
 static void Pop() {
     if (g_depth > 1) {
         Trace("close page=%s", g_pages[TopPage()].name);
         g_depth--;
         g_scroll = 0;
+    } else if (TopPage() == P_MAIN && !g_inGame) {
+        Trace("esc: no game to go back to");  // 1997 too: Esc on the first menu does nothing
     } else {
-        g_closed = true;
-        Trace("close options");
+        Play();  // the game menu, or Options as the Options key opens them in play
     }
 }
 
@@ -875,10 +1037,18 @@ void Menu_Init(bool firstLaunch) {
     g_preset = 0;
     Bindings_Pages(g_pages);
     MoreOptions_Pages(g_pages);
+    g_pages[P_MAIN] = kGamePages[0];
+    g_pages[P_LOAD] = kGamePages[1];
+    g_pages[P_SAVE] = kGamePages[2];
+    MakeSaves(g_savesAtStart);
+    g_inGame = g_unsaved = g_playing = g_quitShown = false;
+    g_playingWhat[0] = 0;
+    g_saveClock = 0;
+    g_menuNote = "";
     g_first = firstLaunch;
     g_depth = 1;
-    g_stack[0].page = g_first ? P_FIRST : P_HUB;
-    g_stack[0].row = g_first ? 0 : 1;  // the preset row, as the mock draws it
+    g_stack[0].page = g_first ? P_FIRST : P_MAIN;
+    g_stack[0].row = g_first ? 0 : ResolveRow(P_MAIN, 0);  // Resume game when there is a save, as 1997
     g_voice.text[0] = 0;
     g_layoutWide = Wide() ? 1 : 0;
     Trace("init layout=%s logical=%ux%u first=%d", Wide() ? "wide" : "column",
@@ -945,13 +1115,16 @@ static void Activate(const Row &r) {
         break;
     case R_PRESET_CHOICE:
         if (g_first) {
+            // One question, then play (docs/UX.md, Peak-End Rule): a new game, as 1997 starts
+            // with the intro when there is no save.
             ApplyPreset(r.arg);
             g_first = false;
             g_presetBackup.have = false;
             g_depth = 1;
-            g_stack[0].page = P_HUB;
-            g_stack[0].row = 1;  // on the preset row
+            g_stack[0].page = P_MAIN;
+            g_stack[0].row = ResolveRow(P_MAIN, 0);
             Trace("first launch chose=%s", kPresetNames[r.arg]);
+            NewGame();
             break;
         }
         if (r.arg == 1 && g_preset != 1)
@@ -962,6 +1135,54 @@ static void Activate(const Row &r) {
     case R_BACK_TO_MINE:
         RestoreBackup(r.arg == BACK_RESET ? g_resetBackup : g_presetBackup);
         Trace("back to my settings");
+        break;
+    case R_GAME:
+        g_menuNote = "";
+        switch (r.arg) {
+        case M_RESUME:
+            if (!g_inGame)  // at the start: the latest save, as 1997's CURRENTSAVE
+                LoadSave(0);
+            else
+                Play();
+            break;
+        case M_NEW:
+            if (g_inGame && g_unsaved)
+                Ask(Q_NEW_GAME);
+            else
+                NewGame();
+            break;
+        case M_LOAD:
+            Push(P_LOAD);
+            break;
+        case M_SAVE:
+            Push(P_SAVE);
+            break;
+        case M_OPTIONS:
+            Push(P_HUB);
+            break;
+        case M_QUIT:
+            if (g_inGame && g_unsaved)
+                Ask(Q_QUIT);
+            else {
+                g_quitShown = true;
+                Trace("quit chosen");
+            }
+            break;
+        }
+        break;
+    case R_SAVE:
+        g_questionSave = r.arg;
+        if (TopPage() == P_SAVE)
+            Ask(Q_SAVE_OVER);  // a save would be lost
+        else if (g_inGame && g_unsaved)
+            Ask(Q_LOAD);
+        else
+            LoadSave(r.arg);
+        break;
+    case R_NEW_SAVE:
+        SaveNow(-1);
+        Pop();  // back on the game menu's Save game row, as 1997 after a save
+        g_menuNote = "Game saved.";
         break;
     case R_ACTION:
         if (r.arg == A_RESET)
@@ -988,6 +1209,7 @@ static void Move(int dir) {
     if (n <= 0)
         return;
     t.row = shown[(Position(t.page, t.row) + dir + n) % n];
+    g_menuNote = "";
     const Row *r = CursorRow();
     Trace("cursor %s", r ? (r->type == R_PRESET_ROW ? "preset row" : RowLabel(*r)) : "-");
 }
@@ -1163,7 +1385,7 @@ static void UpdatePointer() {
     HostPointer in;
     Host_Pointer(&in);
     const PointTarget *at = PointAt(in.x, in.y);
-    if (g_onBack && LastPointer() == POINTER_NONE && !g_first && !g_closed && !g_console) {
+    if (g_onBack && LastPointer() == POINTER_NONE && !g_first && !MenuClosed() && !g_console) {
         // A key while on Back only brings the cursor back to its row (decided 2026-11-13); Esc
         // still goes back, as Back would have.
         g_onBack = false;
@@ -1190,9 +1412,11 @@ static void UpdatePointer() {
             Host_PressNow(KEY_ESC);
         return;
     }
-    if (g_console || g_closed) {
+    if (g_console || MenuClosed()) {
+        // A click closes the console, opens the game menu over the game, or (on Quit's
+        // screen) starts the game again.
         if (in.pressed)
-            Host_PressNow(g_closed ? KEY_ENTER : KEY_ESC);  // a click closes the console, reopens Options
+            Host_PressNow(g_quitShown ? KEY_ENTER : KEY_ESC);
         else if (in.rightPressed && g_console)
             Host_PressNow(KEY_ESC);
         return;
@@ -1270,10 +1494,16 @@ void Menu_Update() {
         }
         return;
     }
-    if (g_closed) {
-        if (Host_Pressed(KEY_ENTER)) {
-            g_closed = false;
-            Trace("reopen options");
+    if (g_playing) {
+        if (Host_Pressed(KEY_ESC))  // the Menus key in play
+            OpenGameMenu();
+        return;
+    }
+    if (g_quitShown) {
+        if (Host_Pressed(KEY_ENTER)) {  // the game starts again, on its first menu
+            g_quitShown = false;
+            g_inGame = g_unsaved = false;
+            OpenGameMenu();
         } else if (Host_Pressed(KEY_ESC)) {
             g_quit = true;
             Trace("quit");
@@ -1293,10 +1523,36 @@ void Menu_Update() {
             g_confirm = false;
             Trace("answer %s", g_confirmCursor ? "yes" : "no");
             if (g_confirmCursor) {
-                if (g_question == Q_RESET)
+                switch (g_question) {
+                case Q_RESET:
                     ResetSettings();
-                else
+                    break;
+                case Q_CLASSIC:
                     ApplyPreset(1);
+                    break;
+                case Q_NEW_GAME:
+                    NewGame();
+                    break;
+                case Q_LOAD:
+                    LoadSave(g_questionSave);
+                    break;
+                case Q_SAVE_OVER:
+                    SaveNow(g_questionSave);
+                    Pop();
+                    g_menuNote = "Game saved.";
+                    break;
+                case Q_DELETE:
+                    DeleteSave(g_questionSave);
+                    if (TopPage() == P_LOAD && !g_saveCount)
+                        Pop();  // nothing left to load: Load game goes from the game menu too
+                    break;
+                case Q_QUIT:
+                    g_quitShown = true;
+                    Trace("quit chosen");
+                    break;
+                case Q_COUNT:
+                    break;
+                }
             }
         }
         UpdateVoice();
@@ -1346,7 +1602,10 @@ void Menu_Update() {
     if (r && Host_Pressed(KEY_ENTER) && RowActive(*r))
         Activate(*r);
     r = CursorRow();
-    if (r && r->type == R_BINDING && Host_Pressed(KEY_DEL))
+    if (r && r->type == R_SAVE && Host_Pressed(KEY_DEL)) {
+        g_questionSave = r->arg;
+        Ask(Q_DELETE);
+    } else if (r && r->type == R_BINDING && Host_Pressed(KEY_DEL))
         Bindings_Clear();
     else if (TopPage() == P_KEYS && Host_Pressed(KEY_DEL))
         Bindings_AskReset();
@@ -1453,7 +1712,10 @@ static void DrawColumnRow(const Row &r, int row, S32 x0, S32 y0, S32 x1, S32 y1,
         snprintf(text, sizeof text, "%s: %s", RowLabel(r), kVersion);
     else
         snprintf(text, sizeof text, "%s", RowLabel(r));
-    Menu_RowLabelCentred(x0, x1, yc, text, active ? INK_WHITE : INK_DISABLED, false, cursor);
+    // A save's name is the player's, not a text to translate.
+    const bool asIs = r.type == R_SAVE;
+    const S32 textW = asIs ? Ui_TextWidthAsIs(text) : Ui_TextWidth(text);
+    Menu_RowLabelCentred(x0, x1, yc, text, active ? INK_WHITE : INK_DISABLED, asIs, cursor);
 
     DrawnRow &d = Menu_Record("column", text,
                               r.type == R_SETTING                         ? ValueText(r.arg, val, sizeof val)
@@ -1462,8 +1724,8 @@ static void DrawColumnRow(const Row &r, int row, S32 x0, S32 y0, S32 x1, S32 y1,
                               fill, x0, y0, x1, y1);
     d.dim = !active;
     d.setting = r.type == R_SETTING;
-    d.textLeft = (x0 + x1) / 2 - Ui_TextWidth(text) / 2;
-    d.textRight = (x0 + x1) / 2 + Ui_TextWidth(text) / 2 + 8;  // 8: the original's side padding
+    d.textLeft = (x0 + x1) / 2 - textW / 2;
+    d.textRight = (x0 + x1) / 2 + textW / 2 + 8;  // 8: the original's side padding
     Menu_Point(POINT_ROW, x0, y0, x1, y1, TopPage(), row);
     if (slider && cursor && active && kSettings[r.arg].kind == K_SLIDER)
         Menu_Point(POINT_SLIDER, x0, y0, x1, y1, r.arg, row);
@@ -1506,8 +1768,9 @@ static void DrawWideRow(const char *pane, const Row &r, int row, S32 x0, S32 y0,
     DrawnRow &d = Menu_Record(pane, label, "", fill, x0, y0, x1, y1);
     d.dim = !active;
     d.setting = r.type == R_SETTING;
+    const bool asIs = r.type == R_SAVE;  // a save's name is the player's, not a text to translate
     d.textLeft = x0 + 16;
-    d.textRight = x0 + 16 + Ui_TextWidth(label);
+    d.textRight = x0 + 16 + (asIs ? Ui_TextWidthAsIs(label) : Ui_TextWidth(label));
     Menu_Point(POINT_ROW, x0, y0, x1, y1, TopPage(), row);
     if (barRow && fill == FILL_CURSOR && active)
         Menu_Point(POINT_SLIDER, x0, y0, x1, y1, r.arg, row);
@@ -1568,7 +1831,7 @@ static void DrawWideRow(const char *pane, const Row &r, int row, S32 x0, S32 y0,
     // The label last, in the room the value leaves (the 1997 swing when it is wider).
     const ClipSave clip;
     SetClip(x0 + 1, y0, x1 - 1, y1);
-    Ui_TextInRoom(x0 + 16, valueLeft ? valueLeft - 17 - 8 - 1 : x1 - 16, yc - 18, Ui_Tr(label),
+    Ui_TextInRoom(x0 + 16, valueLeft ? valueLeft - 17 - 8 - 1 : x1 - 16, yc - 18, asIs ? label : Ui_Tr(label),
                   active ? INK_WHITE : INK_DISABLED, fill == FILL_CURSOR);
     clip.Restore();
 }
@@ -1622,13 +1885,21 @@ static void LegendFor(const Row *r, const char **keys, const char **words, int *
             if (PresetChanged()) {
                 keys[*n] = "Enter"; words[(*n)++] = "Restore";
             }
+        } else if (r->type == R_SAVE) {
+            keys[*n] = "Enter"; words[(*n)++] = TopPage() == P_SAVE ? "Save" : "Load";
+            keys[*n] = "Del"; words[(*n)++] = "Delete";
+        } else if (r->type == R_NEW_SAVE) {
+            keys[*n] = "Enter"; words[(*n)++] = "Save";
         } else if (r->type == R_CATEGORY || r->type == R_PRESET_ROW ||
+                   (r->type == R_GAME && (r->arg == M_LOAD || r->arg == M_SAVE || r->arg == M_OPTIONS)) ||
                    (r->type == R_ACTION && (r->arg == A_KEYS || r->arg == A_EXP || r->arg == A_CONSOLE))) {
             keys[*n] = "Enter"; words[(*n)++] = "Open";
         } else if (r->type != R_SETTING) {
             keys[*n] = "Enter"; words[(*n)++] = "Choose";
         }
     }
+    if (!EscGoesBack())
+        return;  // the first game menu: Esc has nothing to go back to
     keys[*n] = "Esc";
     words[(*n)++] = g_first ? "Modern" : "Back";
 }
@@ -1918,7 +2189,9 @@ void Menu_DrawDialogueIn(S32 x0, S32 y0, S32 x1, S32 y1, const char **keysGiven,
 // pad's button, which have Esc and B. It sits on the title's line: in the one column at the
 // rows' left edge (the title moves right of it when it must), wide in the frame's margin left
 // of the rows. A row's height, as big a target as a row; it presses Esc.
-static bool BackShown() { return LastPointer() != POINTER_NONE && !g_first && !g_closed && !g_console; }
+static bool BackShown() {
+    return LastPointer() != POINTER_NONE && !g_first && !MenuClosed() && !g_console && EscGoesBack();
+}
 // Always Back, one look and one width on every screen (decided 2026-11-12; on a question it
 // does what the legend's Esc Cancel does). In the Text language as the legend has it
 // ("legend|Back": the plain "Back" is the walk-back key).
@@ -1951,6 +2224,39 @@ static void DrawBack() {
     g_backBox = {true, x0, y0, x1, y1};
 }
 
+// The game menu and its save lists: no help, so in the one column a strip one voice line tall
+// (a note such as "Game saved.", and the legend at its right) in place of the dialogue window.
+// A question there still asks in the dialogue window.
+enum { STRIP_H = 60 };  // the voice line at 12 in, 10 under it: six rows and a title fit 640x480
+static bool StripPage() {
+    const int p = TopPage();
+    return !g_confirm && !g_first && (p == P_MAIN || p == P_LOAD || p == P_SAVE);
+}
+
+static void DrawStrip(const char **keysGiven, const char **words, int nk) {
+    const S32 W = (S32)Host_LogicalW(), H = (S32)Host_LogicalH();
+    const S32 x0 = 8, x1 = W - 1 - 8, y1 = H - 1 - 8, y0 = y1 - STRIP_H + 1;
+    Ui_Panel(x0, y0, x1, y1, PANEL_SHADE_LVL);
+    const char *keys[8];
+    LegendKeys(keysGiven, keys, nk);
+    S32 scale = 2;
+    if (DrawLegendRow(0, 0, keys, keysGiven, words, nk, scale, false) > x1 - x0 - 32)
+        scale = 1;
+    const S32 lw = nk ? DrawLegendRow(0, 0, keys, keysGiven, words, nk, scale, false) : 0;
+    const S32 voiceW = x1 - x0 - 32 - (lw ? lw + 16 : 0);
+    g_voiceLines = Voice_Draw(g_voice, x0 + 16, y0 + 12, voiceW, 1, &g_voiceNeeded);
+    g_voiceMax = 1;
+    g_voiceWidth = voiceW;
+    if (nk)
+        DrawLegendRow(x1 - 16 - lw + 1, (y0 + y1) / 2 - 6 * scale + 1, keys, keysGiven, words, nk, scale, true);
+    else
+        g_legend[0] = 0;
+    NotePageMark();
+    g_helpBox.shown = true;
+    g_helpBox.kind = "strip";
+    g_helpBox.x0 = x0; g_helpBox.y0 = y0; g_helpBox.x1 = x1; g_helpBox.y1 = y1;
+}
+
 static void DrawColumn() {
     S32 W = (S32)Host_LogicalW(), H = (S32)Host_LogicalH();
     const Place &t = Top();
@@ -1976,8 +2282,10 @@ static void DrawColumn() {
     if (g_confirm) {
         DrawConfirm("confirm", W / 2 - 180, W / 2 + 180, 120);
     } else {
-        // Help in the dialogue window on every one-column page (decided 2026-11-03).
-        S32 top = 16, bottom = H - 1 - 137 - 16;
+        // Help in the dialogue window on every one-column page (decided 2026-11-03); the game
+        // menu's pages, which have none, take a strip one line tall, so its six rows fit at
+        // 640x480 as 1997's did.
+        S32 top = 16, bottom = H - 1 - (StripPage() ? STRIP_H : 137) - 16;
         if (g_first)
             top = 168 - 8;
         // A page names itself in a title above its rows, as the wide pages do (EPmager,
@@ -2020,7 +2328,9 @@ static void DrawColumn() {
     const char *keys[4], *words[4];
     int nk;
     LegendFor(g_confirm ? NULL : CursorRow(), keys, words, &nk);
-    if (framed)
+    if (StripPage())
+        DrawStrip(keys, words, nk);
+    else if (framed)
         Menu_DrawDialogueIn(fr.x0 + 32, fr.y0 + fr.h - 25 - 137, fr.x0 + fr.w - 33, fr.y0 + fr.h - 25, keys, words, nk);
     else
         Menu_DrawDialogue(keys, words, nk);
@@ -2199,6 +2509,33 @@ static void SyncBackgroundRes() {
         Host_SetBackgroundRes(want);
 }
 
+// The pretend game, or Quit's screen: black, as the game is not drawn here, and two lines in
+// the voice at its pitch (on one, 784 wide, they would not fit 640).
+static void DrawClosed() {
+    const S32 W = (S32)Host_LogicalW(), H = (S32)Host_LogicalH();
+    Box(0, 0, W - 1, H - 1, 0);
+    char what[128];
+    const char *lines[2];
+    if (g_quitShown) {
+        lines[0] = Ui_Tr("The game would close here.");
+        lines[1] = Ui_Tr("<ENTER> starts it again. <ESC> quits.");
+    } else {
+        if (g_playingWhat[0])
+            snprintf(what, sizeof what, "%s", g_playingWhat);
+        else
+            snprintf(what, sizeof what, "%s", Ui_Tr("A new game."));
+        lines[0] = what;
+        lines[1] = Ui_Tr("<ESC> opens the game menu.");
+    }
+    for (int i = 0; i < 2; i++) {
+        const S32 w = Ui_TextWidthAsIs(lines[i]);
+        Ui_TextAsIs(W / 2 - w / 2 + 2, H / 2 - 38 + i * 38 + 4, lines[i], INK_BLACK);  // the dialogue shadow
+        Ui_TextAsIs(W / 2 - w / 2, H / 2 - 38 + i * 38, lines[i], DIALOGUE_HERO * 16 + 12);
+        Menu_Record(g_quitShown ? "quit" : "game", lines[i], "", FILL_SHADE, W / 2 - w / 2, H / 2 - 38 + i * 38,
+                    W / 2 + w / 2, H / 2 + i * 38).textLeft = W / 2 - w / 2;
+    }
+}
+
 void Menu_Draw() {
     SyncBackgroundRes();
     ScreenFont_Set(g_val[S_FONT]);  // before the layout: widths follow the font
@@ -2221,12 +2558,8 @@ void Menu_Draw() {
 
     Ui_SetBackRight(BackShown() ? BackLeft() + BackWidth() : 0);
     g_backBox.shown = false;
-    if (g_closed) {
-        // Two lines at the voice's pitch: on one, 784 wide, it would not fit 640.
-        const char *lines[2] = {"Options closed.", "<ENTER> opens them again. <ESC> quits."};
-        for (int i = 0; i < 2; i++)
-            Ui_TextShadow((S32)Host_LogicalW() / 2 - Ui_TextWidth(lines[i]) / 2,
-                          (S32)Host_LogicalH() / 2 - 38 + i * 38, lines[i], DIALOGUE_HERO * 16 + 12);
+    if (MenuClosed()) {
+        DrawClosed();
     } else if (Bindings_Active()) {
         Bindings_Draw();
     } else if (MoreOptions_Active()) {
@@ -2320,6 +2653,32 @@ bool Menu_Open(const char *name) {
     }
     g_console = CON_CLOSED;
     Bindings_Close();
+    if (!strcmp(name, g_pages[P_FIRST].name)) {  // a fresh install's question, before any game
+        g_first = true;
+        g_confirm = g_playing = g_quitShown = g_inGame = g_unsaved = false;
+        g_depth = 1;
+        g_stack[0].page = P_FIRST;
+        g_stack[0].row = 0;
+        g_scroll = 0;
+        Trace("open page=%s (control)", name);
+        return true;
+    }
+    for (int p = P_MAIN; p <= P_SAVE; p++) {  // the game menu, and its pages from their rows
+        if (strcmp(g_pages[p].name, name) != 0)
+            continue;
+        g_first = false;
+        g_confirm = false;
+        g_quitShown = false;
+        if (p == P_SAVE)
+            g_inGame = true;  // Save game is there only in a game
+        OpenGameMenu();
+        if (p != P_MAIN) {
+            PutCursorOn(R_GAME, p == P_LOAD ? M_LOAD : M_SAVE);
+            Activate(*CursorRow());
+        }
+        Trace("open page=%s (control)", name);
+        return true;
+    }
     for (int p = 0; p < P_KEYS; p++) {  // Keys and buttons opens from its row, above
         if (strcmp(g_pages[p].name, name) != 0)
             continue;
@@ -2328,9 +2687,11 @@ bool Menu_Open(const char *name) {
         for (int i = 0; i < g_pages[P_HUB].count; i++)
             if (g_pages[P_HUB].rows[i].type != R_RETURN && g_pages[P_HUB].rows[i].arg == p)
                 hubRow = i;
+        // As the Options key opens them in play: Esc from the hub goes back to the game.
         g_first = false;
         g_confirm = false;
-        g_closed = false;
+        g_playing = g_quitShown = false;
+        g_inGame = true;
         g_depth = 1;
         g_stack[0].page = P_HUB;
         g_stack[0].row = hubRow;
@@ -2364,7 +2725,6 @@ void Menu_Reset() {
     MoreOptions_Defaults();
     g_confirm = false;
     g_confirmCursor = 0;
-    g_closed = false;
     g_console = CON_CLOSED;
     g_presetBackup.have = false;
     g_resetBackup.have = false;
@@ -2402,7 +2762,9 @@ void Menu_Help(MenuHelp *h) {
 
 bool Menu_WantsQuit() { return g_quit; }
 
-const char *Menu_Layout() { return g_closed ? "closed" : g_first ? "first-launch" : Wide() ? "wide" : "column"; }
+const char *Menu_Layout() {
+    return g_playing ? "game" : g_quitShown ? "quit" : g_first ? "first-launch" : Wide() ? "wide" : "column";
+}
 
 const char *Menu_PageName() {
     return g_pages[Top().page].name;
@@ -2417,15 +2779,15 @@ static int Depth() {
 
 const char *Menu_CursorLabel() {
     static char buf[160];
-    const Row *r = MoreOptions_Active() || g_closed ? NULL : CursorRow();
+    const Row *r = MoreOptions_Active() || MenuClosed() ? NULL : CursorRow();
     if (!r)
         return "";
     return r->type == R_PRESET_ROW ? PresetRowLabel(buf, sizeof buf) : RowLabel(*r);
 }
 
 int Menu_Where(char *buf, size_t n) {
-    if (g_closed) {
-        snprintf(buf, n, "closed");
+    if (MenuClosed()) {
+        snprintf(buf, n, "%s", g_playing ? "game" : "quit");
         return 0;
     }
     if (Bindings_Active()) {
@@ -2453,7 +2815,7 @@ int Menu_Where(char *buf, size_t n) {
 }
 
 bool Menu_CursorSetting(bool *active) {
-    const Row *r = MoreOptions_Active() || g_closed ? NULL : CursorRow();
+    const Row *r = MoreOptions_Active() || MenuClosed() ? NULL : CursorRow();
     if (!r || r->type != R_SETTING)
         return false;
     *active = RowActive(*r);

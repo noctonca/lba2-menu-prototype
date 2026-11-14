@@ -300,8 +300,32 @@ voice. A setting exists only if players really disagree about it.
 what a setting does in the player's terms ("Footsteps, doors, magic."), not
 the engine's.
 
-**Paradox of the Active User** (people don't read manuals). Every row explains
-itself in the voice as the cursor lands on it; there is no help page.
+**Paradox of the Active User** (people don't read manuals). Every setting
+explains itself in the voice as the cursor lands on it; there is no help page.
+
+- **Rows that say what they do** (decided 2026-11-14): the game menu's rows
+  (Resume game, New game, Load game, Save game, Options, Quit) and a save have
+  no help. Their names say what they do, so a line under them would repeat the
+  label (Occam's Razor above), and neither the 1997 main menu nor a console's
+  has one (Jakob's Law). They keep the legend: a pad player still needs to see
+  which button opens and which goes back.
+- The voice speaks there only when something happens or would be lost: "Game
+  saved." after a save, until the cursor moves (1997 showed a brief overlay),
+  and the questions. The game menu asks before New game, Load game or Quit
+  after playing since the last save, before saving over a save and before a
+  delete, each on No. 1997 asked none of them. **[self test: flow]**
+- In the one column those pages take a strip one voice line tall in place of
+  the dialogue window: the note at its left, the legend at its right. With the
+  137 px window only 4 rows fit at 640x480, and the game menu's six would
+  scroll where 1997 showed them all. A question there asks in the dialogue
+  window, as everywhere. Wide, the band stays as it is.
+- Before a game the game menu has nothing for Esc to go back to (1997's first
+  menu did nothing either), so the legend shows no Esc and the corner Back is
+  not drawn.
+- A save is named as lba2cc names one it makes, `<island> <date> <time>`,
+  shorter than lba2cc's `<island> - <date> <hours-minutes-seconds>`: that
+  spilled a 640x480 row by up to 33 px with the longest island, and 8 without
+  the seconds (self test, 2026-11-14). The port's save list has to decide.
 
 **Goal-Gradient, Zeigarnik.** The preset row says when the player's settings
 are no longer the preset ("Preset: Modern, changed"), and the changed values

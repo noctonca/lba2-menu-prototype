@@ -4,6 +4,8 @@
 #include <stdio.h>
 
 void Menu_Init(bool firstLaunch);
+// How many fake saves Menu_Init and Menu_Reset make (20 unless --saves says).
+void Menu_SetSavesAtStart(int n);
 // Everything back as a fresh start has it: switches, settings, bindings, pages.
 void Menu_Reset();
 void Menu_Update();  // reads this frame's keys
@@ -18,7 +20,7 @@ void Menu_Draw();
 bool Menu_SetSwitch(const char *name, int value);
 // A short note at the bottom right for two seconds, as switches show theirs.
 void Menu_Toast(const char *text);
-// Esc on the "Options closed" note: end the prototype.
+// Esc on Quit's screen ("The game would close here"): end the prototype.
 bool Menu_WantsQuit();
 // After the screen changed: the note with its size and canvas, and a trace line.
 void Menu_NoteScreen();

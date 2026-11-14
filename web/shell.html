@@ -122,7 +122,7 @@
 </head>
 <body>
 <header id="bar">
-  <h1>LBA2 Options menu prototype</h1>
+  <h1>LBA2 menu prototype</h1>
   <span class="spacer"></span>
   <button id="fullscreen" class="chip" hidden>Fullscreen</button>
   <button id="aboutBtn" class="chip">About</button>
@@ -153,21 +153,22 @@
     <h2 class="title">How it works</h2>
     <p class="voice">Seven things this menu promises. Each one says how to see it.</p>
     <ol class="ways voice">
-      <li><b>Nothing is lost by accident.</b> A row that throws your settings away asks first, and the question
-        starts on No. <span class="try">Try it: Preset, choose Classic, then Undo preset.</span></li>
+      <li><b>Nothing is lost by accident.</b> A row that throws your settings or your game away asks first, and
+        the question starts on No. <span class="try">Try it: Resume game, Esc, then New game. Or Options, Preset,
+        choose Classic, then Undo preset.</span></li>
       <li><b>Back is always one press.</b> Esc leaves any page, whichever row you are on. On a pad it is B; in a
         browser, Q works too.</li>
-      <li><b>Every row explains itself.</b> Its help appears as you move onto it, in the game's dialogue voice,
-        and never runs onto a second page. A greyed-out row says why.
-        <span class="try">Try it: Controls and camera, set Outdoors camera to Classic, then move onto Camera
-        speed.</span></li>
+      <li><b>Every setting explains itself.</b> Its help appears as you move onto it, in the game's dialogue
+        voice. A greyed-out row says why. Rows that say what they do, such as New game, need no help.
+        <span class="try">Try it: Options, Controls and camera, set Outdoors camera to Classic, then move onto
+        Camera speed.</span></li>
       <li><b>Classic looks like 1997.</b> At 640x480 the menu looks as the 1997 one does, and the Classic preset
         brings back the 1997 picture and font. <span class="try">Try it: press F2 until the size reads 640x480,
-        then choose the Classic preset.</span></li>
+        then choose Options, Preset, Classic.</span></li>
       <li><b>Keyboard and pad are equal.</b> The key list at the bottom uses your pad's button names, and no key
         binding can lock the pad out of the menu.</li>
       <li><b>One language for the whole menu.</b> Changing Text changes every word, the help included.
-        <span class="try">Try it: Language and interface, Text.</span></li>
+        <span class="try">Try it: Options, Language and interface, Text.</span></li>
       <li><b>The picture is never stretched.</b> It is scaled evenly to fill the screen and cropped at the edges,
         and the menu grows in whole steps. <span class="try">Try it: resize the window, or press F2.</span></li>
     </ol>
@@ -178,8 +179,9 @@
 
   <section id="about" class="page" hidden><div class="panel frame">
     <h2 class="title">About</h2>
-    <p class="voice">A fan-made prototype of a new Options menu for LBA2 Classic Community. It is not the game, and
-      not affiliated with the game's owners. The settings are pretend: nothing is saved.</p>
+    <p class="voice">A fan-made prototype of a new game menu and Options for LBA2 Classic Community. It is not the
+      game, and not affiliated with the game's owners. The settings and the saves are pretend: nothing is
+      written, and no game is played.</p>
     <p class="voice">The menu's screen is the size of this window: resize the window to try other sizes, or step
       through lba2cc's list with F2, shown with black bars. The prototype's keys are listed in the README.</p>
     <div class="legend system">
@@ -360,7 +362,7 @@
     onRuntimeInitialized: function () { Module.ready = true; },
     onExit: function () {
       var pick = document.getElementById('pick');
-      pick.querySelector('div').innerHTML = '<h2 class="title">The menu was closed</h2><p class="voice">Reload the page to open it again.</p>';
+      pick.querySelector('div').innerHTML = '<h2 class="title">The game was closed</h2><p class="voice">Reload the page to start it again.</p>';
       pick.hidden = false;
     }
   };

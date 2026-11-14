@@ -1,9 +1,14 @@
 // LBA2 Options menu prototype on lba2cc's LIB386.
 //
-//   lba2menu [--data DIR] [--size WxH] [--first] [--headless] [--fixed-dt MS]
+//   lba2menu [--data DIR] [--size WxH] [--first | --options] [--saves N] [--headless] [--fixed-dt MS]
 //            [--script FILE] [--do "cmd; cmd"] [--stdin] [--control FILE] [--trace FILE]
 //            [--switch name=v ...]
 //   lba2menu --selftest [--size WxH] [--combo name=v,name=v ...] [--only PAGE] [--no-again] [--layout-only]
+//
+// It starts on the game menu before a game, with N fake saves (20; 0 for a player with none).
+// --first starts on the first launch's question instead; --options in a game, with Options
+// open as the Options key opens them in play (Esc goes back to the game), as the prototype
+// started before it had the game menu.
 //
 // --do: commands as a script would hold them, separated by ';', run after --script.
 // Without --headless the window stays up afterwards, on the screen they lead to.
@@ -245,7 +250,7 @@ int Lba2Main(int argc, char *argv[]) {
 #else
     U32 w = 0, h = 0, fixedDt = 0;  // the display's size
 #endif
-    bool first = false, headless = false, live = false, selftest = false;
+    bool first = false, options = false, headless = false, live = false, selftest = false;
     const char *script = NULL, *trace = NULL, *control = NULL;
     std::vector<std::string> switches, inline_cmds;
     SelftestOptions test;
@@ -266,6 +271,11 @@ int Lba2Main(int argc, char *argv[]) {
             i++;
         } else if (!strcmp(a, "--first")) {
             first = true;
+        } else if (!strcmp(a, "--options")) {
+            options = true;
+        } else if (!strcmp(a, "--saves")) {
+            Menu_SetSavesAtStart(atoi(v));
+            i++;
         } else if (!strcmp(a, "--headless")) {
             headless = true;
         } else if (!strcmp(a, "--fixed-dt")) {
@@ -348,6 +358,8 @@ int Lba2Main(int argc, char *argv[]) {
     if (fixedDt)
         Host_SetFixedDt(fixedDt);
     Menu_Init(first);
+    if (options && !first)
+        Menu_Open("Options");
     if (selftest) {
         int result = Selftest_Run(test, argv[0]);
         Host_Shutdown();

@@ -36,6 +36,10 @@ from concurrent.futures import ThreadPoolExecutor
 PAGES = ["Options", "Preset", "Language and interface", "Display and graphics", "Sound",
          "Controls and camera", "Advanced and reset"]
 
+# The game menu and its save lists (selftest.cpp kGamePages); the lists scroll, so every row.
+GAME_PAGES = ["Game menu", "Load game", "Save game"]
+GAME_PAGE_ROWS = 24
+
 # Actions per group on the Controls page (bindings.cpp kActions).
 CONTROL_GROUPS = [5, 6, 4, 7, 4, 4, 6]
 
@@ -111,6 +115,14 @@ def run_scripts(binary, size, combo, only, shots):
             continue
         lines += [f"open {page}", "wait 1", "state"]
         for i in range(1, 12):
+            lines += ["key down", "wait 1", "state"]
+        if shots:
+            lines += [f"shot {shots}/{tag}-{page.replace(' ', '_')}.png"]
+    for page in GAME_PAGES:
+        if only and only != page:
+            continue
+        lines += [f"open {page}", "wait 1", "state"]
+        for i in range(GAME_PAGE_ROWS):
             lines += ["key down", "wait 1", "state"]
         if shots:
             lines += [f"shot {shots}/{tag}-{page.replace(' ', '_')}.png"]
