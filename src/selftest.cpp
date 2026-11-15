@@ -1754,6 +1754,8 @@ struct Walker {
         Expect(!Drawn("Save game") && Drawn("Load game"), "flow: start: Save game shown, or Load game not, before a game");
         // Resume game's picture in place of the title, as 1997's first menu.
         Expect(PictureDrawn() && !Drawn("Game menu"), "flow: start: no picture, or the title with it");
+        // The picture and every row fit, Quit too, with no scroll (it scrolled until 2026-11-16).
+        Expect(Drawn("Quit"), "flow: start: Quit not drawn: the picture and the rows don't fit");
         // Load game: a row for each save (20 at a start) and AUTOSAVE last, as 1997; it opens on
         // AUTOSAVE, as nothing is in play.
         Choose("Load game");

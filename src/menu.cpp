@@ -2310,7 +2310,8 @@ static void DrawBack() {
 // current save's), in place of the title; on Load game, the save under the cursor's, under
 // the title. Not in play: six rows and a picture don't fit (387 px at 640x480; decided
 // 2026-11-14), and the game it would show is behind the menu.
-enum { PICTURE_H = SAVE_PICTURE_H + 2 + ROW_GAP };  // framed, then a row gap
+// Framed, then the gap rows have between them: a row is drawn ROW_H + 1 tall, so 5 px.
+enum { PICTURE_H = SAVE_PICTURE_H + 2 + ROW_GAP - 1 };
 
 static int IslandOf(const char *where) {
     for (int i = 0; i < SAVE_PICTURE_ISLANDS; i++)
@@ -2353,9 +2354,11 @@ static bool StripPage() {
     return !g_confirm && !g_first && (p == P_MAIN || p == P_LOAD || p == P_SAVE);
 }
 
-static void DrawStrip(const char **keysGiven, const char **words, int nk) {
-    const S32 W = (S32)Host_LogicalW(), H = (S32)Host_LogicalH();
-    const S32 x0 = 8, x1 = W - 1 - 8, y1 = H - 1 - 8, y0 = y1 - STRIP_H + 1;
+// The strip with its bottom right corner at x1, y1: in the one column 8 in from the screen's,
+// in the wide frame where the band's is (the band is two lines tall for help these pages
+// don't have; decided 2026-11-16).
+static void DrawStripAt(S32 x0, S32 x1, S32 y1, const char **keysGiven, const char **words, int nk) {
+    const S32 y0 = y1 - STRIP_H + 1;
     Ui_Panel(x0, y0, x1, y1, PANEL_SHADE_LVL);
     const char *keys[8];
     LegendKeys(keysGiven, keys, nk);
@@ -2375,6 +2378,11 @@ static void DrawStrip(const char **keysGiven, const char **words, int nk) {
     g_helpBox.shown = true;
     g_helpBox.kind = "strip";
     g_helpBox.x0 = x0; g_helpBox.y0 = y0; g_helpBox.x1 = x1; g_helpBox.y1 = y1;
+}
+
+static void DrawStrip(const char **keysGiven, const char **words, int nk) {
+    const S32 W = (S32)Host_LogicalW(), H = (S32)Host_LogicalH();
+    DrawStripAt(8, W - 1 - 8, H - 1 - 8, keysGiven, words, nk);
 }
 
 static void DrawColumn() {
@@ -2408,9 +2416,9 @@ static void DrawColumn() {
         const U8 *pic = PagePicture();
         S32 top = 16, bottom = H - 1 - (StripPage() ? STRIP_H : 137) - 16;
         if (pic && TopPage() == P_MAIN) {
-            // The first game menu's picture and five rows take 402 px: at 640x480 they fit
-            // with the frame 4 from the top and the last row 6 above the strip, one more than
-            // between rows (the proximity rule). 1997's frame was 9 from the top.
+            // The first game menu's picture and five rows take 402 px (127 + 5 x 56 - 5): at
+            // 640x480 they fit with the frame 4 from the top and the last row 6 above the strip,
+            // one more than between rows (the proximity rule). 1997's frame was 9 from the top.
             top = 4;
             bottom = H - 1 - STRIP_H - 14;
         }
@@ -2483,10 +2491,16 @@ static void DrawWide() {
         const int n = ShownRows(t.page, shown);
         int cursor = Position(t.page, t.row);
         const U8 *pic = PagePicture();
-        // The first game menu: the picture in the title's place, and five rows under it with
-        // 8 px less above the band (the top margin stays 24).
+        // The first game menu: the picture in the title's place and the rows under it, the
+        // whole centred between the top margin and the strip, the last row at least 6 above
+        // it, more than between rows (the proximity rule; decided 2026-11-16).
         const bool inPlace = pic && t.page == P_MAIN;
         S32 rowsTop = top;
+        if (inPlace) {
+            const S32 block = PICTURE_H + n * ROW_PITCH - ROW_GAP + 1, room = Menu_WideRowsLimit() + 9 - top + 1;
+            if (block < room)
+                rowsTop = top + (room - block) / 2;
+        }
         if (!inPlace) {  // the hub too, as the column has it: rows keep their height between pages (decided 2026-11-13)
             rowsTop = Ui_Title(x0, x1, top, page.name);
             Menu_Record("title", page.name, "", FILL_SHADE, x0, top, x1, top + 38).textLeft =
@@ -2496,7 +2510,7 @@ static void DrawWide() {
             DrawPicture(pic, (x0 + x1 + 1) / 2 - SAVE_PICTURE_W / 2, rowsTop + 1);
             rowsTop += PICTURE_H;
         }
-        const S32 limit = Menu_WideRowsLimit() + (inPlace ? 8 : 0);
+        const S32 limit = Menu_WideRowsLimit() + (inPlace ? 9 : 0);
         int visible = (limit - rowsTop + ROW_GAP) / ROW_PITCH;
         if (visible > n)
             visible = n;
@@ -2532,10 +2546,11 @@ static void DrawWide() {
     Menu_DrawFoot(keys, words, nk);
 }
 
+// The last line a row may take: 16 above the band, or above the game pages' strip.
 S32 Menu_WideRowsLimit() {
     WideFrame f = Menu_WideFrame();
     S32 H = f.y0 + f.h;
-    return H - 24 - 86 - 16;
+    return H - 24 - (StripPage() ? STRIP_H : 86) - 16;
 }
 
 // The voice's width in the band: what the legend leaves, at most the review's 620.
@@ -2547,6 +2562,11 @@ static S32 BandVoiceWidth(const char **keys, const char **words, int nk) {
 }
 
 void Menu_DrawFoot(const char **keysGiven, const char **wordsGiven, int nk) {
+    if (StripPage()) {
+        const WideFrame fr = Menu_WideFrame();
+        DrawStripAt(fr.x0 + 32, fr.x0 + fr.w - 33, fr.y0 + fr.h - 25, keysGiven, wordsGiven, nk);
+        return;
+    }
     const char *keysIn[8], *words[8];
     nk = WithMore(keysGiven, wordsGiven, nk, BandVoiceWidth(keysGiven, wordsGiven, nk), 2, keysIn, words);
     // After a pad press the legend names the pad's buttons, not the keyboard's.

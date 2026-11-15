@@ -332,14 +332,20 @@ explains itself in the voice as the cursor lands on it; there is no help page.
   (2026-11-14). **[self test: flow]**
 - The save picture, 160x120 framed, is where 1997 has it: in place of the
   title on the first game menu (Resume game's), under the title on Load game
-  (the save under the cursor's). It takes 128 px with its gap. The first game
+  (the save under the cursor's). It takes 127 px with its gap, which is the
+  5 px rows have between them (a row is drawn 51 px tall). The first game
   menu's five rows then fit 640x480 with the frame 4 px from the top (1997:
   9) and the last row 6 px above the strip, one more than between rows (the
-  proximity rule); the wide frame keeps its 24 px top margin and takes 8 px
-  from the gap above the band. In play the six rows would be
+  proximity rule). The wide frame's game pages take the same 60 px strip in
+  place of the band, which is two lines tall for help they don't have; the
+  first game menu's picture and rows are then centred between the 24 px top
+  margin and the strip (frame 36 px from the top, last row 18 px above the
+  strip; decided 2026-11-16, until then Quit scrolled in both layouts and
+  the wide page felt cramped). In play the six rows would be
   71 px over, so the game menu shows no picture there, and the game it would
   show is behind the menu anyway (decided 2026-11-14). Load game shows 3 rows
-  at a time with it, in both layouts. **[self test: flow, picture]**
+  at a time with it in the one column, 4 in the wide frame.
+  **[self test: flow, picture]**
 - A save is named as lba2cc names one it makes, `<island> <date> <time>`,
   shorter than lba2cc's `<island> - <date> <hours-minutes-seconds>`: that
   spilled a 640x480 row by up to 33 px with the longest island, and 8 without
