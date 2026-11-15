@@ -2348,6 +2348,14 @@ static void DrawPicture(const U8 *pic, S32 x, S32 y) {
     Menu_Record("picture", "", "", FILL_SHADE, x - 1, y - 1, x1 + 1, y1 + 1);
 }
 
+// The picture centred in its own place: between the last line taken above it (the title's,
+// or the edge's) and the first row, the same gap above and below (the odd pixel below);
+// the maintainer, 2026-11-16: it sat on the first row and far from Load game's title.
+static void DrawPictureBetween(const U8 *pic, S32 x, S32 above, S32 firstRow) {
+    const S32 frameH = SAVE_PICTURE_H + 2, free = firstRow - above - 1 - frameH;
+    DrawPicture(pic, x, above + 1 + free / 2 + 1);
+}
+
 enum { STRIP_H = 60 };  // the voice line at 12 in, 10 under it: six rows and a title fit 640x480
 static bool StripPage() {
     const int p = TopPage();
@@ -2451,8 +2459,8 @@ static void DrawColumn() {
             Menu_Record("title", p.name, "", FILL_SHADE, W / 2 - 275, y - titleH, W / 2 + 275, y - titleH + 38).textLeft =
                 W / 2 - Ui_TextWidth(p.name) / 2;
         }
-        if (pic)
-            DrawPicture(pic, W / 2 - SAVE_PICTURE_W / 2, y - PICTURE_H + 1);
+        if (pic)  // under the title, or on the first game menu from the screen's edge (640x480 has no more)
+            DrawPictureBetween(pic, W / 2 - SAVE_PICTURE_W / 2, titled ? y - titleH + 38 : -1, y);
         // The 1997 width: LargeurMenu 550, centred.
         S32 x0 = W / 2 - 275, x1 = W / 2 + 275;
         for (int i = g_scroll; i < g_scroll + visible; i++) {
@@ -2491,26 +2499,35 @@ static void DrawWide() {
         const int n = ShownRows(t.page, shown);
         int cursor = Position(t.page, t.row);
         const U8 *pic = PagePicture();
-        // The first game menu: the picture in the title's place and the rows under it, the
-        // whole centred between the top margin and the strip, the last row at least 6 above
-        // it, more than between rows (the proximity rule; decided 2026-11-16).
+        // The first game menu: the picture in the title's place and the rows under it, what
+        // height is left shared out in three like gaps, above the picture, under it and above
+        // the strip, that last at least 6, more than between rows (the proximity rule;
+        // decided 2026-11-16).
         const bool inPlace = pic && t.page == P_MAIN;
-        S32 rowsTop = top;
-        if (inPlace) {
-            const S32 block = PICTURE_H + n * ROW_PITCH - ROW_GAP + 1, room = Menu_WideRowsLimit() + 9 - top + 1;
-            if (block < room)
-                rowsTop = top + (room - block) / 2;
-        }
+        const S32 stripTop = Menu_WideRowsLimit() + 16 + 1;
+        S32 rowsTop = top, above = top - 1;
         if (!inPlace) {  // the hub too, as the column has it: rows keep their height between pages (decided 2026-11-13)
             rowsTop = Ui_Title(x0, x1, top, page.name);
             Menu_Record("title", page.name, "", FILL_SHADE, x0, top, x1, top + 38).textLeft =
                 (x0 + x1 + 1) / 2 - Ui_TextWidth(page.name) / 2;
         }
         if (pic) {
-            DrawPicture(pic, (x0 + x1 + 1) / 2 - SAVE_PICTURE_W / 2, rowsTop + 1);
-            rowsTop += PICTURE_H;
+            if (!inPlace) {
+                above = top + 38;  // the title's last line
+                rowsTop += PICTURE_H;
+            } else {
+                const S32 space = stripTop - top - (SAVE_PICTURE_H + 2) - (n * ROW_PITCH - ROW_GAP + 1);
+                S32 a = (space + 1) / 3, c = space - 2 * a;
+                if (c < 6) {
+                    c = 6;
+                    a = (space - c) / 2;
+                }
+                const S32 b = space - a - c;  // under the picture
+                rowsTop = space < 5 + 6 ? top + PICTURE_H : top + a + SAVE_PICTURE_H + 2 + b;
+            }
+            DrawPictureBetween(pic, (x0 + x1 + 1) / 2 - SAVE_PICTURE_W / 2, above, rowsTop);
         }
-        const S32 limit = Menu_WideRowsLimit() + (inPlace ? 9 : 0);
+        const S32 limit = inPlace ? stripTop - 7 : Menu_WideRowsLimit();
         int visible = (limit - rowsTop + ROW_GAP) / ROW_PITCH;
         if (visible > n)
             visible = n;

@@ -337,15 +337,18 @@ explains itself in the voice as the cursor lands on it; there is no help page.
   menu's five rows then fit 640x480 with the frame 4 px from the top (1997:
   9) and the last row 6 px above the strip, one more than between rows (the
   proximity rule). The wide frame's game pages take the same 60 px strip in
-  place of the band, which is two lines tall for help they don't have; the
-  first game menu's picture and rows are then centred between the 24 px top
-  margin and the strip (frame 36 px from the top, last row 18 px above the
-  strip; decided 2026-11-16, until then Quit scrolled in both layouts and
-  the wide page felt cramped). In play the six rows would be
+  place of the band, which is two lines tall for help they don't have; on
+  the first game menu the height left is shared in three like gaps, above
+  the picture, under it and above the strip (12, 12 and 11 px; decided
+  2026-11-16, until then Quit scrolled in both layouts and the wide page
+  felt cramped). The picture centres itself in its place: the gap to what is
+  above it (the title, else the top margin or the screen's edge) and to the
+  first row is the same, a pixel either way (Load game 11 and 11; the first
+  game menu at 640x480 4 and 5, all the room there is). In play the six rows would be
   71 px over, so the game menu shows no picture there, and the game it would
   show is behind the menu anyway (decided 2026-11-14). Load game shows 3 rows
   at a time with it in the one column, 4 in the wide frame.
-  **[self test: flow, picture]**
+  **[self test: flow, picture, picture centred]**
 - A save is named as lba2cc names one it makes, `<island> <date> <time>`,
   shorter than lba2cc's `<island> - <date> <hours-minutes-seconds>`: that
   spilled a 640x480 row by up to 33 px with the longest island, and 8 without

@@ -322,6 +322,25 @@ static void Check(std::vector<std::string> *found) {
                                      Repr(rows[j].label).c_str(), rows[j].y0, rows[j].y1));
     }
     const bool wide = !strcmp(Menu_Layout(), "wide");
+    // The save picture centred in its place: the gap to what is above it (the title, else the
+    // wide frame's top margin or the screen's edge) and to the first row under it the same,
+    // one pixel either way (decided 2026-11-16).
+    for (int i = 0; i < n; i++) {
+        if (strcmp(rows[i].pane, "picture"))
+            continue;
+        int above = wide ? Menu_WideFrame().y0 + 23 : -1, below = -1;
+        for (int j = 0; j < n; j++) {
+            if (j == i)
+                continue;
+            if (rows[j].y1 < rows[i].y0 && rows[j].y1 > above)
+                above = rows[j].y1;
+            if (rows[j].y0 > rows[i].y1 && (below < 0 || rows[j].y0 < below))
+                below = rows[j].y0;
+        }
+        const int gapAbove = rows[i].y0 - above - 1, gapBelow = below - rows[i].y1 - 1;
+        if (below >= 0 && std::abs(gapAbove - gapBelow) > 1)
+            found->push_back(Fmt("picture: %d px above it, %d under it, not centred in its place", gapAbove, gapBelow));
+    }
     // One edge per pane: its rows share x0 and x1; wide labels start 16 in.
     for (size_t p = 0; p < paneNames.size(); p++) {
         const std::vector<const DrawnRow *> &pr = panes[paneNames[p]];
