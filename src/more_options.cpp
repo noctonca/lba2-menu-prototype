@@ -562,7 +562,13 @@ static void DrawWideExp() {
 static void DrawColumnExp() {
     S32 W = (S32)Host_LogicalW();
     S32 x0 = W / 2 - 275, x1 = W / 2 + 275;
-    DrawTable(x0, x1, 16, Menu_DialogueTop() - 16);
+    // Titled as every page is, so the corner Back has the title's line, not the table's top.
+    const S32 top = 16;
+    const char *title = "More options";
+    const S32 rtop = Ui_Title(x0, x1, top, title, false);
+    Menu_Record("title", title, "", FILL_SHADE, x0, top, x1, top + 38).textLeft =
+        (x0 + x1 + 1) / 2 - Ui_TextWidth(title) / 2;
+    DrawTable(x0, x1, rtop, Menu_DialogueTop() - 16);
     const char *keys[4], *words[4];
     int nk;
     Legend(keys, words, &nk);

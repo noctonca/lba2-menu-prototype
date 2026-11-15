@@ -1020,17 +1020,40 @@ static void DrawWideControls() {
     if (OnGroups() && g_reset.asking) {
         DrawResetAnswers(x0, x1, Ui_Title(x0, x1, top, ResetTitle()), "bindings-left");
     } else if (OnGroups()) {
-        S32 y = top;
-        for (int g = 0; g < GROUP_COUNT; g++) {
-            RowFill fill = g == CurrentGroup() && Menu_CursorLit() ? FILL_CURSOR : FILL_SHADE;
+        // Under the page's title, as every wide page is, so the corner Back has the title's
+        // line and does not sit on the first group. Six of the seven fit; the rest scroll.
+        const S32 rowsTop = Ui_Title(x0, x1, top, "Keys and buttons");
+        Menu_Record("title", "Keys and buttons", "", FILL_SHADE, x0, top, x1, top + 38).textLeft =
+            (x0 + x1 + 1) / 2 - Ui_TextWidth("Keys and buttons") / 2;
+        int cursor = Menu_TopRow() - 1;  // row 0 is Return, not shown
+        if (cursor < 0)
+            cursor = 0;
+        int &scroll = Menu_Scroll();
+        const int n = GROUP_COUNT;
+        int visible = (Menu_WideRowsLimit() - rowsTop + ROW_GAP) / ROW_PITCH;
+        if (visible > n)
+            visible = n;
+        if (const int want = Menu_WheelView(scroll, visible, n, cursor); want != cursor) {
+            Menu_CursorTo(want + 1);
+            cursor = want;
+        }
+        if (cursor < scroll)
+            scroll = cursor;
+        if (cursor >= scroll + visible)
+            scroll = cursor - visible + 1;
+        S32 y = rowsTop;
+        for (int g = scroll; g < scroll + visible; g++) {
+            RowFill fill = g == cursor && Menu_CursorLit() ? FILL_CURSOR : FILL_SHADE;
             Ui_RowBackground(x0, y, x1, y + ROW_H, fill);
             Ui_TextInRoom(x0 + 16, x1 - 16, y + ROW_H / 2 - 18, Ui_Tr(kGroups[g].name), INK_WHITE, fill == FILL_CURSOR);
             DrawnRow &d = Menu_Record("bindings-left", kGroups[g].name, "", fill, x0, y, x1, y + ROW_H);
-            Menu_Point(POINT_ROW, x0, y, x1, y + ROW_H, P_KEYS, g + 1);  // row 0 is Return, not shown wide
+            Menu_Point(POINT_ROW, x0, y, x1, y + ROW_H, P_KEYS, g + 1);
             d.textLeft = x0 + 16;
             d.textRight = x0 + 16 + Ui_TextWidth(kGroups[g].name);
             y += ROW_PITCH;
         }
+        if (visible < n)
+            Menu_DrawScrollBar(x1 + 9, rowsTop, rowsTop + visible * ROW_PITCH - ROW_GAP - 1, scroll, visible, n);
     } else {
         // The title and the actions as one block, centred between the top margin and the
         // band, so a short group (Movement's five) does not leave a gap above the band
@@ -1113,13 +1136,21 @@ static void DrawColumnControls() {
         Menu_DrawDialogue(keys, words, nk);
         return;
     }
-    // The actions page: column heads, the rows, and the voice below (it asks for the key),
-    // centred above the dialogue window as the one column's pages are when they fit.
-    const S32 limit = Menu_DialogueTop() - 16;
-    S32 fit = (limit - (6 + 22) + ROW_GAP) / ROW_PITCH, n = GroupCount(CurrentGroup());
+    // The actions page: the group's title, column heads, the rows, and the voice below (it
+    // asks for the key), centred above the dialogue window as the one column's pages are when
+    // they fit. The title, as on every page, gives the corner Back its line. A key in use
+    // asks, titled as the wide page has it.
+    const S32 top = 16, limit = Menu_DialogueTop() - 16;
+    S32 fit = (limit - (top + ROW_PITCH + 22) + ROW_GAP) / ROW_PITCH, n = GroupCount(CurrentGroup());
     S32 shown = n < fit ? n : fit;
-    S32 block = 22 + shown * ROW_PITCH - ROW_GAP;
-    DrawActions(x0, x1, 6 + (limit - 6 - block > 0 ? (limit - 6 - block) / 2 : 0), limit, "column");
+    S32 block = ROW_PITCH + 22 + shown * ROW_PITCH - ROW_GAP;
+    const S32 y = top + (limit - top - block > 0 ? (limit - top - block) / 2 : 0);
+    const char *title = g_swap.action < 0 ? kGroups[CurrentGroup()].name
+                        : g_device        ? "Confirm button swap"
+                                          : "Confirm key swap";
+    Ui_Title(x0, x1, y, title);
+    Menu_Record("title", title, "", FILL_SHADE, x0, y, x1, y + 38).textLeft = (x0 + x1 + 1) / 2 - Ui_TextWidth(title) / 2;
+    DrawActions(x0, x1, y + ROW_PITCH, limit, "column");
     const char *keys[4], *words[4];
     int nk;
     Legend(keys, words, &nk);

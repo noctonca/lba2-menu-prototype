@@ -2010,6 +2010,22 @@ struct Walker {
                 Key("enter");
             }
             const std::string name = group >= 0 ? Fmt("%s, group %d", page, group + 1) : page;
+            {
+                // The corner Back has the title's line to itself: it touches no other target
+                // (Keys and buttons once had untitled pages whose first row ran under it).
+                Mouse(0, 0);
+                const MenuPoint *pts;
+                const int n = Menu_Points(&pts);
+                for (int i = 0; i < n; i++) {
+                    if (pts[i].kind != POINT_KEY || pts[i].b != POINT_KEY_BACK)
+                        continue;
+                    for (int j = 0; j < n; j++)
+                        if (j != i && pts[j].x0 <= pts[i].x1 && pts[i].x0 <= pts[j].x1 && pts[j].y0 <= pts[i].y1 &&
+                            pts[i].y0 <= pts[j].y1)
+                            Expect(false, Fmt("back: the corner Back on %s overlaps a target at %d,%d-%d,%d", name.c_str(),
+                                              (int)pts[j].x0, (int)pts[j].y0, (int)pts[j].x1, (int)pts[j].y1));
+                }
+            }
             const int want = Menu_TopShownCount();
             std::set<int> reached;
             for (int step = 0; step < 64; step++) {
