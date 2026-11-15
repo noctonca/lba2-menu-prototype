@@ -36,8 +36,15 @@ void GamePieces_AnimatePlasma() {
 
 // GAMEMENU.CPP DrawFireBar, with the bank passed in.
 void GamePieces_FireBar(S32 xmin, S32 ymin, S32 xmax, S32 ymax, S32 bank) {
+    GamePieces_FireBarSpan(xmin, ymin, xmax, ymax, bank, xmax - xmin);
+}
+
+void GamePieces_FireBarSpan(S32 xmin, S32 ymin, S32 xmax, S32 ymax, S32 bank, S32 spanW) {
     if (!Host_Pixels())
         return;
+    // DrawFireBar's U runs to 2 * ((63 << 8) + 250) across the box; here across spanW.
+    const S32 uFull = 2 * ((63 << 8) + 250);
+    const S32 u1 = spanW > 0 ? uFull * (xmax - xmin) / spanW : uFull;
     Struc_Point p[4];
     p[0].Pt_XE = (S16)xmin;
     p[0].Pt_YE = (S16)ymin;
@@ -49,11 +56,11 @@ void GamePieces_FireBar(S32 xmin, S32 ymin, S32 xmax, S32 ymax, S32 bank) {
     p[1].Pt_MapV = (U16)((63 << 8) + 250);
     p[2].Pt_XE = (S16)xmax;
     p[2].Pt_YE = (S16)ymax;
-    p[2].Pt_MapU = (U16)(2 * ((63 << 8) + 250));
+    p[2].Pt_MapU = (U16)u1;
     p[2].Pt_MapV = (U16)((63 << 8) + 250);
     p[3].Pt_XE = (S16)xmax;
     p[3].Pt_YE = (S16)ymin;
-    p[3].Pt_MapU = (U16)(2 * ((63 << 8) + 250));
+    p[3].Pt_MapU = (U16)u1;
     p[3].Pt_MapV = 0;
 
     RepMask = 0x3f3f;

@@ -2274,8 +2274,10 @@ void Menu_DrawDialogueIn(S32 x0, S32 y0, S32 x1, S32 y1, const char **keysGiven,
 // pad's button, which have Esc and B. It sits on the title's line: in the one column at the
 // rows' left edge (the title moves right of it when it must), wide in the frame's margin left
 // of the rows. A row's height, as big a target as a row; it presses Esc.
+// Not on the game menu itself: Resume game is its first row (the maintainer, 2026-11-16).
 static bool BackShown() {
-    return LastPointer() != POINTER_NONE && !g_first && !MenuClosed() && !g_console && EscGoesBack();
+    return LastPointer() != POINTER_NONE && !g_first && !MenuClosed() && !g_console && EscGoesBack() &&
+           !(g_depth == 1 && TopPage() == P_MAIN);
 }
 // Always Back, one look and one width on every screen (decided 2026-11-12; on a question it
 // does what the legend's Esc Cancel does). In the Text language as the legend has it
@@ -2304,7 +2306,15 @@ static void DrawBack() {
     HostPointer in;
     Host_Pointer(&in);
     const bool lit = !Menu_CursorLit();  // it has the cursor
-    Ui_RowBackground(x0, y0, x1, y1, lit ? FILL_CURSOR : FILL_SHADE);
+    if (lit) {
+        // The plasma at a row's grain, as the slider shows part of a row's (1997 drew it
+        // only on its 550 px rows): squeezed into the button it read as scrunched.
+        GamePieces_BackupCorners(x0, y0, x1, y1);
+        GamePieces_FireBarSpan(x0, y0, x1, y1, PLASMA_CURSOR, 2 * COLUMN_HALF_W);
+        GamePieces_Frame(x0, y0, x1, y1);
+    } else {
+        Ui_RowBackground(x0, y0, x1, y1, FILL_SHADE);
+    }
     Ui_Arrow(x0 + 18, yc, -1);
     Ui_TextAsIs(x0 + 44, yc - ROW_TEXT_RISE, BackWord(), INK_WHITE);
     Menu_Point(POINT_KEY, x0, y0, x1, y1, KEY_ESC, POINT_KEY_BACK);

@@ -15,6 +15,9 @@ void GamePieces_AnimatePlasma();
 // A fill inside a frame passes the frame's own right column as x1, or a dark column
 // shows between the plasma and the frame.
 void GamePieces_FireBar(S32 x0, S32 y0, S32 x1, S32 y1, S32 bank);
+// The same plasma at the grain it has across a box spanW wide: a short box shows part of
+// a long one's plasma, not the whole of it squeezed in (1997 drew it only on its rows).
+void GamePieces_FireBarSpan(S32 x0, S32 y0, S32 x1, S32 y1, S32 bank, S32 spanW);
 
 // INVENT.CPP DrawCadre with ALL_ANGLES: the 1px two-tone frame with chamfers.
 // Call GamePieces_BackupCorners before filling, GamePieces_Frame after (DrawOneChoice).
