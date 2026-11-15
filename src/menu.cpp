@@ -1747,13 +1747,13 @@ DrawnRow &Menu_Record(const char *pane, const char *label, const char *value, Ro
 // Centred text clipped to the row, the original's way (DrawOneChoice).
 void Menu_RowLabelCentred(S32 x0, S32 x1, S32 yc, const char *s, U8 colour, bool asIs, bool cursor) {
     const ClipSave clip;
-    SetClip(x0 + 1, yc - 25, x1 - 1, yc + 25);
+    SetClip(x0 + 1, yc - ROW_H / 2, x1 - 1, yc + ROW_H / 2);
     if (!asIs)
         s = Ui_Tr(s);
     if (Ui_TextWidthAsIs(s) > x1 - x0 - 16)
-        Ui_TextInRoom(x0 + 8, x1 - 8, yc - 18, s, colour, cursor);  // 1997: x0 + 8, swinging
+        Ui_TextInRoom(x0 + 8, x1 - 8, yc - ROW_TEXT_RISE, s, colour, cursor);  // 1997: x0 + 8, swinging
     else
-        Ui_TextAsIs((x0 + x1) / 2 - Ui_TextWidthAsIs(s) / 2, yc - 18, s, colour);
+        Ui_TextAsIs((x0 + x1) / 2 - Ui_TextWidthAsIs(s) / 2, yc - ROW_TEXT_RISE, s, colour);
     clip.Restore();
 }
 
@@ -1846,13 +1846,13 @@ static void DrawWideRow(const char *pane, const Row &r, int row, S32 x0, S32 y0,
     d.dim = !active;
     d.setting = r.type == R_SETTING;
     const bool asIs = r.type == R_SAVE || r.type == R_AUTOSAVE;  // a save's name is the player's, not a text to translate
-    d.textLeft = x0 + 16;
-    d.textRight = x0 + 16 + (asIs ? Ui_TextWidthAsIs(label) : Ui_TextWidth(label));
+    d.textLeft = x0 + ROW_TEXT_INSET;
+    d.textRight = x0 + ROW_TEXT_INSET + (asIs ? Ui_TextWidthAsIs(label) : Ui_TextWidth(label));
     Menu_Point(POINT_ROW, x0, y0, x1, y1, TopPage(), row);
     if (barRow && fill == FILL_CURSOR && active)
         Menu_Point(POINT_SLIDER, x0, y0, x1, y1, r.arg, row);
 
-    const S32 valueRight = x1 - 24;
+    const S32 valueRight = x1 - VALUE_INSET;
     S32 valueLeft = 0;  // where a value starts: the label's room ends 8 before its marks
     if (r.type == R_SETTING) {
         const Setting &st = kSettings[r.arg];
@@ -1867,49 +1867,50 @@ static void DrawWideRow(const char *pane, const Row &r, int row, S32 x0, S32 y0,
         } else {
             ValueText(r.arg, val, sizeof val);
             left = valueRight + 1 - Ui_TextInkWidth(val);  // the ink ends on the value edge
-            if (d.textRight + 8 > left - 17)
-                d.textRight = x1 + (d.textRight + 8 - (left - 17));  // label runs into the value
-            Ui_Text(left, yc - 18, val, !active ? INK_DISABLED : changed ? INK_COUNT : INK_WHITE);
+            if (d.textRight + 8 > left - MARK_ROOM)
+                d.textRight = x1 + (d.textRight + 8 - (left - MARK_ROOM));  // label runs into the value
+            Ui_Text(left, yc - ROW_TEXT_RISE, val, !active ? INK_DISABLED : changed ? INK_COUNT : INK_WHITE);
             snprintf(d.value, sizeof d.value, "%s", val);
             valueLeft = left;
         }
         d.changed = changed;
         d.valueRight = valueRight;
         if (fill == FILL_CURSOR && active && st.kind != K_SLIDER) {
-            Ui_ChangeMarks(left - 17, valueRight + 17, yc);  // in the padding: the value never moves
+            Ui_ChangeMarks(left - MARK_ROOM, valueRight + MARK_ROOM, yc);  // in the padding: the value never moves
             d.marks = true;
             // Each arrow and the padding around it (Triangle: 10 wide from its tip).
-            Menu_Point(POINT_STEP, left - 17 - 6, y0, left - 3, y1, -1, row);
-            Menu_Point(POINT_STEP, valueRight + 3, y0, valueRight + 17 + 6, y1, +1, row);
+            Menu_Point(POINT_STEP, left - MARK_ROOM - 6, y0, left - 3, y1, -1, row);
+            Menu_Point(POINT_STEP, valueRight + 3, y0, valueRight + MARK_ROOM + 6, y1, +1, row);
         }
     } else if (r.type == R_ACTION && r.arg == A_CONSOLE) {
         // The version where a value goes, in the dimmed grey: it reads, it does not change.
         S32 left = valueRight + 1 - Ui_TextInkWidth(kVersion);
-        if (d.textRight + 8 > left - 17)
-            d.textRight = x1 + (d.textRight + 8 - (left - 17));
-        Ui_Text(left, yc - 18, kVersion, INK_DISABLED);
+        if (d.textRight + 8 > left - MARK_ROOM)
+            d.textRight = x1 + (d.textRight + 8 - (left - MARK_ROOM));
+        Ui_Text(left, yc - ROW_TEXT_RISE, kVersion, INK_DISABLED);
         snprintf(d.value, sizeof d.value, "%s", kVersion);
         d.valueRight = valueRight;
         valueLeft = left;
     } else if (presetValue) {
         S32 left = valueRight + 1 - Ui_TextInkWidth(presetValue);
-        if (d.textRight + 8 > left - 17)
-            d.textRight = x1 + (d.textRight + 8 - (left - 17));
-        Ui_Text(left, yc - 18, presetValue, PresetChanged() ? INK_COUNT : INK_WHITE);
+        if (d.textRight + 8 > left - MARK_ROOM)
+            d.textRight = x1 + (d.textRight + 8 - (left - MARK_ROOM));
+        Ui_Text(left, yc - ROW_TEXT_RISE, presetValue, PresetChanged() ? INK_COUNT : INK_WHITE);
         snprintf(d.value, sizeof d.value, "%s", presetValue);
         d.valueRight = valueRight;
         valueLeft = left;
     } else if (r.type == R_PRESET_CHOICE && r.arg == g_preset && PresetChanged()) {
         valueLeft = valueRight + 1 - Ui_TextInkWidth("Changed");
-        Ui_Text(valueLeft, yc - 18, "Changed", INK_COUNT);
+        Ui_Text(valueLeft, yc - ROW_TEXT_RISE, "Changed", INK_COUNT);
         snprintf(d.value, sizeof d.value, "Changed");
         d.valueRight = valueRight;
     }
     // The label last, in the room the value leaves (the 1997 swing when it is wider).
     const ClipSave clip;
     SetClip(x0 + 1, y0, x1 - 1, y1);
-    Ui_TextInRoom(x0 + 16, valueLeft ? valueLeft - 17 - 8 - 1 : x1 - 16, yc - 18, asIs ? label : Ui_Tr(label),
-                  active ? INK_WHITE : INK_DISABLED, fill == FILL_CURSOR);
+    Ui_TextInRoom(x0 + ROW_TEXT_INSET, valueLeft ? valueLeft - MARK_ROOM - 8 - 1 : x1 - ROW_TEXT_INSET,
+                  yc - ROW_TEXT_RISE, asIs ? label : Ui_Tr(label), active ? INK_WHITE : INK_DISABLED,
+                  fill == FILL_CURSOR);
     clip.Restore();
 }
 
@@ -2159,10 +2160,11 @@ static void DrawConfirm(const char *pane, S32 x0, S32 x1, S32 y0) {
         } else {
             const ClipSave clip;
             SetClip(x0 + 1, ry0, x1 - 1, ry0 + ROW_H);
-            Ui_TextInRoom(x0 + 16, x1 - 16, yc - 18, Ui_Tr(answers[i]), INK_WHITE, i == g_confirmCursor);
+            Ui_TextInRoom(x0 + ROW_TEXT_INSET, x1 - ROW_TEXT_INSET, yc - ROW_TEXT_RISE, Ui_Tr(answers[i]), INK_WHITE,
+                          i == g_confirmCursor);
             clip.Restore();
-            d.textLeft = x0 + 16;
-            d.textRight = x0 + 16 + Ui_TextWidth(answers[i]);
+            d.textLeft = x0 + ROW_TEXT_INSET;
+            d.textRight = x0 + ROW_TEXT_INSET + Ui_TextWidth(answers[i]);
         }
     }
 }
@@ -2196,12 +2198,15 @@ bool Menu_CursorEnterSteps(bool *isValue) {
     return k == K_CHOICE || k == K_TOGGLE;
 }
 
-S32 Menu_DialogueTop() { return (S32)Host_LogicalH() - 1 - 137; }
+// MESSAGE.CPP NormalWinDial: the window's top this far above the screen's last line.
+enum { DIALOGUE_RISE = 137 };
+
+S32 Menu_DialogueTop() { return (S32)Host_LogicalH() - 1 - DIALOGUE_RISE; }
 
 void Menu_DrawDialogue(const char **keys, const char **words, int nk) {
     // MESSAGE.CPP NormalWinDial: 8 in from the sides, 137 tall, 8 off the bottom.
     S32 W = (S32)Host_LogicalW(), H = (S32)Host_LogicalH();
-    Menu_DrawDialogueIn(8, H - 1 - 137, W - 1 - 8, H - 1 - 8, keys, words, nk);
+    Menu_DrawDialogueIn(8, H - 1 - DIALOGUE_RISE, W - 1 - 8, H - 1 - 8, keys, words, nk);
 }
 
 // In a row: chip, word, then the next, from x; returns the width.
@@ -2236,24 +2241,25 @@ static void LegendKeys(const char **in, const char **out, int nk) {
 
 void Menu_DrawDialogueIn(S32 x0, S32 y0, S32 x1, S32 y1, const char **keysGiven, const char **wordsGiven, int nk) {
     const char *keysIn[8], *words[8];
-    nk = WithMore(keysGiven, wordsGiven, nk, x1 - x0 - 32, nk ? 2 : 3, keysIn, words);
+    nk = WithMore(keysGiven, wordsGiven, nk, x1 - x0 - 2 * PANEL_PAD_X, nk ? 2 : 3, keysIn, words);
     Ui_Panel(x0, y0, x1, y1, PANEL_SHADE_LVL);
     // The legend takes the window's third line, so the help has two, as in the wide band;
     // no help at 640x480 needs a third (measured 2026-11-11, six languages).
     const S32 maxLines = nk ? 2 : 3;
-    g_voiceLines = Voice_Draw(g_voice, x0 + 16, y0 + 12, x1 - x0 - 32, maxLines, &g_voiceNeeded);
+    g_voiceLines = Voice_Draw(g_voice, x0 + PANEL_PAD_X, y0 + PANEL_PAD_Y, x1 - x0 - 2 * PANEL_PAD_X, maxLines,
+                              &g_voiceNeeded);
     g_voiceMax = maxLines;
-    g_voiceWidth = x1 - x0 - 32;
+    g_voiceWidth = x1 - x0 - 2 * PANEL_PAD_X;
     if (nk) {
         const char *keys[8];
         LegendKeys(keysIn, keys, nk);
         // The 8x8 font at 2x when the line fits, as the wide band has it; 1x, the 1997 key
         // screen's size, when it does not.
         S32 scale = 2;
-        if (DrawLegendRow(0, 0, keys, keysIn, words, nk, scale, false) > x1 - x0 - 32)
+        if (DrawLegendRow(0, 0, keys, keysIn, words, nk, scale, false) > x1 - x0 - 2 * PANEL_PAD_X)
             scale = 1;
         S32 w = DrawLegendRow(0, 0, keys, keysIn, words, nk, scale, false);
-        DrawLegendRow(x1 - 16 - w + 1, y1 - 8 - 12 * scale + 1, keys, keysIn, words, nk, scale, true);
+        DrawLegendRow(x1 - PANEL_PAD_X - w + 1, y1 - 8 - 12 * scale + 1, keys, keysIn, words, nk, scale, true);
     } else {
         g_legend[0] = 0;
     }
@@ -2278,7 +2284,9 @@ static const char *BackWord() { return LegendWord("Back"); }
 static S32 BackWidth() { return 44 + Ui_TextWidthAsIs(BackWord()) + 20; }
 // In the one column at the rows' left edge (1997's LargeurMenu 550, centred); wide on the
 // frame's side margin, left of the rows.
-static S32 BackLeft() { return Wide() && !g_first ? Menu_WideFrame().x0 + 32 : (S32)Host_LogicalW() / 2 - 275; }
+static S32 BackLeft() {
+    return Wide() && !g_first ? Menu_WideFrame().x0 + WIDE_INSET_X : (S32)Host_LogicalW() / 2 - COLUMN_HALF_W;
+}
 static struct {
     bool shown;
     S32 x0, y0, x1, y1;
@@ -2291,14 +2299,14 @@ static void DrawBack() {
     const S32 x0 = BackLeft();
     // The title's 38 in a row's 50, so the word sits on the title's line (wide, 6 into the
     // top margin: lined up with the title reads better than kept out of it).
-    const S32 y0 = (titled ? ty : Wide() ? Menu_WideFrame().y0 + 24 : 16) - 6;
+    const S32 y0 = (titled ? ty : Wide() ? Menu_WideFrame().y0 + WIDE_INSET_Y : ROWS_MARGIN) - 6;
     const S32 x1 = x0 + BackWidth(), y1 = y0 + ROW_H, yc = (y0 + y1) / 2;
     HostPointer in;
     Host_Pointer(&in);
     const bool lit = !Menu_CursorLit();  // it has the cursor
     Ui_RowBackground(x0, y0, x1, y1, lit ? FILL_CURSOR : FILL_SHADE);
     Ui_Arrow(x0 + 18, yc, -1);
-    Ui_TextAsIs(x0 + 44, yc - 18, BackWord(), INK_WHITE);
+    Ui_TextAsIs(x0 + 44, yc - ROW_TEXT_RISE, BackWord(), INK_WHITE);
     Menu_Point(POINT_KEY, x0, y0, x1, y1, KEY_ESC, POINT_KEY_BACK);
     g_backBox = {true, x0, y0, x1, y1};
 }
@@ -2357,6 +2365,7 @@ static void DrawPictureBetween(const U8 *pic, S32 x, S32 above, S32 firstRow) {
 }
 
 enum { STRIP_H = 60 };  // the voice line at 12 in, 10 under it: six rows and a title fit 640x480
+enum { BAND_H = 86 };   // the wide band: two lines of help and the legend
 static bool StripPage() {
     const int p = TopPage();
     return !g_confirm && !g_first && (p == P_MAIN || p == P_LOAD || p == P_SAVE);
@@ -2371,15 +2380,16 @@ static void DrawStripAt(S32 x0, S32 x1, S32 y1, const char **keysGiven, const ch
     const char *keys[8];
     LegendKeys(keysGiven, keys, nk);
     S32 scale = 2;
-    if (DrawLegendRow(0, 0, keys, keysGiven, words, nk, scale, false) > x1 - x0 - 32)
+    if (DrawLegendRow(0, 0, keys, keysGiven, words, nk, scale, false) > x1 - x0 - 2 * PANEL_PAD_X)
         scale = 1;
     const S32 lw = nk ? DrawLegendRow(0, 0, keys, keysGiven, words, nk, scale, false) : 0;
-    const S32 voiceW = x1 - x0 - 32 - (lw ? lw + 16 : 0);
-    g_voiceLines = Voice_Draw(g_voice, x0 + 16, y0 + 12, voiceW, 1, &g_voiceNeeded);
+    const S32 voiceW = x1 - x0 - 2 * PANEL_PAD_X - (lw ? lw + PANEL_PAD_X : 0);
+    g_voiceLines = Voice_Draw(g_voice, x0 + PANEL_PAD_X, y0 + PANEL_PAD_Y, voiceW, 1, &g_voiceNeeded);
     g_voiceMax = 1;
     g_voiceWidth = voiceW;
     if (nk)
-        DrawLegendRow(x1 - 16 - lw + 1, (y0 + y1) / 2 - 6 * scale + 1, keys, keysGiven, words, nk, scale, true);
+        DrawLegendRow(x1 - PANEL_PAD_X - lw + 1, (y0 + y1) / 2 - 6 * scale + 1, keys, keysGiven, words, nk, scale,
+                      true);
     else
         g_legend[0] = 0;
     NotePageMark();
@@ -2412,7 +2422,8 @@ static void DrawColumn() {
         S32 tx = W / 2 - Ui_TextWidth(title) / 2;
         Ui_Text(tx + 4, oy + 64 + 4, title, INK_BLACK);  // the title shadow, +4,+4
         Ui_Text(tx, oy + 64, title, INK_WHITE);
-        Menu_Record("title", title, "", FILL_SHADE, tx, oy + 64, tx + Ui_TextWidth(title), oy + 64 + 38).textLeft = tx;
+        Menu_Record("title", title, "", FILL_SHADE, tx, oy + 64, tx + Ui_TextWidth(title),
+                    oy + 64 + TEXT_LINE_H).textLeft = tx;
     }
 
     if (g_confirm) {
@@ -2422,7 +2433,7 @@ static void DrawColumn() {
         // menu's pages, which have none, take a strip one line tall, so its six rows fit at
         // 640x480 as 1997's did.
         const U8 *pic = PagePicture();
-        S32 top = 16, bottom = H - 1 - (StripPage() ? STRIP_H : 137) - 16;
+        S32 top = ROWS_MARGIN, bottom = H - 1 - (StripPage() ? STRIP_H : DIALOGUE_RISE) - ROWS_MARGIN;
         if (pic && TopPage() == P_MAIN) {
             // The first game menu's picture and five rows take 402 px (127 + 5 x 56 - 5): at
             // 640x480 they fit with the frame 4 from the top and the last row 6 above the strip,
@@ -2455,21 +2466,21 @@ static void DrawColumn() {
         if (g_first)
             y = oy + 168;
         if (titled) {
-            Ui_Title(W / 2 - 275, W / 2 + 275, y - titleH, p.name);
-            Menu_Record("title", p.name, "", FILL_SHADE, W / 2 - 275, y - titleH, W / 2 + 275, y - titleH + 38).textLeft =
+            Ui_Title(W / 2 - COLUMN_HALF_W, W / 2 + COLUMN_HALF_W, y - titleH, p.name);
+            Menu_Record("title", p.name, "", FILL_SHADE, W / 2 - COLUMN_HALF_W, y - titleH, W / 2 + COLUMN_HALF_W, y - titleH + TEXT_LINE_H).textLeft =
                 W / 2 - Ui_TextWidth(p.name) / 2;
         }
         if (pic)  // under the title, or on the first game menu from the screen's edge (640x480 has no more)
-            DrawPictureBetween(pic, W / 2 - SAVE_PICTURE_W / 2, titled ? y - titleH + 38 : -1, y);
+            DrawPictureBetween(pic, W / 2 - SAVE_PICTURE_W / 2, titled ? y - titleH + TEXT_LINE_H : -1, y);
         // The 1997 width: LargeurMenu 550, centred.
-        S32 x0 = W / 2 - 275, x1 = W / 2 + 275;
+        S32 x0 = W / 2 - COLUMN_HALF_W, x1 = W / 2 + COLUMN_HALF_W;
         for (int i = g_scroll; i < g_scroll + visible; i++) {
             DrawColumnRow(p.rows[shown[i]], shown[i], x0, y, x1, y + ROW_H, i == cursor && Menu_CursorLit());
             y += ROW_PITCH;
         }
         if (visible < count)
-            Menu_DrawScrollBar(x1 + 9, y - visible * ROW_PITCH, y - visible * ROW_PITCH + stackH - 1, g_scroll, visible,
-                          count);
+            Menu_DrawScrollBar(x1 + SCROLL_BAR_GAP, y - visible * ROW_PITCH, y - visible * ROW_PITCH + stackH - 1,
+                               g_scroll, visible, count);
     }
     const char *keys[4], *words[4];
     int nk;
@@ -2477,7 +2488,8 @@ static void DrawColumn() {
     if (StripPage())
         DrawStrip(keys, words, nk);
     else if (framed)
-        Menu_DrawDialogueIn(fr.x0 + 32, fr.y0 + fr.h - 25 - 137, fr.x0 + fr.w - 33, fr.y0 + fr.h - 25, keys, words, nk);
+        Menu_DrawDialogueIn(fr.x0 + WIDE_INSET_X, fr.y0 + fr.h - 1 - WIDE_INSET_Y - DIALOGUE_RISE,
+                            fr.x0 + fr.w - 1 - WIDE_INSET_X, fr.y0 + fr.h - 1 - WIDE_INSET_Y, keys, words, nk);
     else
         Menu_DrawDialogue(keys, words, nk);
 }
@@ -2486,7 +2498,7 @@ static void DrawColumn() {
 // as the 1997 menu goes. Every page names itself in a title, the hub too (1997's had none).
 static void DrawWide() {
     WideFrame f = Menu_WideFrame();
-    const S32 top = f.y0 + 24;
+    const S32 top = f.y0 + WIDE_INSET_Y;
     const S32 x0 = f.x0 + (f.w - DRILL_W) / 2, x1 = x0 + DRILL_W - 1;
     const Place &t = Top();
     const Page &page = g_pages[t.page];
@@ -2504,16 +2516,16 @@ static void DrawWide() {
         // the strip, that last at least 6, more than between rows (the proximity rule;
         // decided 2026-11-16).
         const bool inPlace = pic && t.page == P_MAIN;
-        const S32 stripTop = Menu_WideRowsLimit() + 16 + 1;
+        const S32 stripTop = Menu_WideRowsLimit() + ROWS_MARGIN + 1;
         S32 rowsTop = top, above = top - 1;
         if (!inPlace) {  // the hub too, as the column has it: rows keep their height between pages (decided 2026-11-13)
             rowsTop = Ui_Title(x0, x1, top, page.name);
-            Menu_Record("title", page.name, "", FILL_SHADE, x0, top, x1, top + 38).textLeft =
+            Menu_Record("title", page.name, "", FILL_SHADE, x0, top, x1, top + TEXT_LINE_H).textLeft =
                 (x0 + x1 + 1) / 2 - Ui_TextWidth(page.name) / 2;
         }
         if (pic) {
             if (!inPlace) {
-                above = top + 38;  // the title's last line
+                above = top + TEXT_LINE_H;  // the title's last line
                 rowsTop += PICTURE_H;
             } else {
                 const S32 space = stripTop - top - (SAVE_PICTURE_H + 2) - (n * ROW_PITCH - ROW_GAP + 1);
@@ -2553,7 +2565,8 @@ static void DrawWide() {
             y += ROW_PITCH;
         }
         if (visible < n)
-            Menu_DrawScrollBar(x1 + 9, rowsTop, rowsTop + visible * ROW_PITCH - ROW_GAP - 1, g_scroll, visible, n);
+            Menu_DrawScrollBar(x1 + SCROLL_BAR_GAP, rowsTop, rowsTop + visible * ROW_PITCH - ROW_GAP - 1, g_scroll,
+                               visible, n);
     }
 
     // Help and legend.
@@ -2567,21 +2580,22 @@ static void DrawWide() {
 S32 Menu_WideRowsLimit() {
     WideFrame f = Menu_WideFrame();
     S32 H = f.y0 + f.h;
-    return H - 24 - (StripPage() ? STRIP_H : 86) - 16;
+    return H - WIDE_INSET_Y - (StripPage() ? STRIP_H : BAND_H) - ROWS_MARGIN;
 }
 
 // The voice's width in the band: what the legend leaves, at most the review's 620.
 static S32 BandVoiceWidth(const char **keys, const char **words, int nk) {
     S32 W = Menu_WideFrame().w;
     S32 legendW = LegendWidth(keys, words, nk, 2);
-    S32 voiceW = (W - 2 * 32) - legendW - 48;
+    S32 voiceW = (W - 2 * WIDE_INSET_X) - legendW - 48;
     return voiceW > 620 ? 620 : voiceW;
 }
 
 void Menu_DrawFoot(const char **keysGiven, const char **wordsGiven, int nk) {
     if (StripPage()) {
         const WideFrame fr = Menu_WideFrame();
-        DrawStripAt(fr.x0 + 32, fr.x0 + fr.w - 33, fr.y0 + fr.h - 25, keysGiven, wordsGiven, nk);
+        DrawStripAt(fr.x0 + WIDE_INSET_X, fr.x0 + fr.w - 1 - WIDE_INSET_X, fr.y0 + fr.h - 1 - WIDE_INSET_Y, keysGiven,
+                    wordsGiven, nk);
         return;
     }
     const char *keysIn[8], *words[8];
@@ -2592,14 +2606,14 @@ void Menu_DrawFoot(const char **keysGiven, const char **wordsGiven, int nk) {
         keys[i] = Bindings_LegendKey(keysIn[i]);
     WideFrame f = Menu_WideFrame();
     S32 W = f.w, H = f.h;
-    const S32 side = 32;
+    const S32 side = WIDE_INSET_X;
     const S32 chip = 2;  // the 8x8 key font at 2x (decided 2026-11-03)
     S32 bx0 = f.x0 + side, bx1 = f.x0 + W - side - 1;
-    S32 bandY0 = f.y0 + H - 24 - 86, bandY1 = f.y0 + H - 25;
+    S32 bandY0 = f.y0 + H - WIDE_INSET_Y - BAND_H, bandY1 = f.y0 + H - 1 - WIDE_INSET_Y;
     S32 legendW = LegendWidth(keys, words, nk, chip);
     Ui_Panel(bx0, bandY0, bx1, bandY1, 15);  // darkened to level 15 (decided 2026-11-03)
     S32 voiceW = BandVoiceWidth(keys, words, nk);
-    g_voiceLines = Voice_Draw(g_voice, bx0 + 16, bandY0 + 5, voiceW, 2, &g_voiceNeeded);
+    g_voiceLines = Voice_Draw(g_voice, bx0 + PANEL_PAD_X, bandY0 + 5, voiceW, 2, &g_voiceNeeded);
     g_voiceMax = 2;
     g_voiceWidth = voiceW;
     NotePageMark();
@@ -2705,10 +2719,12 @@ static void DrawClosed() {
     }
     for (int i = 0; i < 2; i++) {
         const S32 w = Ui_TextWidthAsIs(lines[i]);
-        Ui_TextAsIs(W / 2 - w / 2 + 2, H / 2 - 38 + i * 38 + 4, lines[i], INK_BLACK);  // the dialogue shadow
-        Ui_TextAsIs(W / 2 - w / 2, H / 2 - 38 + i * 38, lines[i], DIALOGUE_HERO * 16 + 12);
-        Menu_Record(g_quitShown ? "quit" : "game", lines[i], "", FILL_SHADE, W / 2 - w / 2, H / 2 - 38 + i * 38,
-                    W / 2 + w / 2, H / 2 + i * 38).textLeft = W / 2 - w / 2;
+        // the dialogue shadow
+        Ui_TextAsIs(W / 2 - w / 2 + 2, H / 2 - TEXT_LINE_H + i * TEXT_LINE_H + 4, lines[i], INK_BLACK);
+        Ui_TextAsIs(W / 2 - w / 2, H / 2 - TEXT_LINE_H + i * TEXT_LINE_H, lines[i], DIALOGUE_HERO * 16 + 12);
+        Menu_Record(g_quitShown ? "quit" : "game", lines[i], "", FILL_SHADE, W / 2 - w / 2,
+                    H / 2 - TEXT_LINE_H + i * TEXT_LINE_H, W / 2 + w / 2, H / 2 + i * TEXT_LINE_H).textLeft =
+            W / 2 - w / 2;
     }
 }
 

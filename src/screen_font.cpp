@@ -1,6 +1,7 @@
 #include "screen_font.h"
 
 #include "host.h"
+#include "ui.h"
 
 #include <SVGA/CLIP.H>
 #include <SVGA/SCREEN.H>
@@ -17,7 +18,7 @@ extern "C" const unsigned char g_zillaSlabBoldTtf[];
 
 // The game font's cell, in logical pixels (RESS.HQR entry 1: 'H' is 22 tall from
 // y + 7, so the baseline is y + 29; 'g' reaches y + 36).
-enum { GAME_CAP = 22, GAME_BASELINE = 29, CELL_H = 38 };
+enum { GAME_CAP = 22, GAME_BASELINE = 29, CELL_H = TEXT_LINE_H };
 
 // CP850 128-255 to Unicode, as TEXT.HQR's text is CP850.
 static const U16 kCp850[128] = {

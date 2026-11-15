@@ -822,14 +822,15 @@ static void DrawActionRow(int action, int row, S32 x0, S32 y0, S32 x1, S32 y1, c
     // The name up to 8 before the first chip; wider, it swings while the row has the cursor.
     const ClipSave clip;
     SetClip(x0 + 1, y0, x1 - 1, y1);
-    Ui_TextInRoom(x0 + 16, cx[0] - 8 - 1, yc - 18, Ui_Tr(kActions[action].name), INK_WHITE, cursorRow);
+    Ui_TextInRoom(x0 + ROW_TEXT_INSET, cx[0] - 8 - 1, yc - ROW_TEXT_RISE, Ui_Tr(kActions[action].name), INK_WHITE,
+                  cursorRow);
     clip.Restore();
 
     S32 s = ChipScale(), ch = Ui_KeyChipHeight(s);
     DrawnRow &d = Menu_Record(pane, kActions[action].name, "", FILL_SHADE, x0, y0, x1, y1);
     Menu_Point(POINT_ROW, x0, y0, x1, y1, Menu_TopPage(), row);
-    d.textLeft = x0 + 16;
-    d.textRight = x0 + 16 + Ui_TextWidth(kActions[action].name);
+    d.textLeft = x0 + ROW_TEXT_INSET;
+    d.textRight = x0 + ROW_TEXT_INSET + Ui_TextWidth(kActions[action].name);
     if (d.textRight + 8 > cx[0])
         d.textRight = x1 + (d.textRight + 8 - cx[0]);  // the name runs into the first chip
 
@@ -949,10 +950,10 @@ static void DrawAnswers(S32 x0, S32 x1, S32 top, const char *pane, const char *c
         } else {
             const ClipSave clip;
             SetClip(x0 + 1, y0, x1 - 1, y0 + ROW_H);
-            Ui_TextInRoom(x0 + 16, x1 - 16, yc - 18, shown, INK_WHITE, i == answer);
+            Ui_TextInRoom(x0 + ROW_TEXT_INSET, x1 - ROW_TEXT_INSET, yc - ROW_TEXT_RISE, shown, INK_WHITE, i == answer);
             clip.Restore();
-            d.textLeft = x0 + 16;
-            d.textRight = x0 + 16 + Ui_TextWidthAsIs(shown);
+            d.textLeft = x0 + ROW_TEXT_INSET;
+            d.textRight = x0 + ROW_TEXT_INSET + Ui_TextWidthAsIs(shown);
         }
     }
 }
@@ -997,7 +998,7 @@ static void DrawActions(S32 x0, S32 x1, S32 headsTop, S32 limit, const char *pan
     if (row >= scroll + visible)
         scroll = row - visible + 1;
     if (!HeadsInRow())
-        DrawHeads(x0 + 16, x1, cols, ncols, headsTop);  // on the label edge, as the names below
+        DrawHeads(x0 + ROW_TEXT_INSET, x1, cols, ncols, headsTop);  // on the label edge, as the names below
     S32 y = top;
     int first = GroupFirst(g);
     for (int i = scroll; i < scroll + visible; i++) {
@@ -1007,7 +1008,7 @@ static void DrawActions(S32 x0, S32 x1, S32 headsTop, S32 limit, const char *pan
     if (HeadsInRow() && visible > 0)
         DrawHeadsInRow(top, x1, cols, ncols);  // the first row shown, scrolled or not
     if (visible < n)
-        Menu_DrawScrollBar(x1 + 9, top, top + visible * ROW_PITCH - ROW_GAP - 1, scroll, visible, n);
+        Menu_DrawScrollBar(x1 + SCROLL_BAR_GAP, top, top + visible * ROW_PITCH - ROW_GAP - 1, scroll, visible, n);
 }
 
 static void DrawWideControls() {
@@ -1015,7 +1016,7 @@ static void DrawWideControls() {
     // from 24 end at 410, clear of the band at 430), or a group's title and its actions, the
     // column names inside the first row.
     WideFrame f = Menu_WideFrame();
-    const S32 top = f.y0 + 24;
+    const S32 top = f.y0 + WIDE_INSET_Y;
     const S32 x0 = f.x0 + (f.w - DRILL_W) / 2, x1 = x0 + DRILL_W - 1;
     if (OnGroups() && g_reset.asking) {
         DrawResetAnswers(x0, x1, Ui_Title(x0, x1, top, ResetTitle()), "bindings-left");
@@ -1023,7 +1024,7 @@ static void DrawWideControls() {
         // Under the page's title, as every wide page is, so the corner Back has the title's
         // line and does not sit on the first group. Six of the seven fit; the rest scroll.
         const S32 rowsTop = Ui_Title(x0, x1, top, "Keys and buttons");
-        Menu_Record("title", "Keys and buttons", "", FILL_SHADE, x0, top, x1, top + 38).textLeft =
+        Menu_Record("title", "Keys and buttons", "", FILL_SHADE, x0, top, x1, top + TEXT_LINE_H).textLeft =
             (x0 + x1 + 1) / 2 - Ui_TextWidth("Keys and buttons") / 2;
         int cursor = Menu_TopRow() - 1;  // row 0 is Return, not shown
         if (cursor < 0)
@@ -1045,21 +1046,23 @@ static void DrawWideControls() {
         for (int g = scroll; g < scroll + visible; g++) {
             RowFill fill = g == cursor && Menu_CursorLit() ? FILL_CURSOR : FILL_SHADE;
             Ui_RowBackground(x0, y, x1, y + ROW_H, fill);
-            Ui_TextInRoom(x0 + 16, x1 - 16, y + ROW_H / 2 - 18, Ui_Tr(kGroups[g].name), INK_WHITE, fill == FILL_CURSOR);
+            Ui_TextInRoom(x0 + ROW_TEXT_INSET, x1 - ROW_TEXT_INSET, y + ROW_H / 2 - ROW_TEXT_RISE,
+                          Ui_Tr(kGroups[g].name), INK_WHITE, fill == FILL_CURSOR);
             DrawnRow &d = Menu_Record("bindings-left", kGroups[g].name, "", fill, x0, y, x1, y + ROW_H);
             Menu_Point(POINT_ROW, x0, y, x1, y + ROW_H, P_KEYS, g + 1);
-            d.textLeft = x0 + 16;
-            d.textRight = x0 + 16 + Ui_TextWidth(kGroups[g].name);
+            d.textLeft = x0 + ROW_TEXT_INSET;
+            d.textRight = x0 + ROW_TEXT_INSET + Ui_TextWidth(kGroups[g].name);
             y += ROW_PITCH;
         }
         if (visible < n)
-            Menu_DrawScrollBar(x1 + 9, rowsTop, rowsTop + visible * ROW_PITCH - ROW_GAP - 1, scroll, visible, n);
+            Menu_DrawScrollBar(x1 + SCROLL_BAR_GAP, rowsTop, rowsTop + visible * ROW_PITCH - ROW_GAP - 1, scroll,
+                               visible, n);
     } else {
         // The title and the actions as one block, centred between the top margin and the
         // band, so a short group (Movement's five) does not leave a gap above the band
         // (EPmager, 2026-11-11). A group that scrolls fills the room from the top as before.
         const S32 limit = Menu_WideRowsLimit();
-        S32 fit = (limit - (top + 56) + ROW_GAP) / ROW_PITCH, n = GroupCount(CurrentGroup());
+        S32 fit = (limit - (top + ROW_PITCH) + ROW_GAP) / ROW_PITCH, n = GroupCount(CurrentGroup());
         S32 shown = n < fit ? n : fit;
         S32 block = 56 + shown * ROW_PITCH - ROW_GAP;
         S32 y = top + (limit - top - block > 0 ? (limit - top - block) / 2 : 0);
@@ -1079,7 +1082,7 @@ static void DrawWideControls() {
 
 static void DrawColumnControls() {
     S32 W = (S32)Host_LogicalW(), H = (S32)Host_LogicalH();
-    S32 x0 = W / 2 - 275, x1 = W / 2 + 275;
+    S32 x0 = W / 2 - COLUMN_HALF_W, x1 = W / 2 + COLUMN_HALF_W;
     if (OnGroups() && g_reset.asking) {
         // The question: two answers, centred, as wide as the groups' rows so a translated
         // answer fits ("Nein, meine Tasten behalten").
@@ -1097,7 +1100,7 @@ static void DrawColumnControls() {
         if (cursor < 0)
             cursor = 0;
         int &scroll = Menu_Scroll();
-        S32 top = 16, bottom = Menu_DialogueTop() - 16;
+        S32 top = ROWS_MARGIN, bottom = Menu_DialogueTop() - ROWS_MARGIN;
         int n = GROUP_COUNT;
         int visible = (bottom - top - ROW_PITCH + ROW_GAP) / ROW_PITCH;
         if (visible > n)
@@ -1114,7 +1117,8 @@ static void DrawColumnControls() {
         S32 y = top + (bottom - top - ROW_PITCH - stackH) / 2 + ROW_PITCH;
         S32 y0 = y;
         Ui_Title(x0, x1, y - ROW_PITCH, "Keys and buttons");
-        Menu_Record("title", "Keys and buttons", "", FILL_SHADE, x0, y - ROW_PITCH, x1, y - ROW_PITCH + 38).textLeft =
+        Menu_Record("title", "Keys and buttons", "", FILL_SHADE, x0, y - ROW_PITCH, x1,
+                    y - ROW_PITCH + TEXT_LINE_H).textLeft =
             (x0 + x1 + 1) / 2 - Ui_TextWidth("Keys and buttons") / 2;
         for (int i = scroll; i < scroll + visible; i++) {
             const char *label = kGroups[i].name;
@@ -1129,7 +1133,7 @@ static void DrawColumnControls() {
             y += ROW_PITCH;
         }
         if (visible < n)
-            Menu_DrawScrollBar(x1 + 9, y0, y0 + stackH - 1, scroll, visible, n);
+            Menu_DrawScrollBar(x1 + SCROLL_BAR_GAP, y0, y0 + stackH - 1, scroll, visible, n);
         const char *keys[4], *words[4];
         int nk;
         Legend(keys, words, &nk);
@@ -1140,7 +1144,7 @@ static void DrawColumnControls() {
     // asks for the key), centred above the dialogue window as the one column's pages are when
     // they fit. The title, as on every page, gives the corner Back its line. A key in use
     // asks, titled as the wide page has it.
-    const S32 top = 16, limit = Menu_DialogueTop() - 16;
+    const S32 top = ROWS_MARGIN, limit = Menu_DialogueTop() - ROWS_MARGIN;
     S32 fit = (limit - (top + ROW_PITCH + 22) + ROW_GAP) / ROW_PITCH, n = GroupCount(CurrentGroup());
     S32 shown = n < fit ? n : fit;
     S32 block = ROW_PITCH + 22 + shown * ROW_PITCH - ROW_GAP;
@@ -1149,7 +1153,7 @@ static void DrawColumnControls() {
                         : g_device        ? "Confirm button swap"
                                           : "Confirm key swap";
     Ui_Title(x0, x1, y, title);
-    Menu_Record("title", title, "", FILL_SHADE, x0, y, x1, y + 38).textLeft = (x0 + x1 + 1) / 2 - Ui_TextWidth(title) / 2;
+    Menu_Record("title", title, "", FILL_SHADE, x0, y, x1, y + TEXT_LINE_H).textLeft = (x0 + x1 + 1) / 2 - Ui_TextWidth(title) / 2;
     DrawActions(x0, x1, y + ROW_PITCH, limit, "column");
     const char *keys[4], *words[4];
     int nk;

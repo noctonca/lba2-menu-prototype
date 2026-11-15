@@ -27,6 +27,22 @@ enum RowFill { FILL_SHADE, FILL_CURSOR, FILL_CURRENT };
 // its centre +-25, so it is ROW_H + 1 pixels tall: y0 .. y0 + ROW_H.
 enum { ROW_H = 50, ROW_GAP = 6, ROW_PITCH = 56 };
 
+// The spacing the pages share, in logical pixels.
+enum {
+    TEXT_LINE_H = 38,     // a line of the game font (screen_font.cpp's cell): a title's line
+    ROW_TEXT_RISE = 18,   // a row's text line starts this far above the row's centre
+    ROW_TEXT_INSET = 16,  // a row's label from its left edge; its room ends as far from the right
+    VALUE_INSET = 24,     // wide: a value's right edge from the row's
+    MARK_ROOM = 17,       // wide: a change mark's room on each side of the value
+    SCROLL_BAR_GAP = 9,   // the scroll bar's left edge from the rows' right
+    ROWS_MARGIN = 16,     // rows from the screen's top (one column), and from the help under them
+    COLUMN_HALF_W = 275,  // the one column: 1997's LargeurMenu 550, centred
+    WIDE_INSET_X = 32,    // the wide frame's side margin: the band, the strip, the corner Back
+    WIDE_INSET_Y = 24,    // the wide frame's top and bottom margin
+    PANEL_PAD_X = 16,     // help and legend from a window's sides, and the help from the legend
+    PANEL_PAD_Y = 12,     // help from the window's top (the wide band's two lines: 5)
+};
+
 void Ui_RowBackground(S32 x0, S32 y0, S32 x1, S32 y1, RowFill fill);
 // Frame + darkened inside: PANEL_SHADE_LVL, the 1997 dialogue window's level, or
 // BAND_SHADE_LVL for the wide band before 2026-11-03 (the rows' MENU_SHADE_LVL);

@@ -198,7 +198,7 @@ S32 Ui_Title(S32 x0, S32 x1, S32 y, const char *s, bool asIs) {
     if (x >= from) {
         Ui_TextAsIs(x + 4, y + 4, s, INK_BLACK);
         Ui_TextAsIs(x, y, s, INK_WHITE);
-        return y + 56;  // the title takes one row's pitch
+        return y + ROW_PITCH;  // the title takes one row's pitch
     }
     if (strcmp(s, s_titleSwingText) != 0) {
         snprintf(s_titleSwingText, sizeof s_titleSwingText, "%s", s);
@@ -212,7 +212,7 @@ S32 Ui_Title(S32 x0, S32 x1, S32 y, const char *s, bool asIs) {
     Ui_TextAsIs(from + off + 4, y + 4, s, INK_BLACK);
     Ui_TextAsIs(from + off, y, s, INK_WHITE);
     clip.Restore();
-    return y + 56;
+    return y + ROW_PITCH;
 }
 
 static void Triangle(S32 tipX, S32 yc, S32 dir, U8 colour) {

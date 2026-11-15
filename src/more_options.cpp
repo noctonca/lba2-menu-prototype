@@ -533,7 +533,7 @@ static void DrawTable(S32 px0, S32 px1, S32 py0, S32 py1) {
     g_table.lines = g_lines;
 
     if (visible < total)
-        Menu_DrawScrollBar(px1 + 9, py0, py1, scroll, visible, total);
+        Menu_DrawScrollBar(px1 + SCROLL_BAR_GAP, py0, py1, scroll, visible, total);
 }
 
 static void Legend(const char **keys, const char **words, int *n) {
@@ -547,10 +547,10 @@ static void Legend(const char **keys, const char **words, int *n) {
 static void DrawWideExp() {
     WideFrame f = Menu_WideFrame();
     S32 x0 = f.x0 + (f.w - DRILL_W) / 2, x1 = x0 + DRILL_W - 1;
-    S32 top = f.y0 + 24, limit = Menu_WideRowsLimit();
+    S32 top = f.y0 + WIDE_INSET_Y, limit = Menu_WideRowsLimit();
     const char *title = "More options";
     S32 rtop = Ui_Title(x0, x1, top, title, false);
-    Menu_Record("title", title, "", FILL_SHADE, x0, top, x1, top + 38).textLeft =
+    Menu_Record("title", title, "", FILL_SHADE, x0, top, x1, top + TEXT_LINE_H).textLeft =
         (x0 + x1 + 1) / 2 - Ui_TextWidth(title) / 2;
     DrawTable(x0, x1, rtop, limit);
     const char *keys[4], *words[4];
@@ -561,14 +561,14 @@ static void DrawWideExp() {
 
 static void DrawColumnExp() {
     S32 W = (S32)Host_LogicalW();
-    S32 x0 = W / 2 - 275, x1 = W / 2 + 275;
+    S32 x0 = W / 2 - COLUMN_HALF_W, x1 = W / 2 + COLUMN_HALF_W;
     // Titled as every page is, so the corner Back has the title's line, not the table's top.
     const S32 top = 16;
     const char *title = "More options";
     const S32 rtop = Ui_Title(x0, x1, top, title, false);
-    Menu_Record("title", title, "", FILL_SHADE, x0, top, x1, top + 38).textLeft =
+    Menu_Record("title", title, "", FILL_SHADE, x0, top, x1, top + TEXT_LINE_H).textLeft =
         (x0 + x1 + 1) / 2 - Ui_TextWidth(title) / 2;
-    DrawTable(x0, x1, rtop, Menu_DialogueTop() - 16);
+    DrawTable(x0, x1, rtop, Menu_DialogueTop() - ROWS_MARGIN);
     const char *keys[4], *words[4];
     int nk;
     Legend(keys, words, &nk);
