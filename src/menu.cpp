@@ -10,6 +10,7 @@
 #include "ui.h"
 #include "twinsun.h"
 #include "screen_font.h"
+#include "prop_scale.h"
 #include "pad_icons.h"
 
 #include <SVGA/BOX.H>
@@ -333,6 +334,8 @@ enum { BACK_PRESET, BACK_RESET };  // R_BACK_TO_MINE: undoes a preset, or a rese
 static int sw_overlay = 0;
 // Help typed on every cursor move (decided 2026-11-03); 1 shows it whole at once, for the self test.
 static int sw_whole = 0;
+static int sw_propscale = 5;  // proportional scale (prop_scale.h), mode 5 decided 2026-11-16
+static int sw_zsub = 0;       // Zilla Slab letters at quarter pixels
 // The chosen preset: "(current)" after its name always; 1 also gives it the green
 // current-value plasma, as before (EPmager, 2026-11-11: green and the blue cursor read alike,
 // so he asked for the words alone). F3; off at start, to show his proposal.
@@ -2734,6 +2737,9 @@ static void DrawClosed() {
 
 void Menu_Draw() {
     SyncBackgroundRes();
+    Host_SetPropScale(sw_propscale);
+    ScreenFont_SetSubpixel(sw_zsub != 0);
+    PropScale_BeginFrame();
     ScreenFont_Set(g_val[S_FONT]);  // before the layout: widths follow the font
     Ui_SetLang(g_val[S_TEXT_LANG]);  // and the language
     ScreenFont_BeginFrame();
@@ -2797,6 +2803,8 @@ static const SwitchDef kSwitches[] = {
     {"roleink", &g_roleInk, 0, 1, 1},    // Enter green, Esc red in the legend
     {"longhelp", &sw_longhelp, 0, 1, 1},  // a second window of help, turned with Space or Y
     {"pointer", &sw_pointer, 0, 2, 0},   // for tests: as if the mouse (1) or a finger (2) was used last
+    {"propscale", &sw_propscale, 0, 6, 5},  // the menu at a proportional scale (5, decided 2026-11-16), F5
+    {"zsub", &sw_zsub, 0, 1, 0},  // Zilla Slab letters at quarter pixels, F6
 };
 
 bool Menu_SetSwitch(const char *name, int v) {

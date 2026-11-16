@@ -104,7 +104,12 @@ void ScreenPicture_NoteShade(S32 x0, S32 y0, S32 x1, S32 y1, U32 row) {
 static U8 *s_chainAt;
 static U32 s_chainAtCap;
 
-void ScreenPicture_Compose(U8 *out, U32 pitch, U32 pw, U32 ph, U32 lw, U32 lh, U32 k, const U8 *picture) {
+static U32 s_chainW, s_chainH;
+
+const U8 *ScreenPicture_ChainAt(U32 pw, U32 ph) { return s_chainAt && s_chainW == pw && s_chainH == ph ? s_chainAt : NULL; }
+
+void ScreenPicture_Compose(U8 *out, U32 pitch, U32 pw, U32 ph, U32 lw, U32 lh, float k, float bxf, float byf,
+                           const U8 *picture) {
     if (pw * ph > s_chainAtCap) {
         s_chainAtCap = pw * ph;
         s_chainAt = (U8 *)realloc(s_chainAt, s_chainAtCap);
@@ -117,8 +122,17 @@ void ScreenPicture_Compose(U8 *out, U32 pitch, U32 pw, U32 ph, U32 lw, U32 lh, U
     if (ny > n)
         n = ny;
     const U32 px0 = (640 * n - pw) / 2, py0 = (480 * n - ph) / 2;
-    // The canvas at its whole step, centred.
-    const U32 bx = (pw - k * lw) / 2, by = (ph - k * lh) / 2;
+    s_chainW = pw, s_chainH = ph;
+    // The canvas at its step. A whole step maps in integers, as it always has.
+    const bool whole = k == floorf(k);
+    const U32 kw = (U32)k, bx = (U32)bxf, by = (U32)byf;
+    const U32 spanW = whole ? kw * lw : (U32)floorf(k * (float)lw), spanH = whole ? kw * lh : (U32)floorf(k * (float)lh);
+    auto toLog = [&](U32 d) -> U32 {
+        if (whole)
+            return d / kw;
+        const U32 v = (U32)floorf(((float)d + 0.5f) / k);
+        return v;
+    };
     static U32 *colPic, *colLog, colCap;
     if (pw > colCap) {
         colCap = pw;
@@ -127,14 +141,17 @@ void ScreenPicture_Compose(U8 *out, U32 pitch, U32 pw, U32 ph, U32 lw, U32 lh, U
     }
     for (U32 x = 0; x < pw; x++) {
         colPic[x] = (x + px0) / n;
-        colLog[x] = (x >= bx && x - bx < k * lw) ? (x - bx) / k : 0xffffffffu;
+        colLog[x] = (x >= bx && x - bx < spanW) ? toLog(x - bx) : 0xffffffffu;
+        if (colLog[x] != 0xffffffffu && colLog[x] >= lw)
+            colLog[x] = lw - 1;
     }
     for (U32 y = 0; y < ph; y++) {
         U8 *o = out + (size_t)y * pitch;
         U8 *ca = s_chainAt + (size_t)y * pw;
         const U8 *pic = picture + ((y + py0) / n) * 640;
-        const bool rowIn = y >= by && y - by < k * lh;
-        const U32 ly = rowIn ? (y - by) / k : 0;
+        const bool rowIn = y >= by && y - by < spanH;
+        U32 ly = rowIn ? toLog(y - by) : 0;
+        ly = ly >= lh ? lh - 1 : ly;
         const U8 *logRow = (const U8 *)Log + TabOffLine[ly];
         const U8 *canRow = on ? s_canvas + ly * lw : NULL;
         const U8 *maskRow = on ? s_mask + ly * lw : NULL;

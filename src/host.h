@@ -15,6 +15,8 @@ struct HostConfig {
 // largest whole step it fits; any other takes rule 0's step and the one column.
 bool Host_RuleChoseWide();  // the wide composition for this screen
 U32 Host_Scale(U32 physW, U32 physH);
+// The canvas at a proportional scale instead (prop_scale.h); 0 is whole steps only.
+void Host_SetPropScale(int mode);
 
 bool Host_Init(const HostConfig &cfg);
 void Host_Shutdown();

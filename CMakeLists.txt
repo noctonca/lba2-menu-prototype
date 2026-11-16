@@ -79,6 +79,7 @@ add_executable(lba2menu
     src/shot.cpp
     src/screen_picture.cpp
     src/screen_font.cpp
+    src/prop_scale.cpp
     src/twinsun.cpp
     src/lang.cpp
     ${EMBEDDED_FONTS_CPP}

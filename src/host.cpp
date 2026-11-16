@@ -33,6 +33,9 @@
 
 #include "game_pieces.h"
 #include "screen_picture.h"
+#include "prop_scale.h"
+
+#include <math.h>
 #include "shot.h"
 #include "twinsun.h"
 
@@ -99,6 +102,25 @@ U32 Host_Scale(U32 w, U32 h) {
     return s < 1 ? 1 : s;
 }
 
+// The canvas for a screen: the screen over its whole step, or over the proportional scale
+// with propscale on (prop_scale.h).
+static void LogicalFor(U32 w, U32 h, U32 *lw, U32 *lh) {
+    if (PropScale_Mode()) {
+        U32 ws;
+        const bool wide = WideByRule(w, h, &ws);
+        const float s = PropScale_For(w, h, wide);
+        *lw = (U32)floorf((float)w / s + 0.5f);
+        *lh = (U32)floorf((float)h / s + 0.5f);
+        const U32 minW = wide ? 960 : 640, minH = wide ? 540 : 480;
+        *lw = *lw < minW ? minW : *lw > w ? w : *lw;
+        *lh = *lh < minH ? minH : *lh > h ? h : *lh;
+        return;
+    }
+    const U32 scale = Host_Scale(w, h);
+    *lw = w / scale;
+    *lh = h / scale;
+}
+
 U32 Host_LogicalW() { return s_logW; }
 U32 Host_LogicalH() { return s_logH; }
 U32 Host_PhysW() { return s_physW; }
@@ -106,6 +128,7 @@ U32 Host_PhysH() { return s_physH; }
 
 static void PadRemoved(uint32_t id);
 static void PaintOverlay(U32 *argb, U32 pitch, U32 w, U32 h, const U8 *palette);
+static void PrePresent(U32 *argb, U32 pitch, U32 w, U32 h, const U8 *palette);
 
 // Button presses and releases counted as they arrive: LIB386's Click says only what is held
 // when the frame reads it, so a click quicker than a frame (a browser's, a touchpad tap) was lost.
@@ -217,7 +240,22 @@ static void SizeWindow() {
     U32 scale = Host_Scale(s_physW, s_physH);
     SDL_DisplayID display = SDL_GetDisplayForWindow(win);
     SDL_Rect usable;
-    if (SDL_GetDisplayUsableBounds(display, &usable)) {
+    const bool haveUsable = SDL_GetDisplayUsableBounds(display, &usable);
+    if (PropScale_Mode()) {  // the window is the screen, or as much of it as the desktop holds
+        float f = 1.0f;
+        if (haveUsable) {
+            const float fx = (float)usable.w / (float)s_physW, fy = (float)(usable.h - 40) / (float)s_physH;
+            f = fx < fy ? fx : fy;
+            f = f > 1.0f ? 1.0f : f;
+        }
+        SDL_SetWindowSize(win, (int)((float)s_physW * f), (int)((float)s_physH * f));
+        SDL_SetWindowPosition(win, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+        SDL_SyncWindow(win);
+        NoteWindowPixels(win);
+        TitleWindow(win);
+        return;
+    }
+    if (haveUsable) {
         while (scale > 1 && ((int)(s_logW * scale) > usable.w || (int)(s_logH * scale) > usable.h - 40))
             scale--;
     }
@@ -240,11 +278,12 @@ bool Host_SetScreen(U32 w, U32 h, bool sizeWindow) {
         w = 640;
     if (h < 480)
         h = 480;
-    U32 scale = Host_Scale(w, h);
-    U32 lw = w / scale, lh = h / scale;
+    U32 lw, lh;
+    LogicalFor(w, h, &lw, &lh);
     // With the picture at the screen's resolution the presented frame is the
     // screen; the canvas stays logical.
-    U32 sw = ScreenPicture_Mode() ? w : lw, sh = ScreenPicture_Mode() ? h : lh;
+    const bool screenFrame = ScreenPicture_Mode() || PropScale_Mode();
+    U32 sw = screenFrame ? w : lw, sh = screenFrame ? h : lh;
     if (lw != s_logW || lh != s_logH || sw != s_surfW || sh != s_surfH) {
         // As RES_SWITCH.CPP: Log, then the texture and Phys, then both clips.
         EndScreen();
@@ -468,9 +507,7 @@ bool Host_Init(const HostConfig &cfg) {
     }
     s_launchW = s_physW;
     s_launchH = s_physH;
-    U32 scale = Host_Scale(s_physW, s_physH);
-    s_logW = s_physW / scale;
-    s_logH = s_physH / scale;
+    LogicalFor(s_physW, s_physH, &s_logW, &s_logH);
     if (!InitGraphics(s_logW, s_logH, false)) {
         fprintf(stderr, "InitGraphics %ux%u failed\n", (unsigned)s_logW, (unsigned)s_logH);
         return false;
@@ -512,6 +549,7 @@ bool Host_Init(const HostConfig &cfg) {
     SetFont(font, 2, 8);  // as PERSO.CPP sets it
     ScreenFont_Init();
     SetOverlayPrePresentCallback(PaintOverlay);  // after the smooth picture's hook
+    SetPrePresentCallback(PrePresent);
     Rnd_Seed(1997);       // the plasma's start; fixed so captures repeat
     GamePieces_InitPlasma();
     Host_UseMenuPalette();
@@ -958,32 +996,30 @@ static void PaintPointer(U32 *argb, U32 pitch, U32 w, U32 h, const U8 *palette) 
                 at(x0 + i, y0 + j) = saved[j][i];
     ClipXMin = cx0, ClipYMin = cy0, ClipXMax = cx1, ClipYMax = cy1;
 
-    U32 k = w / s_logW < h / s_logH ? w / s_logW : h / s_logH;
-    if (k < 1)
-        k = 1;
-    const S32 bx = (S32)(w - k * s_logW) / 2, by = (S32)(h - k * s_logH) / 2;
+    float k, bx, by;
+    PropScale_Map(w, h, &k, &bx, &by);
+    auto sx = [&](S32 x) { return (S32)floorf(bx + (float)x * k); };
+    auto sy = [&](S32 y) { return (S32)floorf(by + (float)y * k); };
     for (S32 j = 0; j < bh; j++)
         for (S32 i = 0; i < bw; i++) {
             if (pass[0][j][i] != pass[1][j][i])
                 continue;  // the fill showed through: not the arrow's
             const U8 *rgb = palette + pass[0][j][i] * 3;
             const U32 c = 0xff000000u | (U32)rgb[0] << 16 | (U32)rgb[1] << 8 | rgb[2];
-            for (U32 dy = 0; dy < k; dy++) {
-                const S32 y = by + (y0 + j) * (S32)k + (S32)dy;
+            for (S32 y = sy(y0 + j); y < sy(y0 + j + 1); y++) {
                 if (y < 0 || y >= (S32)h)
                     continue;
                 U32 *row = (U32 *)((U8 *)argb + (size_t)y * pitch);
-                for (U32 dx = 0; dx < k; dx++) {
-                    const S32 x = bx + (x0 + i) * (S32)k + (S32)dx;
+                for (S32 x = sx(x0 + i); x < sx(x0 + i + 1); x++)
                     if (x >= 0 && x < (S32)w)
                         row[x] = c;
-                }
             }
         }
 }
 
 // What is painted on the screen's frame over the canvas: the screen font, then the arrow.
 static void PaintOverlay(U32 *argb, U32 pitch, U32 w, U32 h, const U8 *palette) {
+    PropScale_PaintText(argb, pitch, w, h, palette);
     ScreenFont_Paint(argb, pitch, w, h, palette);
     PaintPointer(argb, pitch, w, h, palette);
 }
@@ -1073,10 +1109,24 @@ static void PaintSmooth(U32 *argb, U32 pitch, U32 w, U32 h, const U8 *palette) {
     ScreenPicture_PaintSmooth(argb, pitch, w, h, palette, s_menuImage);
 }
 
+// Before the overlay: the smooth picture, then the menu's pixels at a proportional scale.
+static void PrePresent(U32 *argb, U32 pitch, U32 w, U32 h, const U8 *palette) {
+    PaintSmooth(argb, pitch, w, h, palette);
+    PropScale_PaintLinear(argb, pitch, w, h, palette);
+}
+
 void Host_SetBackgroundRes(int mode) {
     ScreenPicture_SetMode(mode);
-    SetPrePresentCallback(mode == 2 ? PaintSmooth : NULL);
     Host_SetScreen(s_physW, s_physH, false);
+}
+
+void Host_SetPropScale(int mode) {
+    if (mode == PropScale_Mode())
+        return;
+    const bool resize = !PropScale_Mode() != !mode;
+    PropScale_Set(mode);
+    if (resize)
+        Host_SetScreen(s_physW, s_physH, true);
 }
 
 int Host_BackgroundRes() { return ScreenPicture_Mode(); }
@@ -1084,13 +1134,15 @@ int Host_BackgroundRes() { return ScreenPicture_Mode(); }
 void Host_Present() {
     if (s_headless)
         return;
-    if (!ScreenPicture_Mode()) {
+    if (!ScreenPicture_Mode() && !PropScale_Mode()) {
         BoxStaticFullflip();
         return;
     }
     // The screen's frame straight into Phys; an empty copy marks it for the present.
-    ScreenPicture_Compose((U8 *)Phys, VideoSurfacePitch(), s_surfW, s_surfH, s_logW, s_logH,
-                     Host_Scale(s_physW, s_physH), s_menuImage);
+    float k, bx, by;
+    PropScale_Map(s_surfW, s_surfH, &k, &bx, &by);
+    ScreenPicture_Compose((U8 *)Phys, VideoSurfacePitch(), s_surfW, s_surfH, s_logW, s_logH, k, bx, by,
+                          s_menuImage);
     T_BOX none = {0, 0, 0, 0, NULL};
     LockVideoSurface();
     CopyVideoArea(Phys, Log, TabOffPhysLine, &none);
@@ -1106,12 +1158,15 @@ bool Host_ShotScreen(const char *path) {
         free(argb);
         return false;
     }
-    ScreenPicture_Compose(idx, w, w, h, s_logW, s_logH, Host_Scale(w, h), s_menuImage);
+    float k, bx, by;
+    PropScale_Map(w, h, &k, &bx, &by);
+    ScreenPicture_Compose(idx, w, w, h, s_logW, s_logH, k, bx, by, s_menuImage);
     for (size_t i = 0; i < (size_t)w * h; i++) {
         const U8 *rgb = s_palCurrent + idx[i] * 3;
         argb[i] = 0xff000000u | (U32)rgb[0] << 16 | (U32)rgb[1] << 8 | rgb[2];
     }
     ScreenPicture_PaintSmooth(argb, w * 4, w, h, s_palCurrent, s_menuImage);
+    PropScale_PaintLinear(argb, w * 4, w, h, s_palCurrent);
     PaintOverlay(argb, w * 4, w, h, s_palCurrent);
     bool ok = Shot_WriteArgb(path, w, h, argb);
     free(idx);

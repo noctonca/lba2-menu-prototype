@@ -28,8 +28,15 @@ void ScreenPicture_NoPicture(U8 fill);
 void ScreenPicture_NoteShade(S32 x0, S32 y0, S32 x1, S32 y1, U32 row);
 
 // The screen's indexed frame (pw x ph, `pitch` bytes a row) from Log (lw x lh)
-// at whole step k, centred. `picture` is the 640x480 menu picture.
-void ScreenPicture_Compose(U8 *out, U32 pitch, U32 pw, U32 ph, U32 lw, U32 lh, U32 k, const U8 *picture);
+// at step k, its top left at (bx, by). `picture` is the 640x480 menu picture.
+// k is a whole step, or the proportional scale (prop_scale.h).
+void ScreenPicture_Compose(U8 *out, U32 pitch, U32 pw, U32 ph, U32 lw, U32 lh, float k, float bx, float by,
+                           const U8 *picture);
+
+// Per pixel of the frame Compose last built (pw x ph): the darkening chain of the
+// picture shown there, SCREEN_PICTURE_NONE where the menu drew. NULL for another size.
+enum { SCREEN_PICTURE_NONE = 255 };
+const U8 *ScreenPicture_ChainAt(U32 pw, U32 ph);
 
 // Mode 2: paints the picture's pixels of the frame Compose built, in RGB.
 void ScreenPicture_PaintSmooth(U32 *argb, U32 pitchBytes, U32 pw, U32 ph, const U8 *palette, const U8 *picture);

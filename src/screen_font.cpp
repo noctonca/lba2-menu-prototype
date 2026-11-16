@@ -2,6 +2,7 @@
 
 #include "host.h"
 #include "ui.h"
+#include "prop_scale.h"
 
 #include <SVGA/CLIP.H>
 #include <SVGA/SCREEN.H>
@@ -218,21 +219,25 @@ struct Glyph {
     bool done;
 };
 enum { GLYPH_SIZES = 4 };
-static Glyph s_glyphs[GLYPH_SIZES][256];
+enum { SUBPIXELS = 4 };  // letters placed at quarters of a screen pixel (switch zsub)
+static Glyph s_glyphs[GLYPH_SIZES][SUBPIXELS][256];
+static int s_subpixel;
+void ScreenFont_SetSubpixel(bool on) { s_subpixel = on; }
 static float s_glyphScale[GLYPH_SIZES];
-static U32 s_glyphK;
+static float s_glyphK;
 static int s_glyphPercent;
 
 static void ForgetSize(int i) {
-    for (int j = 0; j < 256; j++) {
-        if (s_glyphs[i][j].bmp)
-            stbtt_FreeBitmap(s_glyphs[i][j].bmp, NULL);
-        memset(&s_glyphs[i][j], 0, sizeof(Glyph));
-    }
+    for (int q = 0; q < SUBPIXELS; q++)
+        for (int j = 0; j < 256; j++) {
+            if (s_glyphs[i][q][j].bmp)
+                stbtt_FreeBitmap(s_glyphs[i][q][j].bmp, NULL);
+            memset(&s_glyphs[i][q][j], 0, sizeof(Glyph));
+        }
     s_glyphScale[i] = 0;
 }
 
-static const Glyph &GetGlyph(int f, U8 c, U32 k, float scale) {
+static const Glyph &GetGlyph(int f, U8 c, float k, float scale, int q = 0) {
     if (k != s_glyphK || s_sizePercent != s_glyphPercent) {
         for (int i = 0; i < GLYPH_SIZES; i++)
             ForgetSize(i);
@@ -247,10 +252,11 @@ static const Glyph &GetGlyph(int f, U8 c, U32 k, float scale) {
         ForgetSize(slot);
     }
     s_glyphScale[slot] = scale;
-    Glyph &g = s_glyphs[slot][c];
+    Glyph &g = s_glyphs[slot][q][c];
     if (!g.done) {
         const float px = k * s_unit[f] * scale;
-        g.bmp = stbtt_GetCodepointBitmap(&s_font[f], px, px, Unicode(c), &g.w, &g.h, &g.xo, &g.yo);
+        g.bmp = stbtt_GetCodepointBitmapSubpixel(&s_font[f], px, px, (float)q / SUBPIXELS, 0.0f, Unicode(c), &g.w, &g.h,
+                                                 &g.xo, &g.yo);
         g.done = true;
     }
     return g;
@@ -259,26 +265,27 @@ static const Glyph &GetGlyph(int f, U8 c, U32 k, float scale) {
 void ScreenFont_Paint(U32 *argb, U32 pitch, U32 w, U32 h, const U8 *palette) {
     if (!ScreenFont_On() || !s_count)
         return;
-    const U32 lw = Host_LogicalW(), lh = Host_LogicalH();
-    U32 k = w / lw < h / lh ? w / lw : h / lh;
-    if (k < 1)
-        k = 1;
-    const S32 bx = (S32)(w - k * lw) / 2, by = (S32)(h - k * lh) / 2;
+    float k, bxf, byf;
+    PropScale_Map(w, h, &k, &bxf, &byf);
+    const S32 bx = (S32)bxf, by = (S32)byf;
     const int f = FaceIndex();
     for (int i = 0; i < s_count; i++) {
         const Item &it = s_items[i];
         if (CanvasSum(it.bx0, it.by0, it.bx1, it.by1) != it.sum)
             continue;  // drawn over later in the frame
         // The clip on the screen.
-        const S32 sx0 = bx + it.cx0 * (S32)k, sy0 = by + it.cy0 * (S32)k;
-        const S32 sx1 = bx + (it.cx1 + 1) * (S32)k, sy1 = by + (it.cy1 + 1) * (S32)k;
+        const S32 sx0 = bx + (S32)floorf(it.cx0 * k), sy0 = by + (S32)floorf(it.cy0 * k);
+        const S32 sx1 = bx + (S32)floorf((it.cx1 + 1) * k), sy1 = by + (S32)floorf((it.cy1 + 1) * k);
         const U8 *rgb = palette + it.ink * 3;
         const U32 cr = rgb[0], cg = rgb[1], cb = rgb[2];
-        const S32 base = by + (it.y + it.baseline) * (S32)k;
-        float pen = (float)(bx + it.x * (S32)k);
+        const S32 base = by + (S32)floorf((it.y + it.baseline) * k);
+        float pen = (float)bx + it.x * k;
         for (const U8 *p = (const U8 *)it.s; *p; p++) {
-            const Glyph &g = GetGlyph(f, *p, k, it.scale);
-            const S32 gx = (S32)floorf(pen + 0.5f) + g.xo, gy = base + g.yo;
+            // Whole pixels as before, or the nearest quarter with zsub on.
+            const float at = s_subpixel ? floorf(pen * SUBPIXELS + 0.5f) / SUBPIXELS : floorf(pen + 0.5f);
+            const int q = (int)((at - floorf(at)) * SUBPIXELS + 0.5f) % SUBPIXELS;
+            const Glyph &g = GetGlyph(f, *p, k, it.scale, q);
+            const S32 gx = (S32)floorf(at) + g.xo, gy = base + g.yo;
             for (int j = 0; j < g.h; j++) {
                 const S32 y = gy + j;
                 if (y < sy0 || y >= sy1 || y < 0 || y >= (S32)h)

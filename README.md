@@ -210,6 +210,9 @@ own keys:
 | F2 | the next screen size; Shift+F2 the previous (see Screen sizes) |
 | F3 | the green current-value plasma on the chosen preset, besides its "(current)" (switch `greencurrent`, off at start) |
 | F4 | long help: a row's short line, then a second window on Space or Y saying when or why to change it (switch `longhelp`, on at start; off is the short help alone) |
+| F5 | how the menu scales (switch `propscale`, 5 at start; Shift+F5 back): 0 whole steps only; 1 everything linear; 2 to 6 frames linear and the game font drawn over them: 2 nearest neighbour, 3 at the whole step below, 4 at the whole step above, 5 each font pixel an exact square with its edges blended by coverage, 6 as 5 after Scale2x (see `src/prop_scale.h`) |
+| F6 | Zilla Slab's letters placed at quarter pixels instead of whole ones (switch `zsub`, off at start) |
+| F7 | `propscale` straight between 5 and 1, the last two compared |
 | F11 | steps the Button names row: Auto / Xbox / PlayStation / Nintendo (switch `padnames`) |
 
 Two more switches have no key: `keyboard` 0 plays as a console before a key is
@@ -220,7 +223,7 @@ Every review switch was pruned on 2026-11-12, keeping what was decided: the
 band (help and legend), help typed on every cursor move and shown in the
 dialogue window on every one-column page, key chips at 2x (58 wide in the one
 column), the preset row "Preset: Modern", one pane at a time with the page's
-name as a title, the 960x540 composition centred at the largest whole step,
+name as a title, the 960x540 composition centred,
 the picture scaled evenly and cropped at the screen's own resolution as the
 Image row says, one device per view on Keys and buttons with the column names
 inside the first row, a key in use offered as a swap, a clash's note alone in
@@ -331,7 +334,7 @@ the 1997 game's six languages were compared for the help review.
   every binding and every conflict.
 - `shot` writes exactly what is in the frame buffer through the current palette.
 - `shotscreen` writes the screen as presented, at the screen's size: the canvas at its
-  whole step and the picture at the screen's resolution.
+  scale, the game font over it and the picture at the screen's resolution.
 - Every key and every change is a trace line (`trace t=<ms> f=<frame> ...`) on
   stderr and in `--trace FILE`.
 - Headless runs use a fixed clock and a fixed plasma seed, so a script gives

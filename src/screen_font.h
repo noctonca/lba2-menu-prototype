@@ -27,6 +27,8 @@ enum { SCREEN_FONT_GAME = 0, SCREEN_FONT_ZILLA = 1 };  // Zilla Slab Bold
 void ScreenFont_Init();
 void ScreenFont_Set(int face);  // SCREEN_FONT_GAME draws with the game font as before
 int ScreenFont_Face();
+// Letters placed at quarters of a screen pixel instead of whole pixels (switch zsub).
+void ScreenFont_SetSubpixel(bool on);
 inline bool ScreenFont_On() { return ScreenFont_Face() != SCREEN_FONT_GAME; }
 
 // Start of a frame: forget last frame's text.

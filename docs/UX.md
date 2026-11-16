@@ -34,13 +34,21 @@ the call is answered.
   row without a key.
 - **The canvas.** 640x480 at 1x is the 1997 canvas and the one-column layout:
   it must look as today's Options do. Screens 3:2 or wider take the wide
-  layout: one 960x540 composition (one pane at a time, centred, and a band) at
-  the largest whole step that fits, centred both ways on the rest of the
-  screen, as 1997 centred its 640x480 canvas. Narrower screens (4:3, 5:4) take
-  the one column at the largest whole step that fits 640x480. Scale is a whole
-  step only (1920x1080 is 960x540 at 2x; 2560x1440, 3440x1440 and 2560x1600
-  are 2x with a border; 3840x2160 is 4x). Every number below is in logical
-  pixels, measured from the composition's top left (decided 2026-11-03).
+  layout: one 960x540 composition (one pane at a time, centred, and a band),
+  centred both ways on the rest of the screen, as 1997 centred its 640x480
+  canvas. Narrower screens (4:3, 5:4) take the one column. Every number below
+  is in logical pixels, measured from the composition's top left (decided
+  2026-11-03).
+- **The scale** is proportional: as large as fits, 960x540 for the wide
+  layout and 640x480 for the one column (1440x900 is 1.5x, 1280x720 1.33x,
+  2560x1440 2.67x; 1920x1080 is 2x and 3840x2160 4x, as before). Frames,
+  plasma and the darkening's edges are scaled linearly. The game font is
+  drawn over them at the screen's resolution, each of its pixels an exact
+  square of the scale, a screen pixel it covers in part taking that share of
+  its colour, so every stroke keeps its weight; Zilla Slab is drawn at the
+  scale. At a whole step it all looks as it did with whole steps only
+  (EPmager's proposal, decided 2026-11-16 over nearest neighbour, text at a
+  whole step, and everything linear).
 - **The picture** behind the menu is scaled evenly to cover the screen and
   cropped, never stretched. It fills the whole screen, border included
   (decided 2026-11-03).

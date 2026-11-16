@@ -3,6 +3,7 @@
 #include "game_pieces.h"
 #include "host.h"
 #include "screen_font.h"
+#include "prop_scale.h"
 
 #include <SVGA/BOX.H>
 #include <SVGA/CLIP.H>
@@ -118,6 +119,13 @@ S32 Ui_TextInkWidthAsIs(const char *s) {
 void Ui_TextAsIs(S32 x, S32 y, const char *s, U8 colour) {
     if (ScreenFont_On()) {
         ScreenFont_Text(x, y, s, colour);
+        return;
+    }
+    if (PropScale_TextOnTop()) {
+        PropScale_Text(x, y, x, y, x + SizeFont((char *)s), y + TEXT_LINE_H, [&] {
+            ColorFont(colour);
+            Font(x, y, s);
+        });
         return;
     }
     ColorFont(colour);
@@ -271,7 +279,20 @@ S32 Ui_SmallWidth(const char *s, S32 scale) {
     return (S32)strlen(s) * 8 * scale;
 }
 
+static void SmallInLog(S32 x, S32 y, const char *s, U8 colour, S32 scale);
+
 void Ui_Small(S32 x, S32 y, const char *s, U8 colour, S32 scale) {
+    if (PropScale_TextOnTop()) {
+        const S32 n = (S32)strlen(s);
+        if (n)
+            PropScale_Text(x, y, x, y, x + n * 8 * scale - 1, y + 8 * scale - 1,
+                           [&] { SmallInLog(x, y, s, colour, scale); });
+        return;
+    }
+    SmallInLog(x, y, s, colour, scale);
+}
+
+static void SmallInLog(S32 x, S32 y, const char *s, U8 colour, S32 scale) {
     U8 *log = (U8 *)Log;
     for (; *s; s++, x += 8 * scale) {
         const U8 *glyph = &Font8x8[(U8)*s * 8];
@@ -634,6 +655,20 @@ S32 Voice_Draw(const Voice &v, S32 x0, S32 y0, S32 width, S32 maxLines, S32 *nee
                 if (c != ' ')
                     ScreenFont_Char(x + 2, y + 4, (U8)c, INK_BLACK);
                 x += ScreenFont_Char(x, y, (U8)c, (U8)(DIALOGUE_HERO * 16 + age));
+                continue;
+            }
+            if (PropScale_TextOnTop()) {
+                S32 adv = 0;
+                char one[2] = {c, 0};
+                PropScale_Text(x, y, x, y, x + 2 + SizeFont(one), y + 4 + TEXT_LINE_H, [&] {
+                    if (c != ' ') {
+                        ColorFont(INK_BLACK);
+                        CarFont(x + 2, y + 4, (U8)c);
+                        ColorFont(DIALOGUE_HERO * 16 + age);
+                    }
+                    adv = CarFont(x, y, (U8)c);
+                });
+                x += c == ' ' ? InterSpace : adv;
                 continue;
             }
             if (c != ' ') {
