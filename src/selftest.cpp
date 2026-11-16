@@ -586,6 +586,15 @@ struct Walker {
                 return true;
         return false;
     }
+    // The top of a drawn row found by its label, or -1.
+    int DrawnTop(const char *label) const {
+        const DrawnRow *rows;
+        int n = Menu_DrawnRows(&rows);
+        for (int i = 0; i < n; i++)
+            if (!strcmp(rows[i].label, label))
+                return rows[i].y0;
+        return -1;
+    }
     bool PictureDrawn() const {
         const DrawnRow *rows;
         int n = Menu_DrawnRows(&rows);
@@ -1778,6 +1787,8 @@ struct Walker {
         // Off Resume game the product's name takes the picture's place.
         Key("down");
         Expect(!PictureDrawn() && Drawn("LBA2 Classic Community"), "flow: start: off Resume game, the picture, or no title");
+        // Where the name and the first row are, for the player with no saves below.
+        const int markTop = DrawnTop("LBA2 Classic Community"), firstTop = DrawnTop("Resume game");
         Key("up");
         // Load game: a row for each save (20 at a start) and AUTOSAVE last, as 1997; it opens on
         // AUTOSAVE, as nothing is in play.
@@ -1931,6 +1942,11 @@ struct Walker {
         Expect(!Drawn("Load game") && !Drawn("Resume game"),
                Fmt("flow: no saves: Load game %s, Resume game %s", Drawn("Load game") ? "shown" : "gone",
                    Drawn("Resume game") ? "shown" : "gone"));
+        // The name in the picture's place and New game where Resume game was: nothing moves
+        // when the first save comes (EPmager, 2026-11-16: the name sat 8 px over New game).
+        Expect(DrawnTop("LBA2 Classic Community") == markTop && DrawnTop("New game") == firstTop,
+               Fmt("flow: no saves: the name at y %d and New game at %d, with a save %d and %d",
+                   DrawnTop("LBA2 Classic Community"), DrawnTop("New game"), markTop, firstTop));
         Check("Game menu");
         // The first game writes the autosave: Load game comes, AUTOSAVE alone.
         Key("enter");

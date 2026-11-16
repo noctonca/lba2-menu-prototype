@@ -367,6 +367,19 @@ explains itself in the voice as the cursor lands on it; there is no help page.
   show is behind the menu anyway (decided 2026-11-14). Load game shows 3 rows
   at a time with it in the one column, 4 in the wide frame.
   **[self test: flow, picture, picture centred]**
+- Before a game with no save, the first game menu keeps the picture's place,
+  laid out for the five rows a save brings, and the product's name is
+  centred in it: the name and New game are where a player with a save has
+  the name and Resume game, so nothing moves when the first save comes. In a
+  title's place the name sat 8 px over New game, nearer its rows than any
+  page's title (17 px) though it is the largest (EPmager, 2026-11-16).
+- In the picture's place the name is 1.8 times a title's (LBA's capitals
+  58 px, CLASSIC COMMUNITY 18), so it fills the place as the picture does: at
+  a title's size LBA was 1.5 times the rows' capitals and the name under 40%
+  of the place's height. It sits 30 px over the first row in the wide frame,
+  23 at 640x480, 21 under the screen's edge there. The 2 keeps a 2 px gap
+  after the A, which then matches the gap between L and B. Chosen in play
+  over 1 and 1.5 (2026-11-16). In play the name keeps a title's size.
 - A save is named as lba2cc names one it makes, `<island> <date> <time>`,
   shorter than lba2cc's `<island> - <date> <hours-minutes-seconds>`: that
   spilled a 640x480 row by up to 33 px with the longest island, and 8 without

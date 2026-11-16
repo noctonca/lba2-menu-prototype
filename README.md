@@ -132,6 +132,9 @@ save's picture is its island's arrival picture from screen.hqr, shrunk to
 
 Off Resume game, and on the first game menu with no save, the title is the
 product's name: LBA large with a raised 2, CLASSIC COMMUNITY small under it.
+It is centred in the picture's place, and with no save it keeps that place:
+the name and New game are where a player with a save has the name and Resume
+game.
 In Zilla Slab, flames rise through LBA and the 2 in the menu palette's fire
 ramp (plasma bank 15, orange to white), in tongues that rise and fall slowly
 (5 steps a second, the heat carried up smoothly between them), with a

@@ -2333,6 +2333,13 @@ static void DrawBack() {
 // Framed, then the gap rows have between them: a row is drawn ROW_H + 1 tall, so 5 px.
 enum { PICTURE_H = SAVE_PICTURE_H + 2 + ROW_GAP - 1 };
 
+// Before a game the game menu keeps the picture's place even with no save to show, the
+// product's name centred in it: the name and the first row are where a returning player has
+// them, laid out for the five rows a save brings (Resume game, New game, Load game, Options,
+// Quit). With the name in a title's place it sat 8 px over New game (EPmager, 2026-11-16).
+enum { MAIN_ROWS_WITH_SAVE = 5 };
+static bool MainBeforeGame() { return !g_confirm && TopPage() == P_MAIN && !g_inGame; }
+
 static int IslandOf(const char *where) {
     for (int i = 0; i < SAVE_PICTURE_ISLANDS; i++)
         if (!strncmp(where, kIslands[i], strlen(kIslands[i])))
@@ -2364,22 +2371,33 @@ static const U8 *PagePicture() {
 // as the game's logo has it (LBA and a raised 2), and CLASSIC COMMUNITY in small spaced capitals under it,
 // its capitals 8 above the first row, in the 56 px a title takes. The game font has one size:
 // there, the name on one line.
-enum { MARK_CAP = 32, MARK_SUP_CAP = 18, MARK_SUP_GAP = 2, MARK_SUB_CAP = 10, MARK_SUB_SPACING = 3,
-       MARK_GAP = 6, MARK_ROW_GAP = 8, MARK_SHADOW = 4, MARK_SUB_SHADOW = 2 };
+struct MarkSize {
+    S32 cap, supCap, supGap, subCap, subSpacing, gap, shadow, subShadow;
+    float rim, supRim;  // the gold rim round LBA and round the 2
+};
+static const MarkSize kMarkTitle = {32, 18, 2, 10, 3, 6, 4, 2, 1.5f, 0.75f};
+// In the save picture's place, 1.8 times as large, so the name fills it as the picture does
+// (chosen in play over 1 and 1.5, the maintainer, 2026-11-16: at a title's size it was 1.5
+// times the rows' capitals, under 40% of the place's height). The 2 keeps its 2 px gap: scaled,
+// the gap after the A was 14 screen px at 1080p against 10 between L and B.
+static const MarkSize kMarkPlace = {58, 32, 2, 18, 5, 11, 7, 4, 2.7f, 1.35f};
+enum { MARK_ROW_GAP = 8 };
 enum { INK_GOLD = 107, INK_PALE = 191 };  // the menu palette's (247,187,87) and (187,223,227)
 static const char kMarkSub[] = "CLASSIC COMMUNITY";
 
-static S32 MarkSubWidth() {
+static S32 MarkSubWidth(const MarkSize &m) {
     S32 w = 0;
     for (const char *c = kMarkSub; *c; c++) {
         const char one[2] = {*c, 0};
-        w += ScreenFont_SmallWidth(one, MARK_SUB_CAP) + (c[1] ? MARK_SUB_SPACING : 0);
+        w += ScreenFont_SmallWidth(one, m.subCap) + (c[1] ? m.subSpacing : 0);
     }
     return w;
 }
 
 // Over x0..x1, its last line MARK_ROW_GAP above firstRow.
-static void DrawProductTitle(S32 x0, S32 x1, S32 firstRow) {
+static void DrawProductTitle(S32 x0, S32 x1, S32 firstRow, const MarkSize &m = kMarkTitle) {
+    const S32 CAP = m.cap, SUP_CAP = m.supCap, SUP_GAP = m.supGap, SUB_CAP = m.subCap, GAP = m.gap, SHADOW = m.shadow,
+              SUB_SHADOW = m.subShadow;
     const S32 cx = (x0 + x1 + 1) / 2;
     if (!ScreenFont_On()) {
         Ui_Title(x0, x1, firstRow - ROW_PITCH, PRODUCT_NAME, true);
@@ -2387,34 +2405,34 @@ static void DrawProductTitle(S32 x0, S32 x1, S32 firstRow) {
             .textLeft = cx - Ui_TextWidthAsIs(PRODUCT_NAME) / 2;
         return;
     }
-    const S32 subTop = firstRow - MARK_ROW_GAP - MARK_SUB_CAP;
-    const S32 top = subTop - MARK_GAP - MARK_CAP;
-    const S32 wLba = ScreenFont_SmallWidth("LBA", MARK_CAP), wSup = ScreenFont_SmallWidth("2", MARK_SUP_CAP);
+    const S32 subTop = firstRow - MARK_ROW_GAP - SUB_CAP;
+    const S32 top = subTop - GAP - CAP;
+    const S32 wLba = ScreenFont_SmallWidth("LBA", CAP), wSup = ScreenFont_SmallWidth("2", SUP_CAP);
     // LBA centred on the line under it, the 2 hanging right of it as a superscript does.
-    const S32 wMark = wLba + MARK_SUP_GAP + wSup, xMark = cx - wLba / 2;
-    const S32 wSub = MarkSubWidth(), xSub = cx - wSub / 2;
+    const S32 wMark = wLba + SUP_GAP + wSup, xMark = cx - wLba / 2;
+    const S32 wSub = MarkSubWidth(m), xSub = cx - wSub / 2;
     // Fire in LBA and the 2 (word_fire.h), over their box; the shadows stay black.
-    WordFire_Frame(xMark, top, xMark + wMark - 1, top + MARK_CAP - 1);
+    WordFire_Frame(xMark, top, xMark + wMark - 1, top + CAP - 1);
     for (int pass = 0; pass < 2; pass++) {  // the shadows, then the letters over them
-        const S32 d = pass ? 0 : MARK_SHADOW, ds = pass ? 0 : MARK_SUB_SHADOW;
+        const S32 d = pass ? 0 : SHADOW, ds = pass ? 0 : SUB_SHADOW;
         if (pass) {
             // The 2's rim half LBA's: at its size a full one left little fire inside (the
             // maintainer, 2026-11-16).
-            ScreenFont_SmallTextFilled(xMark, top, "LBA", INK_GOLD, MARK_CAP, 1.5f);
-            ScreenFont_SmallTextFilled(xMark + wLba + MARK_SUP_GAP, top, "2", INK_GOLD, MARK_SUP_CAP, 0.75f);
+            ScreenFont_SmallTextFilled(xMark, top, "LBA", INK_GOLD, CAP, m.rim);
+            ScreenFont_SmallTextFilled(xMark + wLba + SUP_GAP, top, "2", INK_GOLD, SUP_CAP, m.supRim);
         } else {
-            ScreenFont_SmallText(xMark + d, top + d, "LBA", INK_BLACK, MARK_CAP);
-            ScreenFont_SmallText(xMark + wLba + MARK_SUP_GAP + d, top + d, "2", INK_BLACK, MARK_SUP_CAP);
+            ScreenFont_SmallText(xMark + d, top + d, "LBA", INK_BLACK, CAP);
+            ScreenFont_SmallText(xMark + wLba + SUP_GAP + d, top + d, "2", INK_BLACK, SUP_CAP);
         }
         S32 x = xSub;
         for (const char *c = kMarkSub; *c; c++) {
             const char one[2] = {*c, 0};
-            ScreenFont_SmallText(x + ds, subTop + ds, one, pass ? INK_PALE : INK_BLACK, MARK_SUB_CAP);
-            x += ScreenFont_SmallWidth(one, MARK_SUB_CAP) + MARK_SUB_SPACING;
+            ScreenFont_SmallText(x + ds, subTop + ds, one, pass ? INK_PALE : INK_BLACK, SUB_CAP);
+            x += ScreenFont_SmallWidth(one, SUB_CAP) + m.subSpacing;
         }
     }
     const S32 l = xMark < xSub ? xMark : xSub, r = xMark + wMark > xSub + wSub ? xMark + wMark : xSub + wSub;
-    Menu_Record("title", PRODUCT_NAME, "", FILL_SHADE, l, top, r - 1, subTop + MARK_SUB_CAP - 1).textLeft = l;
+    Menu_Record("title", PRODUCT_NAME, "", FILL_SHADE, l, top, r - 1, subTop + SUB_CAP - 1).textLeft = l;
 }
 
 // The picture with 1997's frame round it (DrawScreenSave: DrawCadre one pixel outside),
@@ -2438,10 +2456,11 @@ static void DrawPictureBetween(const U8 *pic, S32 x, S32 above, S32 firstRow) {
     const S32 frameH = SAVE_PICTURE_H + 2, free = firstRow - above - 1 - frameH;
     const S32 y = above + 1 + free / 2 + 1;
     const Row *r = CursorRow();
-    if (TopPage() == P_MAIN && !(r && r->type == R_GAME && r->arg == M_RESUME)) {
-        const S32 markH = MARK_CAP + MARK_GAP + MARK_SUB_CAP;
+    if (!pic || (TopPage() == P_MAIN && !(r && r->type == R_GAME && r->arg == M_RESUME))) {
+        const MarkSize &m = kMarkPlace;
+        const S32 markH = m.cap + m.gap + m.subCap;
         DrawProductTitle(x - 1 + SAVE_PICTURE_W / 2 - COLUMN_HALF_W, x - 1 + SAVE_PICTURE_W / 2 + COLUMN_HALF_W,
-                         y - 1 + (frameH - markH) / 2 + markH + MARK_ROW_GAP);
+                         y - 1 + (frameH - markH) / 2 + markH + MARK_ROW_GAP, m);
         return;
     }
     DrawPicture(pic, x, y);
@@ -2501,8 +2520,9 @@ static void DrawColumn() {
         // menu's pages, which have none, take a strip one line tall, so its six rows fit at
         // 640x480 as 1997's did.
         const U8 *pic = PagePicture();
+        const bool place = MainBeforeGame();  // the picture's place, the name in it with no save
         S32 top = ROWS_MARGIN, bottom = H - 1 - (StripPage() ? STRIP_H : DIALOGUE_RISE) - ROWS_MARGIN;
-        if (pic && TopPage() == P_MAIN) {
+        if (place) {
             // The first game menu's picture and five rows take 402 px (127 + 5 x 56 - 5): at
             // 640x480 they fit with the frame 4 from the top and the last row 6 above the strip,
             // one more than between rows (the proximity rule). 1997's frame was 9 from the top.
@@ -2512,8 +2532,8 @@ static void DrawColumn() {
         // A page names itself in a title above its rows, as the wide pages do (EPmager,
         // 2026-11-12). The hub too, so the corner Back has its line and nothing moves when
         // it comes (decided 2026-11-12).
-        const bool titled = !(pic && TopPage() == P_MAIN);  // the picture in its place
-        const S32 titleH = (titled ? ROW_PITCH : 0) + (pic ? PICTURE_H : 0);
+        const bool titled = !place;  // the picture in its place
+        const S32 titleH = (titled ? ROW_PITCH : 0) + (pic || place ? PICTURE_H : 0);
         int visible = (bottom - top - titleH + ROW_GAP) / ROW_PITCH;
         if (visible > count)
             visible = count;
@@ -2528,7 +2548,8 @@ static void DrawColumn() {
         if (cursor >= g_scroll + visible)
             g_scroll = cursor - visible + 1;
         S32 stackH = visible * ROW_PITCH - ROW_GAP;
-        S32 y = top + (bottom - top - titleH - stackH) / 2 + titleH;  // centred above the dialogue window
+        const int laid = place && visible < MAIN_ROWS_WITH_SAVE ? MAIN_ROWS_WITH_SAVE : visible;
+        S32 y = top + (bottom - top - titleH - (laid * ROW_PITCH - ROW_GAP)) / 2 + titleH;  // centred above the dialogue window
         if (titled && t.page == P_MAIN) {
             DrawProductTitle(W / 2 - COLUMN_HALF_W, W / 2 + COLUMN_HALF_W, y);
         } else if (titled) {
@@ -2536,7 +2557,7 @@ static void DrawColumn() {
             Menu_Record("title", p.name, "", FILL_SHADE, W / 2 - COLUMN_HALF_W, y - titleH, W / 2 + COLUMN_HALF_W, y - titleH + TEXT_LINE_H).textLeft =
                 W / 2 - Ui_TextWidth(p.name) / 2;
         }
-        if (pic)  // under the title, or on the first game menu from the screen's edge (640x480 has no more)
+        if (pic || place)  // under the title, or on the first game menu from the screen's edge (640x480 has no more)
             DrawPictureBetween(pic, W / 2 - SAVE_PICTURE_W / 2, titled ? y - titleH + TEXT_LINE_H : -1, y);
         // The 1997 width: LargeurMenu 550, centred.
         S32 x0 = W / 2 - COLUMN_HALF_W, x1 = W / 2 + COLUMN_HALF_W;
@@ -2578,7 +2599,7 @@ static void DrawWide() {
         // height is left shared out in three like gaps, above the picture, under it and above
         // the strip, that last at least 6, more than between rows (the proximity rule;
         // decided 2026-11-16).
-        const bool inPlace = pic && t.page == P_MAIN;
+        const bool inPlace = MainBeforeGame();  // with no save, the name in the picture's place
         const S32 stripTop = Menu_WideRowsLimit() + ROWS_MARGIN + 1;
         S32 rowsTop = top, above = top - 1;
         if (!inPlace && t.page == P_MAIN) {
@@ -2589,12 +2610,13 @@ static void DrawWide() {
             Menu_Record("title", page.name, "", FILL_SHADE, x0, top, x1, top + TEXT_LINE_H).textLeft =
                 (x0 + x1 + 1) / 2 - Ui_TextWidth(page.name) / 2;
         }
-        if (pic) {
+        if (pic || inPlace) {
             if (!inPlace) {
                 above = top + TEXT_LINE_H;  // the title's last line
                 rowsTop += PICTURE_H;
             } else {
-                const S32 space = stripTop - top - (SAVE_PICTURE_H + 2) - (n * ROW_PITCH - ROW_GAP + 1);
+                const int laid = n < MAIN_ROWS_WITH_SAVE ? MAIN_ROWS_WITH_SAVE : n;
+                const S32 space = stripTop - top - (SAVE_PICTURE_H + 2) - (laid * ROW_PITCH - ROW_GAP + 1);
                 S32 a = (space + 1) / 3, c = space - 2 * a;
                 if (c < 6) {
                     c = 6;
