@@ -145,6 +145,7 @@
 {"PlayStation", "PlayStation", "PlayStation", "PlayStation", "PlayStation", "PlayStation"},
 {"Nintendo", "Nintendo", "Nintendo", "Nintendo", "Nintendo", "Nintendo"},
 {"legend|More", "Suite", "Mehr", "M\xa0""s", "Altro", "Mais"},
+{"legend|Resume", "Reprendre", "Fortsetzen", "Continuar", "Riprendi", "Continuar"},
 {"Resume game", "Reprendre la partie", "Spiel fortsetzen", "Continuar partida", "Riprendi partita", "Continuar jogo"},
 {"New game", "Nouvelle partie", "Neues Spiel", "Nueva partida", "Nuova partita", "Novo jogo"},
 {"Load game", "Charger une partie", "Spiel laden", "Cargar partida", "Carica partita", "Carregar jogo"},

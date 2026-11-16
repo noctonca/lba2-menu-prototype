@@ -1981,7 +1981,9 @@ static void LegendFor(const Row *r, const char **keys, const char **words, int *
     if (!EscGoesBack())
         return;  // the first game menu: Esc has nothing to go back to
     keys[*n] = "Esc";
-    words[(*n)++] = g_first ? "Modern" : "Back";
+    // In play the game menu's Esc goes back to the game: the legend says so, as its first row
+    // does (no corner Back there either).
+    words[(*n)++] = g_first ? "Modern" : g_depth == 1 && TopPage() == P_MAIN ? "Resume" : "Back";
 }
 
 // Help with another window: Space (the pad's Y) turns it, "More" in the legend before its
@@ -2062,7 +2064,7 @@ static int LegendKeyOf(const char *key, const char *word) {
         const char *word;
         UiKey key;
     } kWordKeys[] = {
-        {"Back", KEY_ESC},  {"Cancel", KEY_ESC},  {"Modern", KEY_ESC},     {"Close", KEY_ESC},
+        {"Back", KEY_ESC},  {"Cancel", KEY_ESC},  {"Modern", KEY_ESC},     {"Close", KEY_ESC},  {"Resume", KEY_ESC},
         {"Open", KEY_ENTER}, {"Change", KEY_ENTER}, {"Answer", KEY_ENTER}, {"Choose", KEY_ENTER}, {"Restore", KEY_ENTER},
         {"Clear", KEY_DEL},  {"Defaults", KEY_DEL}, {"Keyboard", KEY_TAB}, {"Gamepad", KEY_TAB},
         {"More", KEY_MORE},
