@@ -1772,9 +1772,13 @@ struct Walker {
         OnPage("Game menu", "Resume game", "start");
         Expect(!Drawn("Save game") && Drawn("Load game"), "flow: start: Save game shown, or Load game not, before a game");
         // Resume game's picture in place of the title, as 1997's first menu.
-        Expect(PictureDrawn() && !Drawn("Game menu"), "flow: start: no picture, or the title with it");
+        Expect(PictureDrawn() && !Drawn("LBA2 Classic Community"), "flow: start: no picture, or the title with it");
         // The picture and every row fit, Quit too, with no scroll (it scrolled until 2026-11-16).
         Expect(Drawn("Quit"), "flow: start: Quit not drawn: the picture and the rows don't fit");
+        // Off Resume game the product's name takes the picture's place.
+        Key("down");
+        Expect(!PictureDrawn() && Drawn("LBA2 Classic Community"), "flow: start: off Resume game, the picture, or no title");
+        Key("up");
         // Load game: a row for each save (20 at a start) and AUTOSAVE last, as 1997; it opens on
         // AUTOSAVE, as nothing is in play.
         Choose("Load game");
@@ -1808,7 +1812,7 @@ struct Walker {
         Key("esc");
         OnPage("Game menu", "Resume game", "Esc in play");
         Expect(Drawn("Save game"), "flow: in play: no Save game");
-        Expect(!PictureDrawn() && Drawn("Game menu"), "flow: in play: a picture, or no title");
+        Expect(!PictureDrawn() && Drawn("LBA2 Classic Community"), "flow: in play: a picture, or not the product's name");
         // Its six rows fit every screen, as 1997's did: no scroll bar.
         Expect(!Menu_ScrollBarShown(), "flow: in play: the game menu scrolls");
         Key("esc");
