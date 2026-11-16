@@ -104,6 +104,13 @@ static bool RunCommand(Runner &r, const char *line) {
             r.next += 0;
         }
         r.waitFrames = 1;
+    } else if (!strcmp(cmd, "pad")) {
+        // A pad button as a pad gives it (a, b, dpad-down ...): the raw press and its menu key.
+        if (!Host_InjectPad(a)) {
+            printf("err unknown pad button %s\n", a);
+            return false;
+        }
+        r.waitFrames = 1;
     } else if (!strcmp(cmd, "press")) {
         const char *name = line + 5;
         while (*name == ' ')

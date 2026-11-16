@@ -314,7 +314,8 @@ Every run can be steered and read back without a person at the keys.
 
 Commands, one per line: `key <up|down|left|right|enter|esc|tab|del|f1..f12> [count]`,
 `press <key>` (a raw key for rebinding: an SDL name such as `J`, `Left Alt` or
-`Keypad 5`, or `pad:a`, `pad:lb`, `pad:lstick-up` ...),
+`Keypad 5`, or `pad:a`, `pad:lb`, `pad:lstick-up` ...), `pad <button>` (a pad
+button as a pad gives it, its menu key too: `a`, `b`, `dpad-down` ...),
 `wait <frames>`, `mouse <x> <y>` (logical pixels), `click [right]`, `tap <x> <y>` (a click as touch), `wheel <notches>`, `mousedown`, `mouseup`, `state`, `measure`, `widths <file> [voice width]`, `shot <path.png> [scale]`, `switch <name> <value>`,
 `set <setting> <value>`, `open <page name>`, `size <WxH>`, `quit`.
 
