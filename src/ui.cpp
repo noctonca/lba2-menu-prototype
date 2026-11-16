@@ -381,6 +381,9 @@ enum : U8 { INK_ROLE_CONFIRM = 140, INK_ROLE_BACK = 74 };
 
 bool Ui_IsRoleInk(U8 c) { return c == INK_ROLE_CONFIRM || c == INK_ROLE_BACK; }
 
+static void ChipBody(S32 x, S32 y, S32 x1, S32 y1, bool cadre, bool lit);
+static U8 ChipInk(bool lit, int roles);
+
 S32 Ui_Chip(S32 x, S32 y, const char *key, S32 scale, bool lit, int pad, int roles) {
     if (const char *and_ = strchr(key, CHIP_AND[0])) {
         std::string first(key, and_ - key);
@@ -389,10 +392,53 @@ S32 Ui_Chip(S32 x, S32 y, const char *key, S32 scale, bool lit, int pad, int rol
     }
     S32 w = Ui_ChipWidth(key, scale, pad), h = 8 * scale + 4 * scale;
     S32 x1 = x + w - 1, y1 = y + h - 1;
+    ChipBody(x, y, x1, y1, scale > 1, lit);
+    // The letters' ink in the middle, not their cells (EPmager, 2026-11-12).
+    S32 tx, ty;
+    CentreInk(x, y, w, h, key, scale, pad, &tx, &ty);
+    PadIcons_Text(tx, ty, key, ChipInk(lit, roles), scale, !lit, pad);
+    NoteChip(x, y, x1, y1, key, scale, !lit, true, pad);
+    return w;
+}
+
+// The fitted legend's chip (switch legendfit): laid out at f times the 1x chip, its box on
+// the canvas at that size and its letters drawn at 1x and painted at f by the text layer.
+void Ui_ChipFit(float x, float y, const char *key, float f, bool lit, int pad, int roles) {
+    if (const char *and_ = strchr(key, CHIP_AND[0])) {
+        std::string first(key, and_ - key);
+        Ui_ChipFit(x, y, first.c_str(), f, lit, pad, roles & 3);
+        Ui_ChipFit(x + (float)(Ui_ChipWidth(first.c_str(), 1, pad) + CHIP_AND_GAP) * f, y, and_ + 1, f, lit, pad,
+                   roles >> 2 & 3);
+        return;
+    }
+    const S32 w = Ui_ChipWidth(key, 1, pad), h = Ui_KeyChipHeight(1);
+    const S32 x0 = (S32)lrintf(x), y0 = (S32)lrintf(y);
+    const S32 x1 = (S32)lrintf(x + (float)w * f) - 1, y1 = (S32)lrintf(y + (float)h * f) - 1;
+    ChipBody(x0, y0, x1, y1, f >= 1.5f, lit);
+    S32 tx, ty;
+    CentreInk(0, 0, w, h, key, 1, pad, &tx, &ty);
+    const S32 ax = (S32)lrintf(x + (float)tx * f), ay = (S32)lrintf(y + (float)ty * f);
+    const U8 ink = ChipInk(lit, roles);
+    PropScale_TextAt(ax, ay, ax + PadIcons_Width(key, 1, pad) - 1, ay + 7, f,
+                     [&] { PadIcons_Text(ax, ay, key, ink, 1, !lit, pad); });
+    NoteChip(x0, y0, x1, y1, key, f >= 1.5f ? 2 : 1, !lit, true, pad);
+}
+
+// A word at f times the 1x size (switch legendfit), as Ui_Word draws it at a whole step.
+void Ui_WordFit(S32 x, S32 y, const char *s, U8 colour, float f) {
+    if (ScreenFont_On()) {
+        ScreenFont_SmallText(x, y, s, colour, (S32)lrintf(7.0f * f));
+        return;
+    }
+    const S32 n = (S32)strlen(s);
+    if (n)
+        PropScale_TextAt(x, y, x + n * 8 - 1, y + 7, f, [&] { SmallInLog(x, y, s, colour, 1); });
+}
+
+static void ChipBody(S32 x, S32 y, S32 x1, S32 y1, bool cadre, bool lit) {
     // Rounded as the rows are (EPmager, 2026-11-12): at 2x the rows' frame, INVENT.CPP
     // DrawCadre with its 5-pixel corners. A 1x chip is 12 pixels tall, and those corners
     // close round its letters like brackets, so it cuts its corners by 2 pixels.
-    const bool cadre = scale > 1;
     if (cadre)
         GamePieces_BackupCorners(x, y, x1, y1);
     if (lit)
@@ -411,17 +457,14 @@ S32 Ui_Chip(S32 x, S32 y, const char *key, S32 scale, bool lit, int pad, int rol
         Plot(x1 - 1, y + 1, COUL_DOWN_BLUE);
         Plot(x1 - 1, y1 - 1, COUL_DOWN_BLUE);
     }
-    // The letters' ink in the middle, not their cells (EPmager, 2026-11-12).
-    S32 tx, ty;
-    CentreInk(x, y, w, h, key, scale, pad, &tx, &ty);
-    U8 ink = lit ? INK_WHITE : INK_CONFIG_MENU;
+}
+
+static U8 ChipInk(bool lit, int roles) {
     if (!lit && g_roleInk && roles == CHIP_ROLE_CONFIRM)
-        ink = INK_ROLE_CONFIRM;
-    else if (!lit && g_roleInk && roles == CHIP_ROLE_BACK)
-        ink = INK_ROLE_BACK;
-    PadIcons_Text(tx, ty, key, ink, scale, !lit, pad);
-    NoteChip(x, y, x1, y1, key, scale, !lit, true, pad);
-    return w;
+        return INK_ROLE_CONFIRM;
+    if (!lit && g_roleInk && roles == CHIP_ROLE_BACK)
+        return INK_ROLE_BACK;
+    return lit ? INK_WHITE : INK_CONFIG_MENU;
 }
 
 S32 Ui_KeyChipHeight(S32 scale) {

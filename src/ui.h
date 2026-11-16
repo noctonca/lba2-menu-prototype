@@ -136,6 +136,10 @@ int Ui_ChipBoxes(const ChipBox **out);
 // does not fit inside (it is clipped).
 enum ChipFill { CHIP_SHADE, CHIP_CURSOR, CHIP_WAITING };
 bool Ui_KeyChip(S32 x, S32 y, S32 w, const char *name, S32 scale, ChipFill fill, bool red, int pad = 0);
+// The help window's legend fitted to its width (switch legendfit): a chip and a word at f
+// times their 1x size, f from 1 to 2; only where PropScale_CanFit().
+void Ui_ChipFit(float x, float y, const char *key, float f, bool lit = false, int pad = 0, int roles = 0);
+void Ui_WordFit(S32 x, S32 y, const char *s, U8 colour, float f);
 S32 Ui_KeyChipHeight(S32 scale);
 
 // The game's voice: help typed letter by letter with the 13-step colour ramp

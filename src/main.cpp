@@ -456,6 +456,8 @@ int Lba2Main(int argc, char *argv[]) {
             Menu_SetSwitch("propscale", Menu_GetSwitch("propscale") + (Host_ShiftHeld() ? -1 : 1));
         if (Host_Pressed(KEY_F7))  // straight between the last two compared, 1 and 5
             Menu_SetSwitch("propscale", Menu_GetSwitch("propscale") == 5 ? 1 : 5);
+        if (Host_Pressed(KEY_F8))
+            Menu_SetSwitch("legendfit", !Menu_GetSwitch("legendfit"));
         if (Host_Pressed(KEY_F6))
             Menu_SetSwitch("zsub", !Menu_GetSwitch("zsub"));
         if (Host_Pressed(KEY_F12))

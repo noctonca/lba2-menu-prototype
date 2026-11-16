@@ -224,6 +224,7 @@ own keys:
 | F5 | how the menu scales (switch `propscale`, 5 at start; Shift+F5 back): 0 whole steps only; 1 everything linear; 2 to 6 frames linear and the game font drawn over them: 2 nearest neighbour, 3 at the whole step below, 4 at the whole step above, 5 each font pixel an exact square with its edges blended by coverage, 6 as 5 after Scale2x (see `src/prop_scale.h`) |
 | F6 | Zilla Slab's letters placed at quarter pixels instead of whole ones (switch `zsub`, off at start) |
 | F7 | `propscale` straight between 5 and 1, the last two compared |
+| F8 | the help window's legend at the size that fits its width, between 1x and 2x, instead of dropping to 1x (switch `legendfit`, off at start; needs `propscale` 5 or 6; `./play-legendfit.sh`) |
 | F11 | steps the Button names row: Auto / Xbox / PlayStation / Nintendo (switch `padnames`) |
 
 Two more switches have no key: `keyboard` 0 plays as a console before a key is

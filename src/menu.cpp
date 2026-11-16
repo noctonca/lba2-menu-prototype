@@ -337,6 +337,7 @@ static int sw_overlay = 0;
 static int sw_whole = 0;
 static int sw_propscale = 5;  // proportional scale (prop_scale.h), mode 5 decided 2026-11-16
 static int sw_zsub = 0;       // Zilla Slab letters at quarter pixels
+static int sw_legendfit = 0;  // the help window's legend at the size that fits, not 2x or 1x
 // The chosen preset: "(current)" after its name always; 1 also gives it the green
 // current-value plasma, as before (EPmager, 2026-11-11: green and the blue cursor read alike,
 // so he asked for the words alone). F3; off at start, to show his proposal.
@@ -2228,6 +2229,36 @@ static S32 DrawLegendRow(S32 x, S32 y, const char **keys, const char **raws, con
     return w;
 }
 
+// The help window's legend at the size that fits (switch legendfit, F8; EPmager, 2026-11-16):
+// the row laid out at f times its 1x size, its chips' boxes on the canvas at that size, their
+// letters and the words drawn at 1x and painted at f by the text layer. Returns the width.
+static float DrawLegendRowFit(float x, float y, const char **keys, const char **raws, const char **words, int n,
+                              float f, bool draw) {
+    if (draw)
+        g_legend[0] = 0;
+    float w = 0;
+    const int pad = Bindings_LegendPadFamily();
+    for (int i = 0; i < n; i++) {
+        if (i)
+            w += 12 * f;
+        const float c = (float)Ui_ChipWidth(keys[i], 1, pad) * f;
+        const char *word = LegendWord(words[i]);
+        const float ww = (float)Ui_WordWidth(word, 1) * f;
+        if (draw) {
+            const S32 x0 = (S32)lrintf(x + w), y0 = (S32)lrintf(y);
+            const S32 x1 = (S32)lrintf(x + w + c + 4 * f + ww) - 1, y1 = (S32)lrintf(y + 12 * f) - 1;
+            const bool lit = LegendPoint(x0, y0 - 1, x1 + 1, y1 + 1, keys[i], words[i]);
+            Ui_ChipFit(x + w, y, keys[i], f, lit, pad, LegendRoles(raws[i], words[i]));
+            Ui_WordFit((S32)lrintf(x + w + c + 4 * f), (S32)lrintf(y + 2 * f), word,
+                       lit ? INK_WHITE : INK_CONFIG_MENU, f);
+            LegendRecord(i, keys[i], words[i]);
+            LegendGrow(x0, y0, x1, y1, f >= 1.5f ? 2 : 1);
+        }
+        w += c + 4 * f + ww;
+    }
+    return w;
+}
+
 // The legend's keys as the device used last names them (a pad's buttons after a pad press).
 static void LegendKeys(const char **in, const char **out, int nk) {
     for (int i = 0; i < nk && i < 8; i++)
@@ -2249,12 +2280,21 @@ void Menu_DrawDialogueIn(S32 x0, S32 y0, S32 x1, S32 y1, const char **keysGiven,
         const char *keys[8];
         LegendKeys(keysIn, keys, nk);
         // The 8x8 font at 2x when the line fits, as the wide band has it; 1x, the 1997 key
-        // screen's size, when it does not.
+        // screen's size, when it does not. With legendfit, the size between that fits.
+        const S32 room = x1 - x0 - 2 * PANEL_PAD_X;
         S32 scale = 2;
-        if (DrawLegendRow(0, 0, keys, keysIn, words, nk, scale, false) > x1 - x0 - 2 * PANEL_PAD_X)
+        if (DrawLegendRow(0, 0, keys, keysIn, words, nk, scale, false) > room)
             scale = 1;
-        S32 w = DrawLegendRow(0, 0, keys, keysIn, words, nk, scale, false);
-        DrawLegendRow(x1 - PANEL_PAD_X - w + 1, y1 - 8 - 12 * scale + 1, keys, keysIn, words, nk, scale, true);
+        if (scale == 1 && sw_legendfit && PropScale_CanFit()) {
+            float f = (float)room / DrawLegendRowFit(0, 0, keys, keysIn, words, nk, 1.0f, false);
+            f = f > 2.0f ? 2.0f : f < 1.0f ? 1.0f : f;
+            const float w = DrawLegendRowFit(0, 0, keys, keysIn, words, nk, f, false);
+            DrawLegendRowFit((float)(x1 - PANEL_PAD_X + 1) - w, (float)(y1 - 8 + 1) - 12 * f, keys, keysIn, words, nk,
+                             f, true);
+        } else {
+            S32 w = DrawLegendRow(0, 0, keys, keysIn, words, nk, scale, false);
+            DrawLegendRow(x1 - PANEL_PAD_X - w + 1, y1 - 8 - 12 * scale + 1, keys, keysIn, words, nk, scale, true);
+        }
     } else {
         g_legend[0] = 0;
     }
@@ -2871,6 +2911,7 @@ static const SwitchDef kSwitches[] = {
     {"pointer", &sw_pointer, 0, 2, 0},   // for tests: as if the mouse (1) or a finger (2) was used last
     {"propscale", &sw_propscale, 0, 6, 5},  // the menu at a proportional scale (5, decided 2026-11-16), F5
     {"zsub", &sw_zsub, 0, 1, 0},  // Zilla Slab letters at quarter pixels, F6
+    {"legendfit", &sw_legendfit, 0, 1, 0},  // the help window's legend fitted to its width, F8
 };
 
 bool Menu_SetSwitch(const char *name, int v) {

@@ -45,7 +45,12 @@ static bool Whole() {
     return lw && lh && pw % lw == 0 && ph % lh == 0 && pw / lw == ph / lh;
 }
 
-bool PropScale_TextOnTop() { return s_mode >= 2 && Host_Pixels() && !Whole(); }
+// Inside a capture: what the draw calls paints into the scratch, not into a capture of its own.
+static bool s_capturing;
+
+bool PropScale_TextOnTop() { return s_mode >= 2 && Host_Pixels() && !Whole() && !s_capturing; }
+
+bool PropScale_CanFit() { return s_mode >= 5 && Host_Pixels() && !s_capturing; }
 
 // ---------------------------------------------------------------------------
 // The text layer: per string its ink (palette index per pixel, 0xffff where none),
@@ -57,6 +62,7 @@ struct Item {
     S32 x0, y0, x1, y1;      // its box, canvas, inclusive
     S32 cx0, cy0, cx1, cy1;  // the clip, canvas, inclusive
     U32 sum;
+    float k;                 // painted k times its size from (x0, y0) (PropScale_TextAt), else 1
     size_t at;               // into s_ink
 };
 
@@ -83,7 +89,17 @@ static U32 CanvasSum(S32 x0, S32 y0, S32 x1, S32 y1) {
     return h;
 }
 
+static void Capture(S32 x, S32 y, S32 x0, S32 y0, S32 x1, S32 y1, float k, const std::function<void()> &draw);
+
 void PropScale_Text(S32 x, S32 y, S32 x0, S32 y0, S32 x1, S32 y1, const std::function<void()> &draw) {
+    Capture(x, y, x0, y0, x1, y1, 1.0f, draw);
+}
+
+void PropScale_TextAt(S32 x0, S32 y0, S32 x1, S32 y1, float k, const std::function<void()> &draw) {
+    Capture(x0, y0, x0, y0, x1, y1, k, draw);
+}
+
+static void Capture(S32 x, S32 y, S32 x0, S32 y0, S32 x1, S32 y1, float k, const std::function<void()> &draw) {
     if (x0 < ClipXMin) x0 = ClipXMin;
     if (y0 < ClipYMin) y0 = ClipYMin;
     if (x1 > ClipXMax) x1 = ClipXMax;
@@ -97,12 +113,14 @@ void PropScale_Text(S32 x, S32 y, S32 x0, S32 y0, S32 x1, S32 y1, const std::fun
             s_scratch[p] = (U8 *)realloc(s_scratch[p], bytes);
     }
     void *const log = Log;
+    s_capturing = true;
     for (int p = 0; p < 2; p++) {
         for (S32 j = y0; j <= y1; j++)
             memset(s_scratch[p] + TabOffLine[j] + x0, p ? 0xff : 0x00, (size_t)(x1 - x0 + 1));
         Log = s_scratch[p];
         draw();
     }
+    s_capturing = false;
     Log = log;
     const size_t n = (size_t)(x1 - x0 + 1) * (size_t)(y1 - y0 + 1);
     if (s_inkUsed + n > s_inkCap) {
@@ -113,6 +131,7 @@ void PropScale_Text(S32 x, S32 y, S32 x0, S32 y0, S32 x1, S32 y1, const std::fun
     it.ax = x, it.ay = y;
     it.x0 = x0, it.y0 = y0, it.x1 = x1, it.y1 = y1;
     it.cx0 = ClipXMin, it.cy0 = ClipYMin, it.cx1 = ClipXMax, it.cy1 = ClipYMax;
+    it.k = k;
     it.at = s_inkUsed;
     U16 *o = s_ink + s_inkUsed;
     for (S32 j = y0; j <= y1; j++)
@@ -214,7 +233,7 @@ static void PaintCoverage(const Item &it, const U16 *ink, U32 *argb, U32 pitchBy
         grid = big;
     }
     const S32 gw = bw * f, gh = bh * f;
-    const float t = s / (float)f;  // screen pixels a texel
+    const float t = s * it.k / (float)f;  // screen pixels a texel
     const float ox = bx + (float)it.x0 * s, oy = by + (float)it.y0 * s;
     S32 X0 = (S32)floorf(ox), Y0 = (S32)floorf(oy);
     S32 X1 = (S32)ceilf(ox + (float)gw * t), Y1 = (S32)ceilf(oy + (float)gh * t);
@@ -263,7 +282,7 @@ static void PaintCoverage(const Item &it, const U16 *ink, U32 *argb, U32 pitchBy
 }
 
 void PropScale_PaintText(U32 *argb, U32 pitchBytes, U32 w, U32 h, const U8 *palette) {
-    if (s_mode < 2 || !s_count)
+    if (s_mode < 2 || !s_count)  // a fitted legend needs 5 or 6 (PropScale_CanFit)
         return;
     float s, bx, by;
     PropScale_Map(w, h, &s, &bx, &by);
@@ -279,7 +298,7 @@ void PropScale_PaintText(U32 *argb, U32 pitchBytes, U32 w, U32 h, const U8 *pale
         kx0 = kx0 < 0 ? 0 : kx0, ky0 = ky0 < 0 ? 0 : ky0;
         kx1 = kx1 > (S32)w ? (S32)w : kx1, ky1 = ky1 > (S32)h ? (S32)h : ky1;
         const U16 *ink = s_ink + it.at;
-        if (s_mode >= 5) {
+        if (s_mode >= 5 || it.k != 1.0f) {
             PaintCoverage(it, ink, argb, pitchBytes, kx0, ky0, kx1, ky1, s, bx, by, palette);
             continue;
         }

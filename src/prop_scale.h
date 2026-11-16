@@ -46,6 +46,13 @@ bool PropScale_TextOnTop();
 // modes 3 and 4; the box bounds what it may touch, clipped to the clip as it is now.
 void PropScale_Text(S32 x, S32 y, S32 x0, S32 y0, S32 x1, S32 y1, const std::function<void()> &draw);
 
+// The help window's legend fitted to its width (switch legendfit, F8; EPmager, 2026-11-16):
+// true where the text layer can draw text at any size, propscale 5 or 6, whole steps too.
+bool PropScale_CanFit();
+// As PropScale_Text, for ink drawn at 1x from (x0, y0) and painted k times its size from
+// there (k from 1 to 2), its pixels exact squares with their edges blended as mode 5's.
+void PropScale_TextAt(S32 x0, S32 y0, S32 x1, S32 y1, float k, const std::function<void()> &draw);
+
 // After the picture's own paint: the menu's pixels of the frame, linearly scaled.
 void PropScale_PaintLinear(U32 *argb, U32 pitchBytes, U32 w, U32 h, const U8 *palette);
 // The text layer over the frame.
