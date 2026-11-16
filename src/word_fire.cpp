@@ -13,10 +13,12 @@ enum { FIRE_BANK = 15, FIRE_LO = 1, FIRE_HI = 6, INK_RIM = 107 };
 // Flames: heat at the logical pixel grain over the letters' box, fed along its bottom row and
 // carried up a row a step, cooling and drifting sideways as it climbs (the demo-scene fire).
 // The cooling varies slowly along the row, so some columns stay hot higher than their
-// neighbours: tongues that rise and fall. Stepped 20 times a second from the menu's clock, so
-// a fixed-clock run repeats; between two steps the letters show a blend of them, so the
-// flames glide (chosen from 60, 30, 20, 12 and 8).
-enum { FIRE_W = 256, FIRE_H = 64, FIRE_HZ = 20 };
+// neighbours: tongues that rise and fall. Stepped 5 times a second from the menu's clock, so
+// a fixed-clock run repeats (chosen from 60, 30, 20, 14, 12, 10, 8, 7 and 5). Between two steps
+// the letters show the heat moved up the part of a row the flames have climbed, a blend of the
+// step before seen that far higher and the step after seen the rest lower, so the flames rise
+// smoothly at so few steps rather than cross-fading the two.
+enum { FIRE_W = 256, FIRE_H = 64, FIRE_HZ = 5 };
 // The cooling over the letters' height: half of what left a third of the heat at the top of
 // LBA's capitals, so the yellow reaches near the top and the orange stays in the tips (chosen
 // from 1, 0.7, 0.5 and 0.35).
@@ -81,13 +83,20 @@ static float FlameLevel(float x, float y) {
     const int u0 = (int)u, v0 = (int)v;
     const int u1 = u0 + 1 < s_fw ? u0 + 1 : u0, v1 = v0 + 1 < s_fh ? v0 + 1 : v0;
     const float au = u - u0, av = v - v0;
-    float c[2][2];
-    for (int j = 0; j < 2; j++)
-        for (int i = 0; i < 2; i++) {
-            const int yy = j ? v1 : v0, xx = i ? u1 : u0;
-            c[j][i] = s_prev[yy][xx] + (s_heat[yy][xx] - s_prev[yy][xx]) * s_blend;
-        }
-    const float t = (c[0][0] * (1 - au) + c[0][1] * au) * (1 - av) + (c[1][0] * (1 - au) + c[1][1] * au) * av;
+    // Each step carries the heat up a row: s_prev seen s_blend of a row higher, s_heat the rest lower.
+    const float vp = v + s_blend, vh = v + s_blend - 1;
+    const float pv = vp > s_fh - 1 ? (float)(s_fh - 1) : vp, hv = vh < 0 ? 0 : vh;
+    const int p0 = (int)pv, h0 = (int)hv;
+    const int p1 = p0 + 1 < s_fh ? p0 + 1 : p0, h1 = h0 + 1 < s_fh ? h0 + 1 : h0;
+    const float ap = pv - p0, ah = hv - h0;
+    float c[2];
+    for (int i = 0; i < 2; i++) {
+        const int xx = i ? u1 : u0;
+        const float pr = s_prev[p0][xx] + (s_prev[p1][xx] - s_prev[p0][xx]) * ap;
+        const float hr = s_heat[h0][xx] + (s_heat[h1][xx] - s_heat[h0][xx]) * ah;
+        c[i] = pr + (hr - pr) * s_blend;
+    }
+    const float t = c[0] * (1 - au) + c[1] * au;
     return 10.0f * (t > 1 ? 1 : t);
 }
 
