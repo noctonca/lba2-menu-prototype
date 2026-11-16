@@ -4,7 +4,7 @@
 // (src/lang_menu.inc). More options' tuning rows stay English.
 #pragma once
 
-enum { LANG_COUNT = 6 };  // English, Francais, Deutsch, Espanol, Italiano, Portugues: the Text row's order
+enum { LANG_COUNT = 6 };  // English, French, German, Spanish, Italian, Portuguese: the Text row's order
 
 // The text in that language, CP850; the English itself when the table has no row for it.
 const char *Lang_Tr(const char *english, int lang);

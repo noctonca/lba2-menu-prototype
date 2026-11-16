@@ -52,9 +52,9 @@ enum {
 
 // Example values only: the prototype's settings live in memory.
 static const Setting kSettings[S_COUNT] = {
-    {"text_lang", "Text", K_CHOICE, 5, {"English", "Francais", "Deutsch", "Espanol", "Italiano", "Portugues"}, 0, 0, false,
+    {"text_lang", "Text", K_CHOICE, 5, {"English", "Fran\x87""ais", "Deutsch", "Espa\xa4""ol", "Italiano", "Portugu\x88""s"}, 0, 0, false,
      "The language the game writes in."},
-    {"voice_lang", "Voices", K_CHOICE, 2, {"English", "Francais", "Deutsch"}, 0, 0, false,
+    {"voice_lang", "Voices", K_CHOICE, 2, {"English", "Fran\x87""ais", "Deutsch"}, 0, 0, false,
      "The language the characters speak."},
     {"subtitles", "Subtitles", K_TOGGLE, 1, {"Off", "On"}, 1, 1, false,
      "Shows what is said while the voices play."},
