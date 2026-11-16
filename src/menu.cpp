@@ -475,7 +475,9 @@ static char g_currentIsland[32];
 static bool g_haveAutosave; // autosave.lba: Load game's AUTOSAVE row
 static char g_autosaveIsland[32];
 static bool g_inGame;    // a game is going on: Resume game goes back to it, Save game is offered
-static bool g_unsaved;   // played since the last save or load: leaving the game loses something
+// Played since the last save. 1997 keeps that play in current.lba (written when Esc leaves
+// play), which Resume game continues even after Quit; New game and Load write over it.
+static bool g_unsaved;
 static bool g_playing;   // the pretend game is on screen, the menu closed
 static bool g_quitShown; // Quit chosen: the screen that says the game would close
 static char g_playingWhat[64];  // what the pretend game plays: a save's name, AUTOSAVE, or a new game
@@ -665,9 +667,9 @@ static int g_depth;
 static int g_scroll;       // the first shown row drawn: the view's, counted as its layout shows rows
 static bool g_confirm;     // a question is up: Classic, Reset settings, or one of the game menu's
 static int g_confirmCursor;
-enum Question { Q_CLASSIC, Q_RESET, Q_NEW_GAME, Q_LOAD, Q_SAVE_OVER, Q_DELETE, Q_QUIT, Q_COUNT };
+enum Question { Q_CLASSIC, Q_RESET, Q_NEW_GAME, Q_SAVE_OVER, Q_DELETE, Q_COUNT };
 static Question g_question;
-static int g_questionSave;  // the save Q_LOAD, Q_SAVE_OVER and Q_DELETE are about
+static int g_questionSave;  // the save Q_SAVE_OVER and Q_DELETE are about
 
 // A question's title (in place of the page's, so the screen says it is a question:
 // EPmager, 2026-11-11), what it says in the voice, and its answers: the safe one first.
@@ -676,18 +678,17 @@ struct QuestionText {
     const char *voice;
     const char *answers[2];
 };
-// The game menu asks only where something would be lost: what was played since the last save,
-// or a save. 1997 asked none of these; lba2cc asks before a delete (SavedConfirmMenu).
+// The game menu asks only where something would be lost: the game in progress, or a save.
+// Quit loses nothing (current.lba keeps the game), so it does not ask. 1997 asked none of
+// these; lba2cc asks before a delete (SavedConfirmMenu).
 static const QuestionText kQuestions[Q_COUNT] = {
     {"Confirm Classic preset", "Play as in 1997? Sound and keys stay as they are.", {"No, keep Modern", "Yes, play Classic"}},
     {"Confirm settings reset", "Put every setting back as a fresh install has it?", {"No, keep my settings", "Yes, reset settings"}},
-    {"Confirm new game", "Start again? What you did since your last save is lost.", {"No, keep playing", "Yes, start again"}},
-    {"Confirm load", "Load this save? What you did since your last save is lost.", {"No, keep playing", "Yes, load it"}},
+    {"Confirm new game", "Start a new game? The game in progress ends; your saves stay.", {"No, keep my game", "Yes, start again"}},
     {"Confirm save", "Save over this save? It becomes the game as it is now.", {"No, keep it", "Yes, save over it"}},
     {"Confirm delete", "Delete this save? It cannot be brought back.", {"No, keep it", "Yes, delete it"}},
-    {"Confirm quit", "Quit? What you did since your last save is lost.", {"No, keep playing", "Yes, quit"}},
 };
-static const char *const kQuestionNames[Q_COUNT] = {"classic", "reset", "new game", "load", "save over", "delete", "quit"};
+static const char *const kQuestionNames[Q_COUNT] = {"classic", "reset", "new game", "save over", "delete"};
 
 static void Ask(Question q) {
     g_confirm = true;
@@ -1225,7 +1226,7 @@ static void Activate(const Row &r) {
                 Play();
             break;
         case M_NEW:
-            if (g_inGame && g_unsaved)
+            if (g_unsaved)  // in play, or kept in current.lba from before a Quit
                 Ask(Q_NEW_GAME);
             else
                 NewGame();
@@ -1240,12 +1241,8 @@ static void Activate(const Row &r) {
             Push(P_HUB);
             break;
         case M_QUIT:
-            if (g_inGame && g_unsaved)
-                Ask(Q_QUIT);
-            else {
-                g_quitShown = true;
-                Trace("quit chosen");
-            }
+            g_quitShown = true;
+            Trace("quit chosen");
             break;
         }
         break;
@@ -1254,10 +1251,9 @@ static void Activate(const Row &r) {
         g_questionSave = r.type == R_AUTOSAVE ? -1 : r.arg;
         if (TopPage() == P_SAVE)
             Ask(Q_SAVE_OVER);  // a save would be lost
-        else if (g_inGame && g_unsaved)
-            Ask(Q_LOAD);
         else
-            LoadSave(g_questionSave);
+            LoadSave(g_questionSave);  // no question: choosing a save on Load game is the choice,
+                                       // and runners load often (AUTOSAVE keeps the last scene)
         break;
     case R_NEW_SAVE:
         SaveNow(-1);
@@ -1582,7 +1578,7 @@ void Menu_Update() {
     if (g_quitShown) {
         if (Host_Pressed(KEY_ENTER)) {  // the game starts again, on its first menu
             g_quitShown = false;
-            g_inGame = g_unsaved = false;
+            g_inGame = false;  // g_unsaved stays: current.lba keeps the play for Resume game
             OpenGameMenu();
         } else if (Host_Pressed(KEY_ESC)) {
             g_quit = true;
@@ -1613,9 +1609,6 @@ void Menu_Update() {
                 case Q_NEW_GAME:
                     NewGame();
                     break;
-                case Q_LOAD:
-                    LoadSave(g_questionSave);
-                    break;
                 case Q_SAVE_OVER:
                     SaveNow(g_questionSave);
                     Pop();
@@ -1625,10 +1618,6 @@ void Menu_Update() {
                     DeleteSave(g_questionSave);
                     if (TopPage() == P_LOAD && !HaveSaves())
                         Pop();  // nothing left to load: Load game goes from the game menu too
-                    break;
-                case Q_QUIT:
-                    g_quitShown = true;
-                    Trace("quit chosen");
                     break;
                 case Q_COUNT:
                     break;

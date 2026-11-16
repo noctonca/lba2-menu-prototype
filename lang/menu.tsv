@@ -155,17 +155,13 @@ Quit	Quitter	Beenden	Salir	Esci	Sair
 New save	Nouvelle sauvegarde	Neuer Spielstand	Nueva partida guardada	Nuovo salvataggio	Nova gravação
 Delete	Supprimer	Löschen	Borrar	Elimina	Apagar
 Confirm new game	Confirmer la nouvelle partie	Neues Spiel bestätigen	Confirmar nueva partida	Conferma nuova partita	Confirmar novo jogo
-Confirm load	Confirmer le chargement	Laden bestätigen	Confirmar carga	Conferma caricamento	Confirmar carregamento
 Confirm save	Confirmer la sauvegarde	Speichern bestätigen	Confirmar guardado	Conferma salvataggio	Confirmar gravação
 Confirm delete	Confirmer la suppression	Löschen bestätigen	Confirmar borrado	Conferma eliminazione	Confirmar eliminação
-Confirm quit	Confirmer pour quitter	Beenden bestätigen	Confirmar salida	Conferma uscita	Confirmar saída
-No, keep playing	Non, continuer à jouer	Nein, weiterspielen	No, seguir jugando	No, continua a giocare	Não, continuar a jogar
+No, keep my game	Non, garder ma partie	Nein, mein Spiel behalten	No, mantener mi partida	No, tieni la mia partita	Não, manter o meu jogo
 Yes, start again	Oui, recommencer	Ja, neu anfangen	Sí, empezar de nuevo	Sì, ricomincia	Sim, recomeçar
-Yes, load it	Oui, la charger	Ja, laden	Sí, cargarla	Sì, caricala	Sim, carregar
 No, keep it	Non, la garder	Nein, behalten	No, conservarla	No, tienilo	Não, manter
 Yes, save over it	Oui, l'écraser	Ja, überschreiben	Sí, sobrescribirla	Sì, sovrascrivilo	Sim, gravar por cima
 Yes, delete it	Oui, la supprimer	Ja, löschen	Sí, borrarla	Sì, eliminalo	Sim, apagar
-Yes, quit	Oui, quitter	Ja, beenden	Sí, salir	Sì, esci	Sim, sair
 The game would close here.	Le jeu se fermerait ici.	Hier würde das Spiel enden.	Aquí se cerraría el juego.	Qui il gioco si chiuderebbe.	O jogo fechar-se-ia aqui.
 <ENTER> starts it again. <ESC> quits.	<ENTER> le relance. <ESC> quitte.	<ENTER> startet es neu. <ESC> beendet.	<ENTER> lo vuelve a abrir. <ESC> sale.	<ENTER> lo riavvia. <ESC> esce.	<ENTER> volta a abri-lo. <ESC> sai.
 A new game.	Une nouvelle partie.	Ein neues Spiel.	Una partida nueva.	Una nuova partita.	Um jogo novo.

@@ -319,9 +319,16 @@ explains itself in the voice as the cursor lands on it; there is no help page.
   which button opens and which goes back.
 - The voice speaks there only when something happens or would be lost: "Game
   saved." after a save, until the cursor moves (1997 showed a brief overlay),
-  and the questions. The game menu asks before New game, Load game or Quit
-  after playing since the last save, before saving over a save and before a
-  delete, each on No. 1997 asked none of them. **[self test: flow]**
+  and the questions. The game menu asks before New game while a game in
+  progress has play since the last save (in play, or kept for Resume game
+  after a Quit), before saving over a save and before a delete, each on No.
+  1997 asked none of them. Quit asks nothing: when Esc leaves play 1997 writes
+  the game to current.lba (GAMEMENU.CPP MainGameMenu), and Resume game
+  continues it at the next start. Load asks nothing either (decided
+  2026-11-16): choosing a save on Load game is already the choice, runners
+  load often, and AUTOSAVE keeps the play up to the last scene change. New
+  game sits one row below Resume game, where a slip is easy.
+  **[self test: flow]**
 - In the one column those pages take a strip one voice line tall in place of
   the dialogue window: the note at its left, the legend at its right. With the
   137 px window only 4 rows fit at 640x480, and the game menu's six would

@@ -1865,25 +1865,40 @@ struct Walker {
         Expect(Menu_CursorLabel() != gone, Fmt("flow: Delete: %s is still there", Repr(gone.c_str()).c_str()));
         Key("up");
         Expect(Menu_CursorLabel() == above, Fmt("flow: Delete: %s went too, or moved", Repr(above.c_str()).c_str()));
-        // Loading after play asks; Yes plays it.
+        // Loading after play asks nothing: choosing the save is the choice.
         Key("enter");
-        Key("down");
-        Key("enter");
-        InGameScreen("Yes to Load");
+        InGameScreen("Load after play");
         Key("esc");
         // Options from the game menu, and Esc back to its row.
         Choose("Options");
         OnPage("Options", "Preset: Modern", "Options from the game menu");
         Key("esc");
         OnPage("Game menu", "Options", "Esc from Options");
-        // Quit after play asks; Yes shows Quit's screen; Enter starts the game again.
+        // Quit after play asks nothing: 1997 keeps the game in current.lba. Enter on Quit's
+        // screen starts the game again, with Resume game.
+        const std::string left = Menu_PlayingWhat();
         Choose("Quit");
-        Key("down");
+        Expect(!strcmp(Menu_Layout(), "quit"), Fmt("flow: Quit after play: on %s, not Quit's screen", Menu_Layout()));
         Key("enter");
-        Expect(!strcmp(Menu_Layout(), "quit"), Fmt("flow: Yes to Quit: on %s", Menu_Layout()));
+        Expect(!strcmp(Menu_PageName(), "Game menu") && !Drawn("Save game") && Drawn("Resume game"),
+               "flow: Enter on Quit's screen: not the first game menu with Resume game");
+        // That play is still the game in progress: New game asks, No first, and No keeps it.
+        Choose("New game");
+        Expect(Where().find("| No | confirm") != std::string::npos, "flow: New game after a Quit did not ask, No first");
         Key("enter");
-        Expect(!strcmp(Menu_PageName(), "Game menu") && !Drawn("Save game"),
-               "flow: Enter on Quit's screen: not the first game menu");
+        OnPage("Game menu", "New game", "No to New game after a Quit");
+        // Resume game plays it.
+        Choose("Resume game");
+        InGameScreen("Resume game after a Quit");
+        Expect(left == Menu_PlayingWhat(), Fmt("flow: Resume game after a Quit plays %s, not %s",
+                                               Repr(Menu_PlayingWhat()).c_str(), Repr(left.c_str()).c_str()));
+        // Load after a Quit asks nothing either.
+        Key("esc");
+        Choose("Quit");
+        Key("enter");
+        Choose("Load game");
+        Key("enter");
+        InGameScreen("Load after a Quit");
 
         // Deleting every named save leaves AUTOSAVE, and Load game with it.
         Start();

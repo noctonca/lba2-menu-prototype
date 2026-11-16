@@ -130,10 +130,13 @@ save's picture is its island's arrival picture from screen.hqr, shrunk to
 160x120 and fitted to the menu palette as 1997 fits a save's.
 
 The game menu asks only where something would be lost, starting on No: New
-game, Load game and Quit after playing since the last save; saving over a
-save; deleting one. A save makes the next New game, load or Quit ask nothing.
-Quit shows a screen saying the game would close here: Enter starts it again,
-Esc ends the prototype.
+game while a game in progress has play since the last save; saving over a
+save; deleting one. A save makes the next New game ask nothing. Quit never
+asks: 1997 writes the game to current.lba when Esc leaves play, and Resume
+game carries on from it at the next start, so New game still asks then. Load
+never asks: choosing a save on Load game is the choice, runners load often,
+and AUTOSAVE keeps the play up to the last scene change. Quit shows a screen saying the game would close here:
+Enter starts it again, Esc ends the prototype.
 
 Game data: `LBA2_GAME_DIR`, or `--data DIR`; the default is
 `~/code/lba-hacking/assets/lba2-activision-us-cd` (a disc image is mounted as
@@ -459,9 +462,11 @@ walk finds starts with the walk's name:
   plays without asking. In a new game the lists open on their last row.
   Saving over a save asks, on No. Del on a save asks; Yes takes that save
   away, the one above stays and the cursor goes to the next. Load after play
-  asks and Yes plays. Options opens on the preset row and Esc comes back to
-  Options. Quit after play asks; Yes shows Quit's screen and Enter starts
-  again on the game menu without Save game. Deleting every named save leaves
+  plays at once. Options opens on the preset row and Esc comes back to
+  Options. Quit after play asks nothing and shows Quit's screen; Enter starts
+  again on the game menu with Resume game and without Save game, where New
+  game asks, No keeps the game and Resume game plays it; Load there plays at
+  once. Deleting every named save leaves
   AUTOSAVE alone on Load game. With no saves (`--saves 0`) the game menu
   starts on New game without Resume game and Load game, and both come after
   the first game. The first launch's question ends in the game.
