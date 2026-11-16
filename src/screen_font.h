@@ -46,6 +46,13 @@ void ScreenFont_Text(S32 x, S32 y, const char *s, U8 ink);
 // baseline cap below y (the top of an 8x8 cell at the same step).
 S32 ScreenFont_SmallWidth(const char *s, S32 cap);
 void ScreenFont_SmallText(S32 x, S32 y, const char *s, U8 ink, S32 cap);
+// Small text whose colour comes per screen pixel from `level` (word_fire.h): 0 to 10 at a
+// logical position, spread over palette entries bank * 16 + lo to bank * 16 + hi and blended
+// between them, with a rim in palette ink `rim` (0 for none) round each letter, as wide as the
+// text's `rim` in logical pixels. The fill is set once a frame before queueing.
+typedef float (*ScreenFontLevel)(float x, float y);
+void ScreenFont_SetFill(ScreenFontLevel level, U8 bank, U8 lo, U8 hi, U8 rim);
+void ScreenFont_SmallTextFilled(S32 x, S32 y, const char *s, U8 ink, S32 cap, float rim);
 // One letter; returns its advance.
 S32 ScreenFont_Char(S32 x, S32 y, U8 c, U8 ink);
 

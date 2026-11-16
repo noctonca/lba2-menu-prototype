@@ -129,6 +129,14 @@ picture do not fit 640x480. The game data has no screenshots of play, so a
 save's picture is its island's arrival picture from screen.hqr, shrunk to
 160x120 and fitted to the menu palette as 1997 fits a save's.
 
+Off Resume game, and on the first game menu with no save, the title is the
+product's name: LBA large with a raised 2, CLASSIC COMMUNITY small under it.
+In Zilla Slab, flames rise through LBA and the 2 in the menu palette's fire
+ramp (plasma bank 15, orange to white), in tongues that rise and fall, with a
+gold rim round each letter, thinner on the 2. They are painted at the screen's
+resolution like the letters, not on the canvas. In the game font the name is
+one line.
+
 The game menu asks only where something would be lost, starting on No: New
 game while a game in progress has play since the last save; saving over a
 save; deleting one. A save makes the next New game ask nothing. Quit never

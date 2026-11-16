@@ -141,6 +141,8 @@ enum { MAX_ITEMS = 512, MAX_LEN = 160 };
 struct Item {
     S32 x, y;
     U8 ink;
+    bool filled;    // coloured by the fill (ScreenFont_SetFill), not the ink
+    float rim;      // a filled item's rim, logical pixels
     float scale;    // 1, or the small size's (capitals scale x 22 tall)
     S32 baseline;   // below y
     S32 cx0, cy0, cx1, cy1;  // the clip when queued, logical, inclusive
@@ -172,6 +174,7 @@ static void Queue(S32 x, S32 y, const char *s, U8 ink, S32 width, float scale = 
     it.x = x;
     it.y = y;
     it.ink = ink;
+    it.filled = false;
     it.scale = scale;
     it.baseline = baseline;
     it.cx0 = ClipXMin;
@@ -198,6 +201,24 @@ S32 ScreenFont_SmallWidth(const char *s, S32 cap) { return (S32)ceilf(WidthF(s, 
 void ScreenFont_SmallText(S32 x, S32 y, const char *s, U8 ink, S32 cap) {
     // Descenders reach about a third of the capitals' height below the baseline.
     Queue(x, y, s, ink, ScreenFont_SmallWidth(s, cap), SmallScale(cap), cap, cap + cap / 2);
+}
+
+static ScreenFontLevel s_fillLevel;
+static U8 s_fillBank, s_fillLo, s_fillHi, s_fillRim;
+
+void ScreenFont_SetFill(ScreenFontLevel level, U8 bank, U8 lo, U8 hi, U8 rim) {
+    s_fillLevel = level;
+    s_fillBank = bank;
+    s_fillLo = lo;
+    s_fillHi = hi;
+    s_fillRim = rim;
+}
+
+void ScreenFont_SmallTextFilled(S32 x, S32 y, const char *s, U8 ink, S32 cap, float rim) {
+    const int before = s_count;
+    ScreenFont_SmallText(x, y, s, ink, cap);
+    if (s_count > before && s_fillLevel)
+        s_items[before].filled = true, s_items[before].rim = rim;
 }
 
 S32 ScreenFont_Char(S32 x, S32 y, U8 c, U8 ink) {
@@ -262,6 +283,38 @@ static const Glyph &GetGlyph(int f, U8 c, float k, float scale, int q = 0) {
     return g;
 }
 
+// A filled letter's colour at glyph pixel (gx, gy), logical (lx, ly): the fill's level through
+// the bank's ramp, blended between neighbouring colours; with a rim, its ink where the glyph's
+// coverage falls off within rimPx (the glyph less its erosion by that many pixels).
+static void FillColour(const U8 *palette, const Glyph &g, int gx, int gy, int rimPx, float lx, float ly, U32 *r,
+                       U32 *gr, U32 *b) {
+    float l = s_fillLevel(lx, ly);
+    l = l < 0 ? 0 : l > 10 ? 10 : l;
+    l = s_fillLo + l * (s_fillHi - s_fillLo) / 10.0f;
+    const int l0 = (int)l, l1 = l0 < s_fillHi ? l0 + 1 : l0;
+    const float t = l - l0;
+    const U8 *c0 = palette + (s_fillBank * 16 + l0) * 3, *c1 = palette + (s_fillBank * 16 + l1) * 3;
+    float fr = c0[0] + (c1[0] - c0[0]) * t, fg = c0[1] + (c1[1] - c0[1]) * t, fb = c0[2] + (c1[2] - c0[2]) * t;
+    if (s_fillRim && rimPx > 0) {
+        U32 inner = 255;
+        for (int dy = -rimPx; dy <= rimPx && inner; dy++)
+            for (int dx = -rimPx; dx <= rimPx; dx++) {
+                const int x = gx + dx, y = gy + dy;
+                const U32 a = (x < 0 || y < 0 || x >= g.w || y >= g.h) ? 0 : g.bmp[y * g.w + x];
+                if (a < inner)
+                    inner = a;
+            }
+        const float rim = 1.0f - inner / 255.0f;
+        const U8 *c = palette + s_fillRim * 3;
+        fr += (c[0] - fr) * rim;
+        fg += (c[1] - fg) * rim;
+        fb += (c[2] - fb) * rim;
+    }
+    *r = (U32)(fr + 0.5f);
+    *gr = (U32)(fg + 0.5f);
+    *b = (U32)(fb + 0.5f);
+}
+
 void ScreenFont_Paint(U32 *argb, U32 pitch, U32 w, U32 h, const U8 *palette) {
     if (!ScreenFont_On() || !s_count)
         return;
@@ -278,6 +331,7 @@ void ScreenFont_Paint(U32 *argb, U32 pitch, U32 w, U32 h, const U8 *palette) {
         const S32 sx1 = bx + (S32)floorf((it.cx1 + 1) * k), sy1 = by + (S32)floorf((it.cy1 + 1) * k);
         const U8 *rgb = palette + it.ink * 3;
         const U32 cr = rgb[0], cg = rgb[1], cb = rgb[2];
+        const int rimPx = it.filled ? (int)floorf(k * it.rim + 0.5f) : 0;
         const S32 base = by + (S32)floorf((it.y + it.baseline) * k);
         float pen = (float)bx + it.x * k;
         for (const U8 *p = (const U8 *)it.s; *p; p++) {
@@ -297,10 +351,14 @@ void ScreenFont_Paint(U32 *argb, U32 pitch, U32 w, U32 h, const U8 *palette) {
                     const U32 a = src[i2];
                     if (!a || x < sx0 || x >= sx1 || x < 0 || x >= (S32)w)
                         continue;
+                    U32 pr = cr, pg = cg, pb = cb;
+                    if (it.filled && s_fillLevel)
+                        FillColour(palette, g, i2, j, rimPx, ((float)x + 0.5f - bxf) / k, ((float)y + 0.5f - byf) / k,
+                                   &pr, &pg, &pb);
                     const U32 ia = 255 - a, d = dst[x];
-                    const U32 r = (cr * a + ((d >> 16) & 0xff) * ia) / 255;
-                    const U32 gg = (cg * a + ((d >> 8) & 0xff) * ia) / 255;
-                    const U32 b = (cb * a + (d & 0xff) * ia) / 255;
+                    const U32 r = (pr * a + ((d >> 16) & 0xff) * ia) / 255;
+                    const U32 gg = (pg * a + ((d >> 8) & 0xff) * ia) / 255;
+                    const U32 b = (pb * a + (d & 0xff) * ia) / 255;
                     dst[x] = 0xff000000u | r << 16 | gg << 8 | b;
                 }
             }

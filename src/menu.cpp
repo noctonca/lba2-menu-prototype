@@ -8,6 +8,7 @@
 #include "menu_parts.h"
 #include "lang.h"
 #include "ui.h"
+#include "word_fire.h"
 #include "twinsun.h"
 #include "screen_font.h"
 #include "prop_scale.h"
@@ -2377,10 +2378,19 @@ static void DrawProductTitle(S32 x0, S32 x1, S32 firstRow) {
     // LBA centred on the line under it, the 2 hanging right of it as a superscript does.
     const S32 wMark = wLba + MARK_SUP_GAP + wSup, xMark = cx - wLba / 2;
     const S32 wSub = MarkSubWidth(), xSub = cx - wSub / 2;
+    // Fire in LBA and the 2 (word_fire.h), over their box; the shadows stay black.
+    WordFire_Frame(xMark, top, xMark + wMark - 1, top + MARK_CAP - 1);
     for (int pass = 0; pass < 2; pass++) {  // the shadows, then the letters over them
         const S32 d = pass ? 0 : MARK_SHADOW, ds = pass ? 0 : MARK_SUB_SHADOW;
-        ScreenFont_SmallText(xMark + d, top + d, "LBA", pass ? INK_GOLD : INK_BLACK, MARK_CAP);
-        ScreenFont_SmallText(xMark + wLba + MARK_SUP_GAP + d, top + d, "2", pass ? INK_GOLD : INK_BLACK, MARK_SUP_CAP);
+        if (pass) {
+            // The 2's rim half LBA's: at its size a full one left little fire inside (the
+            // maintainer, 2026-11-16).
+            ScreenFont_SmallTextFilled(xMark, top, "LBA", INK_GOLD, MARK_CAP, 1.5f);
+            ScreenFont_SmallTextFilled(xMark + wLba + MARK_SUP_GAP, top, "2", INK_GOLD, MARK_SUP_CAP, 0.75f);
+        } else {
+            ScreenFont_SmallText(xMark + d, top + d, "LBA", INK_BLACK, MARK_CAP);
+            ScreenFont_SmallText(xMark + wLba + MARK_SUP_GAP + d, top + d, "2", INK_BLACK, MARK_SUP_CAP);
+        }
         S32 x = xSub;
         for (const char *c = kMarkSub; *c; c++) {
             const char one[2] = {*c, 0};

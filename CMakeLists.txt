@@ -70,6 +70,7 @@ add_executable(lba2menu
     src/main.cpp
     src/host.cpp
     src/game_pieces.cpp
+    src/word_fire.cpp
     src/menu.cpp
     src/bindings.cpp
     src/more_options.cpp
