@@ -1,5 +1,5 @@
 #!/bin/bash
-# Play test: the help window's legend at the size that fits (switch legendfit, F8; off at start).
+# Play test: the help window's legend at the size that fits (switch legendfit, F8; on at start).
 #   ./play-legendfit.sh [--size 1024x768]
 # Writes .runs/legendfit/<time>/trace.log for reading back.
 set -euo pipefail
@@ -15,9 +15,9 @@ cp "$here/build/lba2menu" "$run/lba2menu"
 cat <<'STEPS'
 Steps (the window opens on Keys and buttons at 1024x768, the one column, game font):
   1. Look at the legend under the help: Enter Open, Del Defaults, Tab Gamepad, Esc Back.
-     It does not fit at 2x, so today it drops to 1x.
-  2. F8 flips legendfit; the toast says which. 1: the row at the size that fills the
-     window's width, between 1x and 2x. Flip a few times from where you sit.
+     It does not fit at 2x, so it takes the size that fills the window's width,
+     between 1x and 2x.
+  2. F8 flips legendfit; the toast says which. 0: the old drop to 1x.
   3. Move the mouse over the legend: each entry lights where it is drawn; a click on
      Defaults asks (Esc cancels).
   4. Language and interface > Text: Deutsch, then back to Keys and buttons: the

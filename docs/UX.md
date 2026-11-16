@@ -203,7 +203,10 @@ the band; the voice keeps about 490 px there). **[self test: legend]** The first
 sits inside the composition, in the band's place.
 In the one column the legend is one line along the bottom of the 1997
 dialogue window, in its third line: the 8x8 chips at 2x when the line fits,
-1x (the 1997 key screen's size) when it does not, and the help keeps two
+and when it does not, the largest size between 1x and 2x that fits, its letters
+drawn as the menu's text is at a proportional scale (EPmager, 2026-11-16; switch
+`legendfit`; without it, or at `propscale` below 5, 1x, the 1997 key screen's
+size), and the help keeps two
 lines, as in the band; no help at 640x480 needs a third in any of the six
 languages (measured 2026-11-11). Before, the one column had no legend, so a
 pad player on a 4:3 or 5:4 screen saw no buttons at all (EPmager,

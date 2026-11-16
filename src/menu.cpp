@@ -338,7 +338,7 @@ static int sw_overlay = 0;
 static int sw_whole = 0;
 static int sw_propscale = 5;  // proportional scale (prop_scale.h), mode 5 decided 2026-11-16
 static int sw_zsub = 0;       // Zilla Slab letters at quarter pixels
-static int sw_legendfit = 0;  // the help window's legend at the size that fits, not 2x or 1x
+static int sw_legendfit = 1;  // the help window's legend at the size that fits (EPmager, 2026-11-16)
 // The chosen preset: "(current)" after its name always; 1 also gives it the green
 // current-value plasma, as before (EPmager, 2026-11-11: green and the blue cursor read alike,
 // so he asked for the words alone). F3; off at start, to show his proposal.
@@ -2912,7 +2912,7 @@ static const SwitchDef kSwitches[] = {
     {"pointer", &sw_pointer, 0, 2, 0},   // for tests: as if the mouse (1) or a finger (2) was used last
     {"propscale", &sw_propscale, 0, 6, 5},  // the menu at a proportional scale (5, decided 2026-11-16), F5
     {"zsub", &sw_zsub, 0, 1, 0},  // Zilla Slab letters at quarter pixels, F6
-    {"legendfit", &sw_legendfit, 0, 1, 0},  // the help window's legend fitted to its width, F8
+    {"legendfit", &sw_legendfit, 0, 1, 1},  // the help window's legend fitted to its width, F8
 };
 
 bool Menu_SetSwitch(const char *name, int v) {
