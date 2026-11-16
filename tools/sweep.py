@@ -250,7 +250,7 @@ def check(state):
                                 f"{l['text']!r} {l['value']!r}")
             if l["cursor"] and l["first"] and not (i and lines[i - 1]["head"]):
                 problems.append(f"table: {l['text']!r} is first in its group, and its group's head is not shown")
-    # The rows by pane, in draw order (the first-launch title is not a pane).
+    # The rows by pane, in draw order (a title is not a pane).
     panes = {}
     for r in state["rows"]:
         if r["pane"] != "title":

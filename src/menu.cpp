@@ -435,13 +435,6 @@ static const Row kAdvancedRows[] = {
      NULL},
 };
 
-static const Row kFirstRows[] = {
-    {R_PRESET_CHOICE, "Modern", 0, "Today's look, bugs fixed. You can change this later in the Options Menu.", NULL,
-     NULL, NULL},
-    {R_PRESET_CHOICE, "Classic", 1, "As in 1997, bugs and all. You can change this later in the Options Menu.", NULL,
-     NULL, NULL},
-};
-
 // A fixture: today's Options page from the boot menu, to diff against lba2cc's
 // `ui menu-main-options` capture.
 static const Row kOriginalRows[] = {
@@ -595,13 +588,10 @@ static Page g_pages[P_COUNT] = {
     PAGE("Sound", kSoundRows),
     PAGE("Controls and camera", kControlsRows),
     PAGE("Advanced and reset", kAdvancedRows),
-    PAGE("First launch", kFirstRows),
     PAGE("original", kOriginalRows),
 };
 static const Page kGamePages[3] = {PAGE("Game menu", kMainRows), PAGE("Load game", kLoadRows), PAGE("Save game", kSaveRows)};
 #undef PAGE
-
-static bool g_first;       // first-launch screen
 
 static const char *RowLabel(const Row &r) {
     if (r.type == R_SETTING)
@@ -610,7 +600,7 @@ static const char *RowLabel(const Row &r) {
         return g_saves[r.arg];
     if (r.type == R_AUTOSAVE)
         return kAutosaveName;
-    if (r.type == R_PRESET_CHOICE && !g_first && r.arg == g_preset) {
+    if (r.type == R_PRESET_CHOICE && r.arg == g_preset) {
         static char marked[2][64];  // two rows can be drawn before the first is used
         static int next;
         char *out = marked[next++ & 1];
@@ -868,7 +858,7 @@ static const char *HelpFor(const Row *r) {
     if (r->type == R_GAME && g_menuNote[0])
         return g_menuNote;
     // The preset in use, changed since: Enter puts its settings back, and says so.
-    if (r->type == R_PRESET_CHOICE && !g_first && r->arg == g_preset && PresetChanged())
+    if (r->type == R_PRESET_CHOICE && r->arg == g_preset && PresetChanged())
         return "You changed some of its settings. Restore puts them back.";
     return RowHelp(*r) ? RowHelp(*r) : "";
 }
@@ -1009,7 +999,7 @@ static void SyncView() {
         return;
     const int was = g_layoutWide;
     g_layoutWide = wide;
-    if (was < 0 || g_first)
+    if (was < 0)
         return;
     g_scroll = 0;
     const Place &t = Top();
@@ -1094,7 +1084,7 @@ static void OpenGameMenu() {
 }
 
 // Esc goes somewhere: everywhere but the game menu before a game (1997's first menu).
-static bool EscGoesBack() { return g_first || !(g_depth == 1 && TopPage() == P_MAIN && !g_inGame); }
+static bool EscGoesBack() { return !(g_depth == 1 && TopPage() == P_MAIN && !g_inGame); }
 
 static void PutCursorOn(RowType type, int arg);
 
@@ -1113,7 +1103,7 @@ static void Pop() {
     }
 }
 
-void Menu_Init(bool firstLaunch) {
+void Menu_Init() {
     for (int s = 0; s < S_COUNT; s++)
         g_val[s] = FreshValue(s);
     g_preset = 0;
@@ -1128,14 +1118,15 @@ void Menu_Init(bool firstLaunch) {
     snprintf(g_island, sizeof g_island, "%s", kIslands[0]);
     g_saveClock = 0;
     g_menuNote = "";
-    g_first = firstLaunch;
+    // Every start opens on the game menu, a fresh install's too, on Modern: nothing is asked and
+    // nothing plays before the player could open Options (decided 2026-11-16).
     g_depth = 1;
-    g_stack[0].page = g_first ? P_FIRST : P_MAIN;
-    g_stack[0].row = g_first ? 0 : ResolveRow(P_MAIN, 0);  // Resume game when there is a save, as 1997
+    g_stack[0].page = P_MAIN;
+    g_stack[0].row = ResolveRow(P_MAIN, 0);  // Resume game when there is a save, as 1997
     g_voice.text[0] = 0;
     g_layoutWide = Wide() ? 1 : 0;
-    Trace("init layout=%s logical=%ux%u first=%d", Wide() ? "wide" : "column",
-          (unsigned)Host_LogicalW(), (unsigned)Host_LogicalH(), (int)g_first);
+    Trace("init layout=%s logical=%ux%u", Wide() ? "wide" : "column", (unsigned)Host_LogicalW(),
+          (unsigned)Host_LogicalH());
 }
 
 static void ChangeSetting(int s, int dir) {
@@ -1197,19 +1188,6 @@ static void Activate(const Row &r) {
             ChangeSetting(r.arg, +1);
         break;
     case R_PRESET_CHOICE:
-        if (g_first) {
-            // One question, then play (docs/UX.md, Peak-End Rule): a new game, as 1997 starts
-            // with the intro when there is no save.
-            ApplyPreset(r.arg);
-            g_first = false;
-            g_presetBackup.have = false;
-            g_depth = 1;
-            g_stack[0].page = P_MAIN;
-            g_stack[0].row = ResolveRow(P_MAIN, 0);
-            Trace("first launch chose=%s", kPresetNames[r.arg]);
-            NewGame();
-            break;
-        }
         if (r.arg == 1 && g_preset != 1)
             Ask(Q_CLASSIC);
         else
@@ -1464,7 +1442,7 @@ static void UpdatePointer() {
     HostPointer in;
     Host_Pointer(&in);
     const PointTarget *at = PointAt(in.x, in.y);
-    if (g_onBack && LastPointer() == POINTER_NONE && !g_first && !MenuClosed() && !g_console) {
+    if (g_onBack && LastPointer() == POINTER_NONE && !MenuClosed() && !g_console) {
         // A key while on Back only brings the cursor back to its row (decided 2026-11-13); Esc
         // still goes back, as Back would have.
         g_onBack = false;
@@ -1666,7 +1644,7 @@ void Menu_Update() {
             Pop();
     } else if (r && r->type == R_TUNING) {
         MoreOptions_Keys(r->arg);  // Left and Right change the value, Del puts its default back
-    } else if (Wide() && !g_first && r && (r->type == R_CATEGORY || r->type == R_PRESET_ROW) &&
+    } else if (Wide() && r && (r->type == R_CATEGORY || r->type == R_PRESET_ROW) &&
                Host_Pressed(KEY_RIGHT)) {
         Activate(*r);  // wide, Right opens what Enter opens: a category, the preset page, a group
     }
@@ -1682,12 +1660,8 @@ void Menu_Update() {
     else if (TopPage() == P_KEYS && Host_Pressed(KEY_DEL))
         Bindings_AskReset();
 
-    if (Host_Pressed(KEY_ESC)) {
-        if (g_first)
-            Activate(g_pages[P_FIRST].rows[0]);  // Escape answers Modern
-        else
-            Pop();
-    }
+    if (Host_Pressed(KEY_ESC))
+        Pop();
 
     UpdateVoice();
 }
@@ -1759,7 +1733,7 @@ static void DrawColumnRow(const Row &r, int row, S32 x0, S32 y0, S32 x1, S32 y1,
     RowFill fill = cursor ? FILL_CURSOR : FILL_SHADE;
     bool active = RowActive(r);
 
-    if (sw_greencurrent && r.type == R_PRESET_CHOICE && !g_first && r.arg == g_preset && !cursor)
+    if (sw_greencurrent && r.type == R_PRESET_CHOICE && r.arg == g_preset && !cursor)
         fill = FILL_CURRENT;  // the chosen preset wears the current-value plasma
 
     bool slider = r.type == R_SETTING && (kSettings[r.arg].kind == K_SLIDER || kSettings[r.arg].kind == K_STEPS);
@@ -1953,7 +1927,7 @@ static void LegendFor(const Row *r, const char **keys, const char **words, int *
             const bool steps = k == K_SLIDER || k == K_STEPS;
             keys[*n] = steps ? "\x11\x10" : "\x11\x10" CHIP_AND "Enter";
             words[(*n)++] = steps ? "Adjust" : "Change";
-        } else if (r->type == R_PRESET_CHOICE && !g_first && r->arg == g_preset) {
+        } else if (r->type == R_PRESET_CHOICE && r->arg == g_preset) {
             // The preset in use: Enter does nothing until it is changed, then puts it back.
             if (PresetChanged()) {
                 keys[*n] = "Enter"; words[(*n)++] = "Restore";
@@ -1978,7 +1952,7 @@ static void LegendFor(const Row *r, const char **keys, const char **words, int *
     keys[*n] = "Esc";
     // In play the game menu's Esc goes back to the game: the legend says so, as its first row
     // does (no corner Back there either).
-    words[(*n)++] = g_first ? "Modern" : g_depth == 1 && TopPage() == P_MAIN ? "Resume" : "Back";
+    words[(*n)++] = g_depth == 1 && TopPage() == P_MAIN ? "Resume" : "Back";
 }
 
 // Help with another window: Space (the pad's Y) turns it, "More" in the legend before its
@@ -2312,7 +2286,7 @@ void Menu_DrawDialogueIn(S32 x0, S32 y0, S32 x1, S32 y1, const char **keysGiven,
 // of the rows. A row's height, as big a target as a row; it presses Esc.
 // Not on the game menu itself: Resume game is its first row (the maintainer, 2026-11-16).
 static bool BackShown() {
-    return LastPointer() != POINTER_NONE && !g_first && !MenuClosed() && !g_console && EscGoesBack() &&
+    return LastPointer() != POINTER_NONE && !MenuClosed() && !g_console && EscGoesBack() &&
            !(g_depth == 1 && TopPage() == P_MAIN);
 }
 // Always Back, one look and one width on every screen (decided 2026-11-12; on a question it
@@ -2323,7 +2297,7 @@ static S32 BackWidth() { return 44 + Ui_TextWidthAsIs(BackWord()) + 20; }
 // In the one column at the rows' left edge (1997's LargeurMenu 550, centred); wide on the
 // frame's side margin, left of the rows.
 static S32 BackLeft() {
-    return Wide() && !g_first ? Menu_WideFrame().x0 + WIDE_INSET_X : (S32)Host_LogicalW() / 2 - COLUMN_HALF_W;
+    return Wide() ? Menu_WideFrame().x0 + WIDE_INSET_X : (S32)Host_LogicalW() / 2 - COLUMN_HALF_W;
 }
 static struct {
     bool shown;
@@ -2368,7 +2342,7 @@ static int IslandOf(const char *where) {
 
 // The picture this page shows, NULL for none.
 static const U8 *PagePicture() {
-    if (g_confirm || g_first)
+    if (g_confirm)
         return NULL;
     if (TopPage() == P_MAIN)
         return !g_inGame && g_haveCurrent ? Host_SavePicture(IslandOf(g_currentIsland)) : NULL;
@@ -2477,7 +2451,7 @@ enum { STRIP_H = 60 };  // the voice line at 12 in, 10 under it: six rows and a 
 enum { BAND_H = 86 };   // the wide band: two lines of help and the legend
 static bool StripPage() {
     const int p = TopPage();
-    return !g_confirm && !g_first && (p == P_MAIN || p == P_LOAD || p == P_SAVE);
+    return !g_confirm && (p == P_MAIN || p == P_LOAD || p == P_SAVE);
 }
 
 // The strip with its bottom right corner at x1, y1: in the one column 8 in from the screen's,
@@ -2520,21 +2494,6 @@ static void DrawColumn() {
     const int count = ShownRows(t.page, shown);
     int cursor = Position(t.page, t.row);
 
-    // First launch on a canvas that takes the wide composition sits in its frame,
-    // the dialogue window where the band is on every other page.
-    bool framed = g_first && Wide();
-    WideFrame fr = Menu_WideFrame();
-    S32 oy = framed ? fr.y0 : 0;
-    if (g_first) {
-        Box(0, 0, W - 1, H - 1, 0);
-        const char *title = "Choose how to play";
-        S32 tx = W / 2 - Ui_TextWidth(title) / 2;
-        Ui_Text(tx + 4, oy + 64 + 4, title, INK_BLACK);  // the title shadow, +4,+4
-        Ui_Text(tx, oy + 64, title, INK_WHITE);
-        Menu_Record("title", title, "", FILL_SHADE, tx, oy + 64, tx + Ui_TextWidth(title),
-                    oy + 64 + TEXT_LINE_H).textLeft = tx;
-    }
-
     if (g_confirm) {
         DrawConfirm("confirm", W / 2 - 180, W / 2 + 180, 120);
     } else {
@@ -2550,12 +2509,10 @@ static void DrawColumn() {
             top = 4;
             bottom = H - 1 - STRIP_H - 14;
         }
-        if (g_first)
-            top = 168 - 8;
         // A page names itself in a title above its rows, as the wide pages do (EPmager,
         // 2026-11-12). The hub too, so the corner Back has its line and nothing moves when
         // it comes (decided 2026-11-12).
-        const bool titled = !g_first && !(pic && TopPage() == P_MAIN);  // the picture in its place
+        const bool titled = !(pic && TopPage() == P_MAIN);  // the picture in its place
         const S32 titleH = (titled ? ROW_PITCH : 0) + (pic ? PICTURE_H : 0);
         int visible = (bottom - top - titleH + ROW_GAP) / ROW_PITCH;
         if (visible > count)
@@ -2572,8 +2529,6 @@ static void DrawColumn() {
             g_scroll = cursor - visible + 1;
         S32 stackH = visible * ROW_PITCH - ROW_GAP;
         S32 y = top + (bottom - top - titleH - stackH) / 2 + titleH;  // centred above the dialogue window
-        if (g_first)
-            y = oy + 168;
         if (titled && t.page == P_MAIN) {
             DrawProductTitle(W / 2 - COLUMN_HALF_W, W / 2 + COLUMN_HALF_W, y);
         } else if (titled) {
@@ -2598,9 +2553,6 @@ static void DrawColumn() {
     LegendFor(g_confirm ? NULL : CursorRow(), keys, words, &nk);
     if (StripPage())
         DrawStrip(keys, words, nk);
-    else if (framed)
-        Menu_DrawDialogueIn(fr.x0 + WIDE_INSET_X, fr.y0 + fr.h - 1 - WIDE_INSET_Y - DIALOGUE_RISE,
-                            fr.x0 + fr.w - 1 - WIDE_INSET_X, fr.y0 + fr.h - 1 - WIDE_INSET_Y, keys, words, nk);
     else
         Menu_DrawDialogue(keys, words, nk);
 }
@@ -2673,7 +2625,7 @@ static void DrawWide() {
             RowFill fill = FILL_SHADE;
             if (i == cursor && Menu_CursorLit())
                 fill = FILL_CURSOR;
-            else if (sw_greencurrent && row.type == R_PRESET_CHOICE && !g_first && row.arg == g_preset)
+            else if (sw_greencurrent && row.type == R_PRESET_CHOICE && row.arg == g_preset)
                 fill = FILL_CURRENT;  // the chosen preset wears the current-value plasma, as in the column
             DrawWideRow("wide", row, shown[i], x0, y, x1, y + ROW_H, fill);
             y += ROW_PITCH;
@@ -2873,7 +2825,7 @@ void Menu_Draw() {
         Bindings_Draw();
     } else if (MoreOptions_Active()) {
         MoreOptions_Draw();
-    } else if (Wide() && !g_first) {
+    } else if (Wide()) {
         DrawWide();
     } else {
         DrawColumn();
@@ -2965,20 +2917,9 @@ bool Menu_Open(const char *name) {
     }
     g_console = CON_CLOSED;
     Bindings_Close();
-    if (!strcmp(name, g_pages[P_FIRST].name)) {  // a fresh install's question, before any game
-        g_first = true;
-        g_confirm = g_playing = g_quitShown = g_inGame = g_unsaved = false;
-        g_depth = 1;
-        g_stack[0].page = P_FIRST;
-        g_stack[0].row = 0;
-        g_scroll = 0;
-        Trace("open page=%s (control)", name);
-        return true;
-    }
     for (int p = P_MAIN; p <= P_SAVE; p++) {  // the game menu, and its pages from their rows
         if (strcmp(g_pages[p].name, name) != 0)
             continue;
-        g_first = false;
         g_confirm = false;
         g_quitShown = false;
         if (p == P_SAVE)
@@ -3000,7 +2941,6 @@ bool Menu_Open(const char *name) {
             if (g_pages[P_HUB].rows[i].type != R_RETURN && g_pages[P_HUB].rows[i].arg == p)
                 hubRow = i;
         // As the Options key opens them in play: Esc from the hub goes back to the game.
-        g_first = false;
         g_confirm = false;
         g_playing = g_quitShown = false;
         g_inGame = true;
@@ -3043,7 +2983,7 @@ void Menu_Reset() {
     g_scroll = 0;
     g_toast[0] = 0;
     g_toastUntil = 0;
-    Menu_Init(false);
+    Menu_Init();
 }
 
 int Menu_DrawnRows(const DrawnRow **rows) {
@@ -3075,7 +3015,7 @@ void Menu_Help(MenuHelp *h) {
 bool Menu_WantsQuit() { return g_quit; }
 
 const char *Menu_Layout() {
-    return g_playing ? "game" : g_quitShown ? "quit" : g_first ? "first-launch" : Wide() ? "wide" : "column";
+    return g_playing ? "game" : g_quitShown ? "quit" : Wide() ? "wide" : "column";
 }
 
 const char *Menu_PageName() {
@@ -3084,8 +3024,6 @@ const char *Menu_PageName() {
 
 // One for the hub; each page opened and a question add one.
 static int Depth() {
-    if (g_first)
-        return 1;
     return g_depth + (g_confirm ? 1 : 0);
 }
 

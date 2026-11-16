@@ -301,7 +301,7 @@ static void Check(std::vector<std::string> *found) {
                                      Repr(l.text).c_str()));
         }
     }
-    // The rows by pane, in draw order (the first-launch title is not a pane).
+    // The rows by pane, in draw order (a title is not a pane).
     std::vector<std::string> paneNames;
     std::map<std::string, std::vector<const DrawnRow *> > panes;
     for (int i = 0; i < n; i++) {
@@ -1938,15 +1938,6 @@ struct Walker {
         Key("esc");
         Expect(Drawn("Load game") && Drawn("Resume game"), "flow: after a first game: no Load game or no Resume game");
         Menu_SetSavesAtStart(20);
-
-        // First launch: one question, then play.
-        Start();
-        path.assign(1, "open First launch");
-        Menu_Open("First launch");
-        Frame();
-        Expect(!strcmp(Menu_Layout(), "first-launch"), Fmt("flow: first launch: on %s", Menu_Layout()));
-        Key("enter");
-        InGameScreen("first launch");
     }
 
     void Behavior() {
@@ -2268,7 +2259,7 @@ struct Walker {
 
     // Every voice text in lang/help.tsv fits its window in every Text language and both
     // fonts (2026-11-12): two lines of the band (620 px) and three of the 640x480 dialogue
-    // window (591 px); first launch's own window, three lines. Formats are filled with long
+    // window (591 px). Formats are filled with long
     // names; the fragments they are built from (" and ", ", in %s") are not checked alone.
     void Languages() {
         if (opt->only)
@@ -2280,7 +2271,6 @@ struct Walker {
                 const char *en = Lang_Text(i, 0);
                 if (en[0] == ' ' || en[0] == ',')
                     continue;
-                const bool first = strstr(en, "later in the Options Menu") != nullptr;
                 for (int lang = 0; lang < LANG_COUNT; lang++) {
                     std::string t;
                     int k = 0;
@@ -2294,7 +2284,7 @@ struct Walker {
                         }
                     }
                     S32 band = Voice_Lines(t.c_str(), 620), dlg = Voice_Lines(t.c_str(), 591);
-                    Expect(!((!first && band > 2) || dlg > 3), Fmt("language %d, font %d: %s needs %d band lines, %d dialogue lines", lang, font,
+                    Expect(!(band > 2 || dlg > 3), Fmt("language %d, font %d: %s needs %d band lines, %d dialogue lines", lang, font,
                                             Repr(t.c_str()).c_str(), (int)band, (int)dlg));
                 }
             }

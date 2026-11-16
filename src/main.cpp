@@ -6,7 +6,8 @@
 //   lba2menu --selftest [--size WxH] [--combo name=v,name=v ...] [--only PAGE] [--no-again] [--layout-only]
 //
 // It starts on the game menu before a game, with N fake saves (20; 0 for a player with none).
-// --first starts on the first launch's question instead; --options in a game, with Options
+// --first is a fresh install: no save, on Modern, as --saves 0 (a fresh install asks nothing
+// and opens on the game menu, decided 2026-11-16); --options in a game, with Options
 // open as the Options key opens them in play (Esc goes back to the game), as the prototype
 // started before it had the game menu.
 //
@@ -271,6 +272,7 @@ int Lba2Main(int argc, char *argv[]) {
             i++;
         } else if (!strcmp(a, "--first")) {
             first = true;
+            Menu_SetSavesAtStart(0);
         } else if (!strcmp(a, "--options")) {
             options = true;
         } else if (!strcmp(a, "--saves")) {
@@ -357,7 +359,7 @@ int Lba2Main(int argc, char *argv[]) {
     }
     if (fixedDt)
         Host_SetFixedDt(fixedDt);
-    Menu_Init(first);
+    Menu_Init();
     if (options && !first)
         Menu_Open("Options");
     if (selftest) {

@@ -3,7 +3,7 @@
 
 #include <stdio.h>
 
-void Menu_Init(bool firstLaunch);
+void Menu_Init();
 // How many fake saves Menu_Init and Menu_Reset make (20 unless --saves says).
 void Menu_SetSavesAtStart(int n);
 // What the pretend game plays (a save's name, AUTOSAVE, or "" for a new game), for the self test.

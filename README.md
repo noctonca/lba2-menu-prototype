@@ -94,14 +94,16 @@ rule there that breaks a promise changes the panel too.
 
     ./play.sh                      # 640x480, one column
     ./play.sh --size 1920x1080     # the wide layout (logical 960x540 at 2x)
-    ./play.sh --first              # the first-launch question
+    ./play.sh --first              # a fresh install: no saves, on Modern
     ./play.sh --saves 0            # a player with no saves
     ./play.sh --options            # in a game, Options open as the Options key opens them
 
 ### The game menu
 
-It starts as the game does for a returning player: on the game menu (1997's
-main menu, GAMEMENU.CPP), before any game. Its rows come and go as 1997's do:
+It starts on the game menu (1997's main menu, GAMEMENU.CPP), before any game. A
+fresh install starts there too, on Modern, after the logos: nothing is asked,
+and nothing plays before the player could open Options (decided 2026-11-16;
+1997 went straight into the intro with no save). New game plays the intro. Its rows come and go as 1997's do:
 Resume game when there is a current save (1997's current.lba: the game last
 started, loaded or resumed), Load game when there are saves, Save game only in
 a game; New game, Options and Quit always. There is nothing for Esc to go back
@@ -110,8 +112,7 @@ as 1997's does.
 
 The game is a black screen that names what it plays (a save, or a new game).
 Esc there opens the game menu over it, on Resume game, as the Menus key does in
-play; Esc on the game menu goes back to the game. The first launch's question
-ends in a new game: one question, then play.
+play; Esc on the game menu goes back to the game.
 
 Load game and Save game are lists of 20 fake saves in alphabetical order, as
 1997 lists them, named as lba2cc names a save it makes, shorter (see
@@ -319,7 +320,7 @@ Commands, one per line: `key <up|down|left|right|enter|esc|tab|del|f1..f12> [cou
 
 `open` takes an Options page as the Options key opens it in a game (Esc from
 Options goes back to the game), `Game menu`, `Load game` or `Save game` as the
-game menu opens them (Save game puts you in a game), or `First launch`.
+game menu opens them (Save game puts you in a game).
 
 `measure` prints the width in the game font of every setting's label, its
 widest value and its help, and of the hub's rows, for sizing panes.
@@ -479,7 +480,7 @@ walk finds starts with the walk's name:
   once. Deleting every named save leaves
   AUTOSAVE alone on Load game. With no saves (`--saves 0`) the game menu
   starts on New game without Resume game and Load game, and both come after
-  the first game. The first launch's question ends in the game.
+  the first game.
 
 - `esc:` from every row of every page, opened from the hub with Enter, Esc
   puts the cursor back where it was (the Controls page, its groups, the

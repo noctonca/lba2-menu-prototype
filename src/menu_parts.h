@@ -45,7 +45,7 @@ struct Page {
 // the game menu and its two save lists.
 enum { KEY_GROUPS = 7 };  // bindings.cpp kGroups
 enum {
-    P_HUB, P_PRESET, P_LANG, P_DISPLAY, P_SOUND, P_CONTROLS, P_ADVANCED, P_FIRST, P_ORIGINAL,
+    P_HUB, P_PRESET, P_LANG, P_DISPLAY, P_SOUND, P_CONTROLS, P_ADVANCED, P_ORIGINAL,
     P_KEYS, P_KEY_GROUP, P_MORE = P_KEY_GROUP + KEY_GROUPS, P_MAIN, P_LOAD, P_SAVE, P_COUNT
 };
 void Bindings_Pages(Page *pages);     // fills pages[P_KEYS] and pages[P_KEY_GROUP + group]
@@ -173,7 +173,7 @@ struct MenuHelp {
 };
 void Menu_Help(MenuHelp *out);
 const char *Menu_PageName();  // as `state` names it
-const char *Menu_Layout();    // as `state` names it: wide, column, first-launch, closed
+const char *Menu_Layout();    // as `state` names it: wide, column, closed
 // Where the player is, as one string ("page | cursor row | confirm"), and how deep:
 // each screen or pane Enter opens adds one, so Esc should take it back by one.
 int Menu_Where(char *buf, size_t n);

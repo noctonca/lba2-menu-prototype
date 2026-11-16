@@ -165,4 +165,3 @@
 {"<ENTER> starts it again. <ESC> quits.", "<ENTER> le relance. <ESC> quitte.", "<ENTER> startet es neu. <ESC> beendet.", "<ENTER> lo vuelve a abrir. <ESC> sale.", "<ENTER> lo riavvia. <ESC> esce.", "<ENTER> volta a abri-lo. <ESC> sai."},
 {"A new game.", "Une nouvelle partie.", "Ein neues Spiel.", "Una partida nueva.", "Una nuova partita.", "Um jogo novo."},
 {"<ESC> opens the game menu.", "<ESC> ouvre le menu du jeu.", "<ESC> \x94""ffnet das Spielmen\x81"".", "<ESC> abre el men\xa3"" del juego.", "<ESC> apre il menu di gioco.", "<ESC> abre o menu do jogo."},
-{"Choose how to play", "Choisissez comment jouer", "W\x84""hlen Sie, wie Sie spielen", "Elige c\xa2""mo jugar", "Scegli come giocare", "Escolhe como jogar"},

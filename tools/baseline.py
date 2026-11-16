@@ -83,7 +83,7 @@ def walk_lines(seed):
 
 
 def jobs():
-    """(name, size, first launch, lines) for each run."""
+    """(name, size, fresh install (--first), lines) for each run."""
     out = []
     for size in SIZES:
         for seed in SEEDS:

@@ -169,7 +169,8 @@ is no pointer, so the cost of a target is the number of key presses to it.
   *(review rule 9)*
 - A long list of the same kind (resolutions, languages beyond six) is a
   sub-page or a scroll list, never a value that takes ten presses to cycle.
-- First launch asks one question with two answers.
+- A fresh install asks nothing: it plays on Modern, and the preset is in
+  Options (decided 2026-11-16).
 
 **Miller's Law, Chunking** (working memory holds about 7 chunks).
 - A page holds at most 7 rows (the brand book's "a plain menu does not
@@ -199,8 +200,7 @@ the voice keeps the band's width (decided 2026-11-03: a legend in a row left
 the voice 248 to 312 px on the Controls page). The band holds three lines, so
 four keys go in two columns read downwards, Back last at the bottom right as
 everywhere else (2026-11-12: the groups page's Del Defaults pushed Back out of
-the band; the voice keeps about 490 px there). **[self test: legend]** The first launch's question
-sits inside the composition, in the band's place.
+the band; the voice keeps about 490 px there). **[self test: legend]**
 In the one column the legend is one line along the bottom of the 1997
 dialogue window, in its third line: the 8x8 chips at 2x when the line fits,
 and when it does not, the largest size between 1x and 2x that fits, its letters
@@ -376,8 +376,9 @@ explains itself in the voice as the cursor lands on it; there is no help page.
 are no longer the preset ("Preset: Modern, changed"), and the changed values
 are in `ink-count`.
 
-**Peak-End Rule.** First launch ends with the game, not with a settings
-screen: one question, then play.
+**Peak-End Rule.** A fresh install opens on the game menu after the logos, so
+the player can set Options before anything plays, and New game starts with
+the intro (decided 2026-11-16; 1997 went straight into the intro with no save).
 
 **Selective Attention, Banner Blindness.** The voice first says one short thing
 about the row under the cursor. Help that fits one line in English *(review
@@ -455,8 +456,8 @@ strip at the value edge, which read badly on a TV.
   formats with long names and checks every language in both fonts: two band
   lines at 620 px, three dialogue lines at 591 px. Measured: translations run
   a median 1.08 to 1.19 times English and at most 1.6 to 2.0 times, the
-  largest on short texts; every row's help fits, and the two questions and
-  first launch fit after the Classic question was shortened.
+  largest on short texts; every row's help fits, and the two questions fit
+  after the Classic question was shortened.
 
 ## Keys
 
