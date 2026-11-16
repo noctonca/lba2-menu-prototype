@@ -1,6 +1,7 @@
 #include "game_pieces.h"
 
 #include "host.h"
+#include "ui.h"
 #include "screen_picture.h"
 
 #include <POLYGON/POLY.H>
@@ -34,17 +35,16 @@ void GamePieces_AnimatePlasma() {
     DoTextureAnimation();
 }
 
-// GAMEMENU.CPP DrawFireBar, with the bank passed in.
+// GAMEMENU.CPP DrawFireBar, with the bank passed in, at a 1997 row's grain. DrawFireBar runs
+// the whole pattern (U to 2 * ((63 << 8) + 250), V to (63 << 8) + 250) across its box, and
+// 1997 drew it only on its 550 x 50 rows. Here every box takes the pattern as a row that
+// size has it and shows the part that fits: a chip or the corner Back is not a whole row's
+// plasma squeezed in, a wide row is not one stretched (the maintainer, 2026-11-16).
 void GamePieces_FireBar(S32 xmin, S32 ymin, S32 xmax, S32 ymax, S32 bank) {
-    GamePieces_FireBarSpan(xmin, ymin, xmax, ymax, bank, xmax - xmin);
-}
-
-void GamePieces_FireBarSpan(S32 xmin, S32 ymin, S32 xmax, S32 ymax, S32 bank, S32 spanW) {
     if (!Host_Pixels())
         return;
-    // DrawFireBar's U runs to 2 * ((63 << 8) + 250) across the box; here across spanW.
-    const S32 uFull = 2 * ((63 << 8) + 250);
-    const S32 u1 = spanW > 0 ? uFull * (xmax - xmin) / spanW : uFull;
+    const S32 u1 = 2 * ((63 << 8) + 250) * (xmax - xmin) / (2 * COLUMN_HALF_W);
+    const S32 v1 = ((63 << 8) + 250) * (ymax - ymin) / ROW_H;
     Struc_Point p[4];
     p[0].Pt_XE = (S16)xmin;
     p[0].Pt_YE = (S16)ymin;
@@ -53,11 +53,11 @@ void GamePieces_FireBarSpan(S32 xmin, S32 ymin, S32 xmax, S32 ymax, S32 bank, S3
     p[1].Pt_XE = (S16)xmin;
     p[1].Pt_YE = (S16)ymax;
     p[1].Pt_MapU = 0;
-    p[1].Pt_MapV = (U16)((63 << 8) + 250);
+    p[1].Pt_MapV = (U16)v1;
     p[2].Pt_XE = (S16)xmax;
     p[2].Pt_YE = (S16)ymax;
     p[2].Pt_MapU = (U16)u1;
-    p[2].Pt_MapV = (U16)((63 << 8) + 250);
+    p[2].Pt_MapV = (U16)v1;
     p[3].Pt_XE = (S16)xmax;
     p[3].Pt_YE = (S16)ymin;
     p[3].Pt_MapU = (U16)u1;

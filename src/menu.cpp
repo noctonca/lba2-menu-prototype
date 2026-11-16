@@ -2308,15 +2308,7 @@ static void DrawBack() {
     HostPointer in;
     Host_Pointer(&in);
     const bool lit = !Menu_CursorLit();  // it has the cursor
-    if (lit) {
-        // The plasma at a row's grain, as the slider shows part of a row's (1997 drew it
-        // only on its 550 px rows): squeezed into the button it read as scrunched.
-        GamePieces_BackupCorners(x0, y0, x1, y1);
-        GamePieces_FireBarSpan(x0, y0, x1, y1, PLASMA_CURSOR, 2 * COLUMN_HALF_W);
-        GamePieces_Frame(x0, y0, x1, y1);
-    } else {
-        Ui_RowBackground(x0, y0, x1, y1, FILL_SHADE);
-    }
+    Ui_RowBackground(x0, y0, x1, y1, lit ? FILL_CURSOR : FILL_SHADE);
     Ui_Arrow(x0 + 18, yc, -1);
     Ui_TextAsIs(x0 + 44, yc - ROW_TEXT_RISE, BackWord(), INK_WHITE);
     Menu_Point(POINT_KEY, x0, y0, x1, y1, KEY_ESC, POINT_KEY_BACK);
