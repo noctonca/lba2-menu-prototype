@@ -46,6 +46,7 @@
 #include "selftest.h"
 #include "shot.h"
 #include "trace.h"
+#include "video_logo.h"
 #include "ui.h"
 
 #include <PLATFORM/PLATFORM.H>
@@ -58,6 +59,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <chrono>
 #include <string>
 #include <vector>
 
@@ -178,6 +180,37 @@ static bool RunCommand(Runner &r, const char *line) {
     } else if (!strcmp(cmd, "shotscreen")) {
         bool ok = Host_ShotScreen(a);
         printf("%s %s\n", ok ? "shotscreen" : "err shotscreen", a);
+    } else if (!strcmp(cmd, "logoframe")) {
+        // logoframe <path.png> <video frame> [scale] [ring 0|1] [background rrggbb]: the logo as the
+        // intro frames it at that moment, to compare with the video's frames.
+        int scale = 1, ring = 1;
+        unsigned bg = 0;
+        float frame = (float)atof(b);
+        sscanf(line, "%*s %*s %*s %d %d %x", &scale, &ring, &bg);
+        scale = scale < 1 ? 1 : scale > 16 ? 16 : scale;
+        std::vector<unsigned> px((size_t)320 * scale * 200 * scale, 0xff000000u | bg);
+        VideoLogo_RenderVideoFrame((U32 *)px.data(), (U32)scale, frame, ring != 0);
+        bool ok = Shot_WriteArgb(a, 320 * scale, 200 * scale, px.data());
+        printf("%s %s\n", ok ? "logoframe" : "err logoframe", a);
+    } else if (!strcmp(cmd, "logobench")) {
+        // logobench <scale> [video frame] [ring 0|1]: milliseconds to draw one whole video frame
+        // at `scale`, by default the build-in's busiest moment (164: both rings over the logo).
+        if (!strcmp(a, "init")) {  // logobench init: milliseconds to build the field from the SVG
+            const auto i0 = std::chrono::steady_clock::now();
+            VideoLogo_Init();
+            printf("logobench init %.2f ms\n", std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - i0).count());
+            return true;
+        }
+        const int scale = atoi(a) < 1 ? 1 : atoi(a) > 16 ? 16 : atoi(a);
+        std::vector<unsigned> px((size_t)320 * scale * 200 * scale, 0xff000000u);
+        const auto t0 = std::chrono::steady_clock::now();
+        enum { RUNS = 20 };
+        const float frame = n >= 3 ? (float)atof(b) : 164.0f;
+        int ring = 1;
+        sscanf(line, "%*s %*s %*s %d", &ring);
+        for (int i = 0; i < RUNS; i++)
+            VideoLogo_RenderVideoFrame((U32 *)px.data(), (U32)scale, frame, ring != 0);
+        printf("logobench %dx%d %.2f ms a frame\n", 320 * scale, 200 * scale, std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - t0).count() / RUNS);
     } else if (!strcmp(cmd, "switch")) {
         if (!Menu_SetSwitch(a, atoi(b)))
             printf("err unknown switch %s\n", a);
@@ -467,6 +500,8 @@ int Lba2Main(int argc, char *argv[]) {
             Menu_SetSwitch("propscale", Menu_GetSwitch("propscale") == 5 ? 1 : 5);
         if (Host_Pressed(KEY_F8))
             Menu_SetSwitch("legendfit", !Menu_GetSwitch("legendfit"));
+        if (Host_Pressed(KEY_F9))  // the wordmark, then the intro's logo with each of its three idle ripples
+            Menu_SetSwitch("videologo", (Menu_GetSwitch("videologo") + 1) % 4);
         if (Host_Pressed(KEY_F6))
             Menu_SetSwitch("zsub", !Menu_GetSwitch("zsub"));
         if (Host_Pressed(KEY_F12))

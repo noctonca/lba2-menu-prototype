@@ -1,5 +1,6 @@
 #include "host.h"
 #include "screen_font.h"
+#include "video_logo.h"
 
 #include <PLATFORM/PLATFORM.H>
 #include <SVGA/CLIP.H>
@@ -548,6 +549,7 @@ bool Host_Init(const HostConfig &cfg) {
 
     SetFont(font, 2, 8);  // as PERSO.CPP sets it
     ScreenFont_Init();
+    VideoLogo_Init();
     SetOverlayPrePresentCallback(PaintOverlay);  // after the smooth picture's hook
     SetPrePresentCallback(PrePresent);
     Rnd_Seed(1997);       // the plasma's start; fixed so captures repeat
@@ -1021,6 +1023,7 @@ static void PaintPointer(U32 *argb, U32 pitch, U32 w, U32 h, const U8 *palette) 
 static void PaintOverlay(U32 *argb, U32 pitch, U32 w, U32 h, const U8 *palette) {
     PropScale_PaintText(argb, pitch, w, h, palette);
     ScreenFont_Paint(argb, pitch, w, h, palette);
+    VideoLogo_Paint(argb, pitch, w, h);
     PaintPointer(argb, pitch, w, h, palette);
 }
 

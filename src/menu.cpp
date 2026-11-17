@@ -9,6 +9,7 @@
 #include "lang.h"
 #include "ui.h"
 #include "word_fire.h"
+#include "video_logo.h"
 #include "twinsun.h"
 #include "screen_font.h"
 #include "prop_scale.h"
@@ -338,6 +339,12 @@ static int sw_overlay = 0;
 static int sw_whole = 0;
 static int sw_propscale = 5;  // proportional scale (prop_scale.h), mode 5 decided 2026-11-16
 static int sw_zsub = 0;       // Zilla Slab letters at quarter pixels
+// The intro's logo in the product name's place (a trial, 2026-11-17; video_logo.h): 0 the
+// wordmark; 1 the logo, its ripple every 30 seconds at half the video's height; 2 that
+// ripple at the video's height; 3 at the video's height with the blue ring.
+static int sw_videologo = 0;
+static int sw_logosub = 0;    // 1 = CLASSIC COMMUNITY kept under the logo
+static int sw_logotitle = 0;  // 1 = the logo in a title's 56 px too (in play), not the wordmark
 static int sw_legendfit = 1;  // the help window's legend at the size that fits (EPmager, 2026-11-16)
 // The chosen preset: "(current)" after its name always; 1 also gives it the green
 // current-value plasma, as before (EPmager, 2026-11-11: green and the blue cursor read alike,
@@ -2394,6 +2401,40 @@ static S32 MarkSubWidth(const MarkSize &m) {
     return w;
 }
 
+// CLASSIC COMMUNITY, its shadow then its letters, the top of its capitals at subTop.
+static void DrawMarkSub(S32 xSub, S32 subTop, const MarkSize &m) {
+    for (int pass = 0; pass < 2; pass++) {
+        const S32 ds = pass ? 0 : m.subShadow;
+        S32 x = xSub;
+        for (const char *c = kMarkSub; *c; c++) {
+            const char one[2] = {*c, 0};
+            ScreenFont_SmallText(x + ds, subTop + ds, one, pass ? INK_PALE : INK_BLACK, m.subCap);
+            x += ScreenFont_SmallWidth(one, m.subCap) + m.subSpacing;
+        }
+    }
+}
+
+static bool LogoOn() { return sw_videologo && ScreenFont_On() && VideoLogo_Ready(); }
+
+// The intro's logo for the name (switch videologo), centred on cx between top and bottom
+// (both included), as wide as its height makes it. With logosub, CLASSIC COMMUNITY keeps
+// the bottom of that space and the logo takes what is above it.
+static void DrawLogoTitle(S32 cx, S32 top, S32 bottom, const MarkSize &m) {
+    S32 logoBottom = bottom, l = cx, r = cx;
+    if (sw_logosub) {
+        // The line's cell reaches half a capital under its baseline, and its shadow further:
+        // all of it stays above `bottom`, or the row drawn under it would take it off the screen.
+        const S32 subTop = bottom + 1 - m.subShadow - (m.subCap + m.subCap / 2), wSub = MarkSubWidth(m);
+        DrawMarkSub(cx - wSub / 2, subTop, m);
+        logoBottom = subTop - m.gap - 1;
+        l = cx - wSub / 2, r = cx - wSub / 2 + wSub - 1;
+    }
+    const S32 h = logoBottom - top + 1, w = (S32)(h * VideoLogo_Aspect() + 0.5f);
+    const S32 x0 = cx - w / 2, x1 = x0 + w - 1;
+    VideoLogo_Queue(x0, top, x1, logoBottom);
+    Menu_Record("title", PRODUCT_NAME, "", FILL_SHADE, x0 < l ? x0 : l, top, x1 > r ? x1 : r, bottom).textLeft = x0 < l ? x0 : l;
+}
+
 // Over x0..x1, its last line MARK_ROW_GAP above firstRow.
 static void DrawProductTitle(S32 x0, S32 x1, S32 firstRow, const MarkSize &m = kMarkTitle) {
     const S32 CAP = m.cap, SUP_CAP = m.supCap, SUP_GAP = m.supGap, SUB_CAP = m.subCap, GAP = m.gap, SHADOW = m.shadow,
@@ -2403,6 +2444,10 @@ static void DrawProductTitle(S32 x0, S32 x1, S32 firstRow, const MarkSize &m = k
         Ui_Title(x0, x1, firstRow - ROW_PITCH, PRODUCT_NAME, true);
         Menu_Record("title", PRODUCT_NAME, "", FILL_SHADE, x0, firstRow - ROW_PITCH, x1, firstRow - ROW_PITCH + TEXT_LINE_H)
             .textLeft = cx - Ui_TextWidthAsIs(PRODUCT_NAME) / 2;
+        return;
+    }
+    if (LogoOn() && sw_logotitle && &m == &kMarkTitle) {  // a title's pitch, less the gap to the first row
+        DrawLogoTitle(cx, firstRow - ROW_PITCH, firstRow - MARK_ROW_GAP - 1, m);
         return;
     }
     const S32 subTop = firstRow - MARK_ROW_GAP - SUB_CAP;
@@ -2458,6 +2503,10 @@ static void DrawPictureBetween(const U8 *pic, S32 x, S32 above, S32 firstRow) {
     const Row *r = CursorRow();
     if (!pic || (TopPage() == P_MAIN && !(r && r->type == R_GAME && r->arg == M_RESUME))) {
         const MarkSize &m = kMarkPlace;
+        if (LogoOn()) {  // the logo fills the picture's place, frame and all
+            DrawLogoTitle(x - 1 + (SAVE_PICTURE_W + 2) / 2, y - 1, y - 1 + frameH - 1, m);
+            return;
+        }
         const S32 markH = m.cap + m.gap + m.subCap;
         DrawProductTitle(x - 1 + SAVE_PICTURE_W / 2 - COLUMN_HALF_W, x - 1 + SAVE_PICTURE_W / 2 + COLUMN_HALF_W,
                          y - 1 + (frameH - markH) / 2 + markH + MARK_ROW_GAP, m);
@@ -2824,6 +2873,8 @@ void Menu_Draw() {
     ScreenFont_Set(g_val[S_FONT]);  // before the layout: widths follow the font
     Ui_SetLang(g_val[S_TEXT_LANG]);  // and the language
     ScreenFont_BeginFrame();
+    VideoLogo_BeginFrame();
+    VideoLogo_SetIdle(sw_videologo);
     Ui_BeginFrame();
     SyncView();
     g_drawnCount = 0;
@@ -2886,10 +2937,15 @@ static const SwitchDef kSwitches[] = {
     {"pointer", &sw_pointer, 0, 2, 0},   // for tests: as if the mouse (1) or a finger (2) was used last
     {"propscale", &sw_propscale, 0, 6, 5},  // the menu at a proportional scale (5, decided 2026-11-16), F5
     {"zsub", &sw_zsub, 0, 1, 0},  // Zilla Slab letters at quarter pixels, F6
+    {"videologo", &sw_videologo, 0, 3, 0},  // the intro's logo for the wordmark, F9
+    {"logosub", &sw_logosub, 0, 1, 0},
+    {"logotitle", &sw_logotitle, 0, 1, 0},
     {"legendfit", &sw_legendfit, 0, 1, 1},  // the help window's legend fitted to its width, F8
 };
 
 bool Menu_SetSwitch(const char *name, int v) {
+    if (!strcmp(name, "videologo"))
+        VideoLogo_Restart();  // switched on, or between its ripples: the build-in from its start
     if (!strcmp(name, "keyboard")) {  // 0: as a console with no keyboard yet
         Host_SetKeyboardSeen(v != 0);
         return true;
@@ -2995,6 +3051,7 @@ void Menu_Reset() {
     for (size_t i = 0; i < sizeof kSwitches / sizeof kSwitches[0]; i++)
         *kSwitches[i].value = kSwitches[i].start;
     Host_ResetInput();
+    VideoLogo_Restart();
     Bindings_Reset();
     MoreOptions_Defaults();
     g_confirm = false;

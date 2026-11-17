@@ -66,11 +66,22 @@ foreach(_face Bold)
     list(APPEND EMBEDDED_FONTS_CPP ${_out})
 endforeach()
 
+# The LBA 2 logo traced from the intro video (assets/logo), baked in for src/video_logo.cpp.
+set(EMBEDDED_LOGO_CPP ${CMAKE_BINARY_DIR}/embedded_logo.cpp)
+add_custom_command(
+    OUTPUT ${EMBEDDED_LOGO_CPP}
+    COMMAND ${CMAKE_COMMAND} "-DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/assets/logo/lba2-logo.svg"
+            "-DOUTPUT=${EMBEDDED_LOGO_CPP}" "-DSYMBOL=g_lba2LogoSvg" -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed_binary.cmake
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/assets/logo/lba2-logo.svg ${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed_binary.cmake
+    COMMENT "Embedding lba2-logo.svg")
+
 add_executable(lba2menu
     src/main.cpp
     src/host.cpp
     src/game_pieces.cpp
     src/word_fire.cpp
+    src/video_logo.cpp
+    ${EMBEDDED_LOGO_CPP}
     src/menu.cpp
     src/bindings.cpp
     src/more_options.cpp
