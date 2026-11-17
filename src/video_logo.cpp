@@ -732,11 +732,19 @@ void VideoLogo_Queue(S32 x0, S32 y0, S32 x1, S32 y1, bool still) {
     s_sum = Host_Pixels() ? QueuedSum() : 0;
 }
 
+// When the build-in is over: the cc's beat comes after the video's.
+static float BuildEnd() { return s_ccOn && s_ccReady ? CC_END : BUILD_END; }
+
+void VideoLogo_RippleNow() {
+    s_started = true;
+    s_startMs = Host_TimeMs() - (U32)(BuildEnd() * 1000.0f / FPS) - RIPPLE_EVERY_MS;
+}
+
 // The moment the clock shows: the build-in once, then a ripple every 30 seconds.
 static Moment MomentNow() {
     const U32 ms = Host_TimeMs() - s_startMs;
     const float f = ms * FPS / 1000.0f;
-    const float end = s_ccOn && s_ccReady ? CC_END : BUILD_END;  // the cc's beat comes after the video's
+    const float end = BuildEnd();
     if (f < end)
         return MomentAt(f, false, true);
     const U32 since = ms - (U32)(end * 1000.0f / FPS);

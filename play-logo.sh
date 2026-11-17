@@ -19,12 +19,14 @@ Steps (the window opens on a fresh install's game menu, the logo building in):
      crosses it from the upper right and bends the letters, it brightens, the 2 lands
      in a swirl and a second ripple runs through the letters. Then the cc arrives under
      the 2, one c after the other. About 3 seconds.
-  2. F9 steps the switch and plays the build-in again each time; the toast says which:
+  2. F9 steps the switch; the toast says which. From 0 to 1 the build-in plays. From 1
+     to 2 and 2 to 3 the build-in does NOT play: that step's ripple plays at once (about
+     2.5 seconds), and again every 30 seconds.
        0  the wordmark as on main
-       1  the logo; every 30 seconds a ripple at half the intro's height
-       2  the ripple at the intro's height
-       3  the ripple at the intro's height, with the blue ring
-     Wait 30 seconds on each of 1 to 3 to see its ripple.
+       1  gentle: the letters sway as the ripple crosses, and stay in one piece
+       2  as the intro: the letters bend hard, and bits of them break off for a moment
+       3  as 2, with the arcs of blue beads sweeping across from the upper right
+     To see one again, go round: F9 until the toast shows it once more.
   3. Shift+F9 turns the cc off and on without playing the build-in again (off is the
      logo as the intro has it).
      In the control file (its path is printed below), try the layout switch:

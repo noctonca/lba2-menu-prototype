@@ -2950,8 +2950,14 @@ static const SwitchDef kSwitches[] = {
 };
 
 bool Menu_SetSwitch(const char *name, int v) {
-    if (!strcmp(name, "videologo"))
-        VideoLogo_Restart();  // switched on, or between its ripples: the build-in from its start
+    if (!strcmp(name, "videologo")) {
+        // Switched on: the build-in from its start. From one ripple to another: that ripple
+        // now, since the build-in is the same for all three and would only hide the change.
+        if (sw_videologo >= 1 && v >= 1 && v <= 3 && v != sw_videologo)
+            VideoLogo_RippleNow();
+        else
+            VideoLogo_Restart();
+    }
     if (!strcmp(name, "keyboard")) {  // 0: as a console with no keyboard yet
         Host_SetKeyboardSeen(v != 0);
         return true;
