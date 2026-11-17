@@ -34,5 +34,5 @@ subscript, so the mark reads LBA, 2, cc.
 - **Why it is a separate file:** the traced logo stays as the intro has it. The
   cc marks the menu as the community build's and not the 1997 game's.
 - **Who uses it:** `src/video_logo.cpp` builds a field for each c and lays them
-  over the logo (switch `logocc`): in the logo's colours or in pale blue, after
-  the intro's build-in has played.
+  over the logo (switch `logocc`), in the logo's own colours, after the intro's
+  build-in has played.

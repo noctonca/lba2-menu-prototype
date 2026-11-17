@@ -42,9 +42,9 @@ void VideoLogo_Restart();
 // The idle ripple: 1 at half the video's height, 2 at the video's, 3 at the video's with the blue ring.
 void VideoLogo_SetIdle(int mode);
 // The cc of LBA2 Classic Community under the 2 (assets/logo/cc.svg, ours and not the
-// video's): 0 none, the logo as the intro has it; 1 in the logo's own colours; 2 in the
-// menu's pale blue. It arrives after the intro's build-in, as its own short beat.
-void VideoLogo_SetCc(int mode);
+// video's), in the logo's own colours. Off, the logo is as the intro has it. It arrives
+// after the intro's build-in, as its own short beat.
+void VideoLogo_SetCc(bool on);
 
 // Paint the queued logo over a presented frame (w x h, pitch in bytes). The canvas sits
 // where PropScale_Map puts it.

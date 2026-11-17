@@ -344,7 +344,7 @@ static int sw_zsub = 0;       // Zilla Slab letters at quarter pixels
 // ripple at the video's height; 3 at the video's height with the blue ring.
 static int sw_videologo = 0;
 static int sw_logosub = 0;    // 1 = CLASSIC COMMUNITY kept under the logo in the picture's place
-static int sw_logocc = 1;     // the cc under the logo's 2: 0 none, 1 in the logo's colours, 2 pale blue
+static int sw_logocc = 1;     // the cc under the logo's 2; 0 = the logo as the intro has it
 static int sw_legendfit = 1;  // the help window's legend at the size that fits (EPmager, 2026-11-16)
 // The chosen preset: "(current)" after its name always; 1 also gives it the green
 // current-value plasma, as before (EPmager, 2026-11-11: green and the blue cursor read alike,
@@ -2878,7 +2878,7 @@ void Menu_Draw() {
     ScreenFont_BeginFrame();
     VideoLogo_BeginFrame();
     VideoLogo_SetIdle(sw_videologo);
-    VideoLogo_SetCc(sw_logocc);
+    VideoLogo_SetCc(sw_logocc != 0);
     Ui_BeginFrame();
     SyncView();
     g_drawnCount = 0;
@@ -2945,7 +2945,7 @@ static const SwitchDef kSwitches[] = {
     {"zsub", &sw_zsub, 0, 1, 0},  // Zilla Slab letters at quarter pixels, F6
     {"videologo", &sw_videologo, 0, 3, 0},  // the intro's logo for the wordmark, F9
     {"logosub", &sw_logosub, 0, 1, 0},
-    {"logocc", &sw_logocc, 0, 2, 1},  // Shift+F9
+    {"logocc", &sw_logocc, 0, 1, 1},  // Shift+F9
     {"legendfit", &sw_legendfit, 0, 1, 1},  // the help window's legend fitted to its width, F8
 };
 

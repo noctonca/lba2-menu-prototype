@@ -25,9 +25,8 @@ Steps (the window opens on a fresh install's game menu, the logo building in):
        2  the ripple at the intro's height
        3  the ripple at the intro's height, with the blue ring
      Wait 30 seconds on each of 1 to 3 to see its ripple.
-  3. Shift+F9 steps the cc without playing the build-in again: in the logo's own colours
-     (1, the start), in pale blue (2), none (0, the logo as the intro has it). Judge the
-     blue while the planet turns behind it, here and at a small size (F2).
+  3. Shift+F9 turns the cc off and on without playing the build-in again (off is the
+     logo as the intro has it).
      In the control file (its path is printed below), try the layout switch:
        echo "switch logosub 1" >> <control>     CLASSIC COMMUNITY kept under the logo
   4. Options, then Esc back: the logo should be still, not building in again.

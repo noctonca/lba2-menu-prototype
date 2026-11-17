@@ -108,17 +108,13 @@ static const U32 RIPPLE_EVERY_MS = 30000;
 static const float RIPPLE_GENTLE = 0.5f;  // the gentle idle ripple's height against the video's
 
 // The cc of LBA2 Classic Community (assets/logo/cc.svg): ours, not the video's, so nothing
-// here is measured. It lies over the logo under the 2, in the ramp's colours or in a pale
-// blue (the mock-up's (159,208,238), a little deeper than the (187,223,227) CLASSIC
-// COMMUNITY has, which read as white once lit), lit as the logo's bevel is: paler on edges
-// facing up and left, darker on those facing down and right. It comes last, when the second ripple has
-// left: each c fades in over CC_FADE frames while it settles from CC_GROW larger over
+// here is measured. It lies over the logo under the 2, in the ramp's colours with the
+// logo's bevel (chosen in captures over a pale blue, which had less contrast over the
+// planet; the maintainer, 2026-11-17). It comes last, when the second ripple has left: each c fades in over CC_FADE frames while it settles from CC_GROW larger over
 // CC_SETTLE, the second c CC_GAP frames after the first (the maintainer, 2026-11-17: the
 // intro's build-in stays as it is and the cc arrives as its own short beat).
 static const float CC_FROM = 40.0f, CC_GAP = 2.5f, CC_FADE = 2.5f, CC_SETTLE = 4.5f, CC_GROW = 0.35f;
 static const float CC_END = CC_FROM + CC_GAP + CC_SETTLE;
-static const float kCcBlue[3] = {159, 208, 238};
-static const float CC_BLUE_LIGHT = 0.45f, CC_BLUE_SHADE = 1.0f;
 
 // ───────────────────────────── The field ─────────────────────────────
 
@@ -139,10 +135,10 @@ struct Field {
     float cx = 0, cy = 0;  // the middle of the shape's box
 };
 static Field s_main;      // the traced logo
-static Field s_cc[2][2];  // the two c's: [0] in the ramp's colours, [1] in pale blue
+static Field s_cc[2];     // the two c's
 static float s_inkW, s_inkH;
 static bool s_ready, s_ccReady;
-static int s_ccMode;      // 0 no cc, 1 in the ramp's colours, 2 in pale blue
+static bool s_ccOn;       // the cc is drawn
 
 struct Seg {
     float x0, y0, x1, y1;
@@ -219,9 +215,8 @@ static void RampAt(float x, float rgb[3]) {
 
 static U8 Byte(float v) { return (U8)(v < 0 ? 0 : v > 255 ? 255 : v + 0.5f); }
 
-// The field of the shape `segs` outline, whose box is w by h units from (x0, y0). blue: the
-// cc's pale blue for the fill, not the ramp.
-static void BuildField(Field &F, const std::vector<Seg> &segs, float x0, float y0, float w, float h, bool blue) {
+// The field of the shape `segs` outline, whose box is w by h units from (x0, y0).
+static void BuildField(Field &F, const std::vector<Seg> &segs, float x0, float y0, float w, float h) {
     F.ox = x0 - PAD, F.oy = y0 - PAD;
     F.cx = x0 + w * 0.5f, F.cy = y0 + h * 0.5f;
     const int gw = F.gw = (int)ceilf((w + 2 * PAD) * TEX);
@@ -285,10 +280,7 @@ static void BuildField(Field &F, const std::vector<Seg> &segs, float x0, float y
             // The colour: the ramp, and near the edge the bevel by the way the edge faces
             // (from the nearest point outwards).
             float rgb[3];
-            if (blue)
-                rgb[0] = kCcBlue[0], rgb[1] = kCcBlue[1], rgb[2] = kCcBlue[2];
-            else
-                RampAt(x, rgb);
+            RampAt(x, rgb);
             if (dist < RANGE && dist > 1e-4f) {
                 const float sgn = in ? -1.0f : 1.0f;
                 const float c = sgn * nx / dist, s = -sgn * ny / dist;  // y grows downwards
@@ -298,17 +290,9 @@ static void BuildField(Field &F, const std::vector<Seg> &segs, float x0, float y
                 float wb = 0, wg = 0;
                 for (int k = 0; k < 5; k++)
                     wb += kBevelBlue[k] * turn[k], wg += kBevelGreen[k] * turn[k];
-                if (blue) {
-                    // The same light on another colour: towards white where the gold pales,
-                    // darker where its green falls.
-                    const float light = wgt * wb * CC_BLUE_LIGHT, shade = 1 + wgt * (wg < 0 ? wg : 0) * CC_BLUE_SHADE;
-                    for (int k = 0; k < 3; k++)
-                        rgb[k] = (rgb[k] + (light > 0 ? light * (255 - rgb[k]) : 0)) * shade;
-                } else {
-                    rgb[2] += wgt * wb * (BEVEL_PALE - rgb[2]);
-                    rgb[1] *= 1 + wgt * wg;
-                    rgb[1] = rgb[1] > GREEN_TOP ? GREEN_TOP : rgb[1];
-                }
+                rgb[2] += wgt * wb * (BEVEL_PALE - rgb[2]);
+                rgb[1] *= 1 + wgt * wg;
+                rgb[1] = rgb[1] > GREEN_TOP ? GREEN_TOP : rgb[1];
             }
             t.r = Byte(rgb[0]), t.g = Byte(rgb[1]), t.b = Byte(rgb[2]);
         }
@@ -322,10 +306,10 @@ void VideoLogo_Init() {
     std::vector<Seg> all;
     for (const std::vector<Seg> &path : paths)
         all.insert(all.end(), path.begin(), path.end());
-    BuildField(s_main, all, 0, 0, s_inkW, s_inkH, false);
+    BuildField(s_main, all, 0, 0, s_inkW, s_inkH);
     s_ready = true;
 
-    // The cc: a field for each c, in each of its two colours.
+    // The cc: a field for each c.
     std::vector<std::vector<Seg>> cc;
     float w, h;
     if (!ParseSvg(g_lba2CcSvg, g_lba2CcSvgSize, cc, &w, &h) || cc.size() != 2 || cc[1].empty())
@@ -334,8 +318,7 @@ void VideoLogo_Init() {
         float x0 = cc[k][0].x0, y0 = cc[k][0].y0, x1 = x0, y1 = y0;
         for (const Seg &g : cc[k])
             x0 = std::min(x0, g.x1), y0 = std::min(y0, g.y1), x1 = std::max(x1, g.x1), y1 = std::max(y1, g.y1);
-        for (int blue = 0; blue < 2; blue++)
-            BuildField(s_cc[blue][k], cc[k], x0, y0, x1 - x0, y1 - y0, blue != 0);
+        BuildField(s_cc[k], cc[k], x0, y0, x1 - x0, y1 - y0);
     }
     s_ccReady = true;
 }
@@ -410,7 +393,7 @@ static Moment MomentAt(float f, bool ripple, bool ring, float gain = 1) {
     m.twoWide = ripple ? 0 : TWO_SQUASH * (1 - t) * sinf(t * 12.566371f);
     m.twoScale = ripple ? 1 : 1 + TWO_GROW * left;
     m.twoThin = ripple ? 0 : TWO_THIN * left;
-    m.cc = s_ccMode != 0 && s_ccReady;
+    m.cc = s_ccOn && s_ccReady;
     for (int k = 0; k < 2; k++) {
         const float since = f - CC_FROM - k * CC_GAP, left = 1 - Clamp01(since / CC_SETTLE);
         m.ccAlpha[k] = !m.cc ? 0 : ripple ? 1 : Clamp01(since / CC_FADE);
@@ -453,7 +436,7 @@ static inline float CcD(const Moment &m, float x, float y) {
     for (int k = 0; k < 2; k++) {
         if (m.ccAlpha[k] <= 0)
             continue;
-        const Field &F = s_cc[s_ccMode - 1][k];
+        const Field &F = s_cc[k];
         float gx, gy, ax, ay;
         int i, j;
         CcPlace(m, k, F, x, y, &gx, &gy);
@@ -468,7 +451,7 @@ static inline float CcOver(const Moment &m, float x, float y, float soft, float 
     for (int k = 0; k < 2; k++) {
         if (m.ccAlpha[k] <= 0)
             continue;
-        const Field &F = s_cc[s_ccMode - 1][k];
+        const Field &F = s_cc[k];
         float gx, gy, ax, ay;
         int i, j;
         CcPlace(m, k, F, x, y, &gx, &gy);
@@ -705,11 +688,10 @@ static int s_idle = 1;
 void VideoLogo_BeginFrame() { s_queued = false; }
 void VideoLogo_Restart() { s_started = false; }
 void VideoLogo_SetIdle(int mode) { s_idle = mode; }
-void VideoLogo_SetCc(int mode) {
-    mode = mode < 0 || mode > 2 ? 0 : mode;
-    if (mode == s_ccMode)
+void VideoLogo_SetCc(bool on) {
+    if (on == s_ccOn)
         return;
-    s_ccMode = mode;
+    s_ccOn = on;
     s_still.clear();  // the settled logo kept for painting is another picture now
 }
 
@@ -754,7 +736,7 @@ void VideoLogo_Queue(S32 x0, S32 y0, S32 x1, S32 y1, bool still) {
 static Moment MomentNow() {
     const U32 ms = Host_TimeMs() - s_startMs;
     const float f = ms * FPS / 1000.0f;
-    const float end = s_ccMode && s_ccReady ? CC_END : BUILD_END;  // the cc's beat comes after the video's
+    const float end = s_ccOn && s_ccReady ? CC_END : BUILD_END;  // the cc's beat comes after the video's
     if (f < end)
         return MomentAt(f, false, true);
     const U32 since = ms - (U32)(end * 1000.0f / FPS);
