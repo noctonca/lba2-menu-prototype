@@ -1,7 +1,7 @@
 #pragma once
 
 // The LBA 2 logo as the 1997 intro builds it in, drawn in code at the screen's resolution
-// (a trial, switch videologo, F9; the maintainer, 2026-11-17).
+// (switch videologo, F9; the maintainer, 2026-11-17).
 //
 // The shape is assets/logo/lba2-logo.svg, traced from the intro video's settled frames and
 // baked into the binary. At start it becomes a distance field in the logo's own units (one

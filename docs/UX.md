@@ -380,6 +380,15 @@ explains itself in the voice as the cursor lands on it; there is no help page.
   23 at 640x480, 21 under the screen's edge there. The 2 keeps a 2 px gap
   after the A, which then matches the gap between L and B. Chosen in play
   over 1 and 1.5 (2026-11-16). In play the name keeps a title's size.
+- In Zilla Slab the name is the game's logo from the 1997 intro, traced and
+  drawn in code, with a lower-case cc under its 2 in the logo's own colours:
+  LBA, 2, cc. The cc is ours and marks the menu as the community build's; it
+  takes the place of the CLASSIC COMMUNITY line. The logo fills the picture's
+  place and builds in once, as the intro builds it, the cc arriving last;
+  every 30 seconds a gentle ripple crosses it. In play it is in a title's
+  place, smaller and at rest: nothing moves over a game that is waiting.
+  The sizes above are the wordmark's, which switch `videologo` 0 brings back
+  (the maintainer, 2026-11-17).
 - A save is named as lba2cc names one it makes, `<island> <date> <time>`,
   shorter than lba2cc's `<island> - <date> <hours-minutes-seconds>`: that
   spilled a 640x480 row by up to 33 px with the longest island, and 8 without

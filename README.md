@@ -131,11 +131,19 @@ save's picture is its island's arrival picture from screen.hqr, shrunk to
 160x120 and fitted to the menu palette as 1997 fits a save's.
 
 Off Resume game, and on the first game menu with no save, the title is the
-product's name: LBA large with a raised 2, CLASSIC COMMUNITY small under it.
-It is centred in the picture's place, and with no save it keeps that place:
-the name and New game are where a player with a save has the name and Resume
-game.
-In Zilla Slab, flames rise through LBA and the 2 in the menu palette's fire
+product's name. It is centred in the picture's place, and with no save it
+keeps that place: the name and New game are where a player with a save has
+the name and Resume game.
+In Zilla Slab the name is the game's logo from the 1997 intro with a
+lower-case cc under its 2, so it reads LBA, 2, cc. It is drawn in code at the
+screen's resolution from a traced outline (`assets/logo/`, `src/video_logo.h`)
+and builds in once as the intro builds it: it fades in, a ring of water with
+blue beads crosses it and bends the letters, the 2 lands in a swirl and sends
+a second ripple through them, and the cc arrives last. Every 30 seconds a
+gentle ripple crosses it. In play the game menu's title is the same logo,
+smaller and at rest.
+Switch `videologo` 0 (F9) gives the wordmark it replaced: LBA large with a
+raised 2, CLASSIC COMMUNITY small under it. There, flames rise through LBA and the 2 in the menu palette's fire
 ramp (plasma bank 15, orange to white), in tongues that rise and fall slowly
 (5 steps a second, the heat carried up smoothly between them), with a
 gold rim round each letter, thinner on the 2. They are painted at the screen's
@@ -230,7 +238,7 @@ own keys:
 | F6 | Zilla Slab's letters placed at quarter pixels instead of whole ones (switch `zsub`, off at start) |
 | F7 | `propscale` straight between 5 and 1, the last two compared |
 | F8 | the help window's legend at the size that fits its width, between 1x and 2x, instead of dropping to 1x (switch `legendfit`, on at start, decided 2026-11-16; needs `propscale` 5 or 6; `./play-legendfit.sh`) |
-| F9 | a trial (branch `trial/video-logo`): the intro's LBA 2 logo in the product name's place instead of the wordmark, drawn in code at the screen's resolution and built in as the intro builds it (switch `videologo`, 1 at start; 0 is the wordmark as on main; the build-in always has the intro's full ripple and blue ring, and 1 to 3 choose the ripple every 30 seconds after it: half the intro's height, the intro's height, the intro's height with the blue ring; stepping from one to the next plays that ripple at once; in play the game menu has it smaller, at a title's size, at rest; Shift+F9 steps switch `logocc`, the lower-case cc of Classic Community under the logo's 2, which is ours, in the logo's colours, and arrives after the intro's build-in (1 at start; 0 is the logo as the intro has it); switch `logosub` 1 keeps CLASSIC COMMUNITY under it before a game; see `src/video_logo.h`, `assets/logo/README.md`; `./play-logo.sh`) |
+| F9 | the product's name: the intro's LBA 2 logo instead of the wordmark, drawn in code at the screen's resolution and built in as the intro builds it (switch `videologo`, 1 at start; 0 is the wordmark it replaced; the build-in always has the intro's full ripple and blue ring, and 1 to 3 choose the ripple every 30 seconds after it: half the intro's height, the intro's height, the intro's height with the blue ring; stepping from one to the next plays that ripple at once; in play the game menu has it smaller, at a title's size, at rest; Shift+F9 steps switch `logocc`, the lower-case cc of Classic Community under the logo's 2, which is ours, in the logo's colours, and arrives after the intro's build-in (1 at start; 0 is the logo as the intro has it); switch `logosub` 1 keeps CLASSIC COMMUNITY under it before a game; see `src/video_logo.h`, `assets/logo/README.md`; `./play-logo.sh`) |
 | F11 | steps the Button names row: Auto / Xbox / PlayStation / Nintendo (switch `padnames`) |
 
 Two more switches have no key: `keyboard` 0 plays as a console before a key is
