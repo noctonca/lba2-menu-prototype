@@ -343,9 +343,11 @@ static int sw_zsub = 0;       // Zilla Slab letters at quarter pixels
 // wordmark; 1 the logo, its ripple every 30 seconds at half the video's height; 2 that
 // ripple at the video's height; 3 at the video's height with the blue ring.
 // The intro's logo for the name: 0 the wordmark, 1 to 3 the logo with one of its ripples
-// every 30 seconds. 3, the intro's height with the blue ring, was chosen in play over the
-// gentle one and the plain one (the maintainer, 2026-11-17).
-static int sw_videologo = 3;
+// every 30 seconds. The build-in is the same for all three: the intro's, at its full
+// height with the blue ring. 1, the gentle ripple after it, was chosen in play: the full
+// one with the ring as the logo fades in, then the gentle one every 30 seconds (the
+// maintainer, 2026-11-17, after trying 3 as the start).
+static int sw_videologo = 1;
 static int sw_logosub = 0;    // 1 = CLASSIC COMMUNITY kept under the logo in the picture's place
 static int sw_logocc = 1;     // the cc under the logo's 2; 0 = the logo as the intro has it
 static int sw_legendfit = 1;  // the help window's legend at the size that fits (EPmager, 2026-11-16)
@@ -2946,7 +2948,7 @@ static const SwitchDef kSwitches[] = {
     {"pointer", &sw_pointer, 0, 2, 0},   // for tests: as if the mouse (1) or a finger (2) was used last
     {"propscale", &sw_propscale, 0, 6, 5},  // the menu at a proportional scale (5, decided 2026-11-16), F5
     {"zsub", &sw_zsub, 0, 1, 0},  // Zilla Slab letters at quarter pixels, F6
-    {"videologo", &sw_videologo, 0, 3, 3},  // the intro's logo for the wordmark, F9
+    {"videologo", &sw_videologo, 0, 3, 1},  // the intro's logo for the wordmark, F9
     {"logosub", &sw_logosub, 0, 1, 0},
     {"logocc", &sw_logocc, 0, 1, 1},  // Shift+F9
     {"legendfit", &sw_legendfit, 0, 1, 1},  // the help window's legend fitted to its width, F8
