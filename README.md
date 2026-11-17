@@ -230,7 +230,7 @@ own keys:
 | F6 | Zilla Slab's letters placed at quarter pixels instead of whole ones (switch `zsub`, off at start) |
 | F7 | `propscale` straight between 5 and 1, the last two compared |
 | F8 | the help window's legend at the size that fits its width, between 1x and 2x, instead of dropping to 1x (switch `legendfit`, on at start, decided 2026-11-16; needs `propscale` 5 or 6; `./play-legendfit.sh`) |
-| F9 | a trial (branch `trial/video-logo`): the intro's LBA 2 logo in the product name's place instead of the wordmark, drawn in code at the screen's resolution and built in as the intro builds it (switch `videologo`, 0 at start; 1 to 3 choose its ripple every 30 seconds: half the intro's height, the intro's height, the intro's height with the blue ring; switches `logosub` 1 keeps CLASSIC COMMUNITY under it and `logotitle` 1 uses it at a title's size too; see `src/video_logo.h`, `assets/logo/README.md`; `./play-logo.sh`) |
+| F9 | a trial (branch `trial/video-logo`): the intro's LBA 2 logo in the product name's place instead of the wordmark, drawn in code at the screen's resolution and built in as the intro builds it (switch `videologo`, 0 at start; 1 to 3 choose its ripple every 30 seconds: half the intro's height, the intro's height, the intro's height with the blue ring; in play the game menu has it smaller, at a title's size, at rest; switch `logosub` 1 keeps CLASSIC COMMUNITY under it before a game; see `src/video_logo.h`, `assets/logo/README.md`; `./play-logo.sh`) |
 | F11 | steps the Button names row: Auto / Xbox / PlayStation / Nintendo (switch `padnames`) |
 
 Two more switches have no key: `keyboard` 0 plays as a console before a key is

@@ -570,7 +570,7 @@ static void PaintStill(U32 *argb, U32 pitch, S32 cx0, S32 cy0, S32 cx1, S32 cy1,
 
 // ───────────────────────────── The queue and the clock ─────────────────────────────
 
-static bool s_queued;
+static bool s_queued, s_queuedStill, s_noteOver;
 static S32 s_bx0, s_by0, s_bx1, s_by1;
 static U32 s_sum;
 static bool s_started;
@@ -591,18 +591,31 @@ static U32 CanvasSum(S32 x0, S32 y0, S32 x1, S32 y1) {
     return h;
 }
 
-void VideoLogo_Queue(S32 x0, S32 y0, S32 x1, S32 y1) {
+static U32 QueuedSum() {
+    const S32 a0 = s_bx0 < 0 ? 0 : s_bx0, b0 = s_by0 < 0 ? 0 : s_by0;
+    const S32 a1 = s_bx1 > (S32)ModeDesiredX - 1 ? (S32)ModeDesiredX - 1 : s_bx1,
+              b1 = s_by1 > (S32)ModeDesiredY - 1 ? (S32)ModeDesiredY - 1 : s_by1;
+    return CanvasSum(a0, b0, a1, b1);
+}
+
+void VideoLogo_NoteBegin() { s_noteOver = s_queued && Host_Pixels() && QueuedSum() == s_sum; }
+void VideoLogo_NoteEnd() {
+    if (s_noteOver)
+        s_sum = QueuedSum();
+    s_noteOver = false;
+}
+
+void VideoLogo_Queue(S32 x0, S32 y0, S32 x1, S32 y1, bool still) {
     if (!s_ready)
         return;
-    if (!s_started) {
+    s_queuedStill = still;
+    if (!s_started && !still) {
         s_started = true;
         s_startMs = Host_TimeMs();
     }
     s_queued = true;
     s_bx0 = x0, s_by0 = y0, s_bx1 = x1, s_by1 = y1;
-    const S32 a0 = x0 < 0 ? 0 : x0, b0 = y0 < 0 ? 0 : y0;
-    const S32 a1 = x1 > (S32)ModeDesiredX - 1 ? (S32)ModeDesiredX - 1 : x1, b1 = y1 > (S32)ModeDesiredY - 1 ? (S32)ModeDesiredY - 1 : y1;
-    s_sum = Host_Pixels() ? CanvasSum(a0, b0, a1, b1) : 0;
+    s_sum = Host_Pixels() ? QueuedSum() : 0;
 }
 
 // The moment the clock shows: the build-in once, then a ripple every 30 seconds.
@@ -621,10 +634,7 @@ static Moment MomentNow() {
 void VideoLogo_Paint(U32 *argb, U32 pitch, U32 w, U32 h) {
     if (!s_queued || !s_ready)
         return;
-    const S32 a0 = s_bx0 < 0 ? 0 : s_bx0, b0 = s_by0 < 0 ? 0 : s_by0;
-    const S32 a1 = s_bx1 > (S32)ModeDesiredX - 1 ? (S32)ModeDesiredX - 1 : s_bx1,
-              b1 = s_by1 > (S32)ModeDesiredY - 1 ? (S32)ModeDesiredY - 1 : s_by1;
-    if (CanvasSum(a0, b0, a1, b1) != s_sum)
+    if (QueuedSum() != s_sum)
         return;  // drawn over later in the frame
     float k, bx, by;
     PropScale_Map(w, h, &k, &bx, &by);
@@ -634,7 +644,7 @@ void VideoLogo_Paint(U32 *argb, U32 pitch, U32 w, U32 h) {
     at.s = std::min(sw / s_inkW, sh / s_inkH);
     at.x0 = sx0 + (sw - s_inkW * at.s) * 0.5f;
     at.y0 = sy0 + (sh - s_inkH * at.s) * 0.5f;
-    const Moment m = MomentNow();
+    const Moment m = s_queuedStill ? MomentAt(BUILD_END, true, false) : MomentNow();
     if (m.still) {
         PaintStill(argb, pitch, 0, 0, (S32)w, (S32)h, at);
         return;

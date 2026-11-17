@@ -29,7 +29,14 @@ float VideoLogo_Aspect();
 // Start of a frame: forget last frame's logo.
 void VideoLogo_BeginFrame();
 // The logo fitted into the logical box x0..x1, y0..y1 (both ends included), centred.
-void VideoLogo_Queue(S32 x0, S32 y0, S32 x1, S32 y1);
+// still: the settled logo whatever the clock says, as the game menu in play has it (no
+// build-in and no ripple there, the maintainer, 2026-11-17); it does not start the build-in.
+void VideoLogo_Queue(S32 x0, S32 y0, S32 x1, S32 y1, bool still = false);
+// Round what the canvas gets over the logo that the logo stays above (the top line's note:
+// at 640x480 the logo's place reaches it, and the note took the logo off for its 2 seconds).
+// Anything drawn over the logo before Begin still takes it off.
+void VideoLogo_NoteBegin();
+void VideoLogo_NoteEnd();
 // Play the build-in again from its first frame, on the next frame queued.
 void VideoLogo_Restart();
 // The idle ripple: 1 at half the video's height, 2 at the video's, 3 at the video's with the blue ring.

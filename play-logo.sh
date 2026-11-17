@@ -24,12 +24,11 @@ Steps (the window opens on a fresh install's game menu, the logo building in):
        2  the ripple at the intro's height
        3  the ripple at the intro's height, with the blue ring
      Wait 30 seconds on each of 1 to 3 to see its ripple.
-  3. In the control file (its path is printed below), try the two layout switches:
+  3. In the control file (its path is printed below), try the layout switch:
        echo "switch logosub 1" >> <control>     CLASSIC COMMUNITY kept under the logo
-       echo "switch logotitle 1" >> <control>   the logo at a title's size too (in play)
   4. Options, then Esc back: the logo should be still, not building in again.
-  5. New game, then Esc: the game menu in play. The wordmark, or with logotitle 1
-     the small logo.
+  5. New game, then Esc: the game menu in play. The logo smaller, at a title's size,
+     at rest: no build-in and no ripple there.
   6. F2 through the screen sizes; drag the window's edge. The logo should stay sharp.
   7. Language and interface > Font: the game font. The name falls back to one line.
   8. Close the window.
@@ -40,4 +39,4 @@ read -r -p "Press Enter to open it. " _
     --do "switch videologo 1" >"$run/out.log" 2>&1 || true
 echo
 echo "Trace: $run/trace.log"
-grep -E "switch (videologo|logosub|logotitle)| screen " "$run/trace.log" || true
+grep -E "switch (videologo|logosub)| screen " "$run/trace.log" || true
