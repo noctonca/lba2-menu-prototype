@@ -20,3 +20,19 @@ colour ramp.
 
 The logo is the game's own and belongs to the game's rights holders. It is here
 to title the game's menu in this prototype.
+
+# The cc
+
+`cc.svg` is two lower-case c's for LBA2 Classic Community, in the same units and
+the same place as `lba2-logo.svg`: laid over it they sit under the 2, as its
+subscript, so the mark reads LBA, 2, cc.
+
+- **Source:** this project's own. Nothing in it is traced: `make_cc.py` draws
+  each c by rule (a fat round stroke round an ellipse, open on the right, a ball
+  on its upper end, leaning right) and writes the file. The shape, the size and
+  the place were chosen from mock-ups.
+- **Why it is a separate file:** the traced logo stays as the intro has it. The
+  cc marks the menu as the community build's and not the 1997 game's.
+- **Who uses it:** `src/video_logo.cpp` builds a field for each c and lays them
+  over the logo (switch `logocc`): in the logo's colours or in pale blue, after
+  the intro's build-in has played.

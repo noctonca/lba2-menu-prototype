@@ -15,6 +15,8 @@
 
 extern "C" const unsigned char g_lba2LogoSvg[];
 extern "C" const U32 g_lba2LogoSvgSize;
+extern "C" const unsigned char g_lba2CcSvg[];
+extern "C" const U32 g_lba2CcSvgSize;
 
 // ───────────────────────────── What was measured ─────────────────────────────
 //
@@ -105,6 +107,19 @@ static const float BUILD_END = 42.0f, RIPPLE_FROM = 6.0f;
 static const U32 RIPPLE_EVERY_MS = 30000;
 static const float RIPPLE_GENTLE = 0.5f;  // the gentle idle ripple's height against the video's
 
+// The cc of LBA2 Classic Community (assets/logo/cc.svg): ours, not the video's, so nothing
+// here is measured. It lies over the logo under the 2, in the ramp's colours or in a pale
+// blue (the mock-up's (159,208,238), a little deeper than the (187,223,227) CLASSIC
+// COMMUNITY has, which read as white once lit), lit as the logo's bevel is: paler on edges
+// facing up and left, darker on those facing down and right. It comes last, when the second ripple has
+// left: each c fades in over CC_FADE frames while it settles from CC_GROW larger over
+// CC_SETTLE, the second c CC_GAP frames after the first (the maintainer, 2026-11-17: the
+// intro's build-in stays as it is and the cc arrives as its own short beat).
+static const float CC_FROM = 40.0f, CC_GAP = 2.5f, CC_FADE = 2.5f, CC_SETTLE = 4.5f, CC_GROW = 0.35f;
+static const float CC_END = CC_FROM + CC_GAP + CC_SETTLE;
+static const float kCcBlue[3] = {159, 208, 238};
+static const float CC_BLUE_LIGHT = 0.45f, CC_BLUE_SHADE = 1.0f;
+
 // ───────────────────────────── The field ─────────────────────────────
 
 static const int TEX = 3;          // texels a unit
@@ -115,19 +130,28 @@ struct Texel {
     float d;  // units inside the edge (negative outside)
     U8 r, g, b, pad;
 };
-static std::vector<Texel> s_field;
-static int s_gw, s_gh;
+// A shape's distances and colours over a grid of texels.
+struct Field {
+    std::vector<Texel> t;
+    int gw = 0, gh = 0;
+    float ox = 0, oy = 0;  // the grid's top left corner, in units
+    float ex = 0, ey = 0;  // and its bottom right
+    float cx = 0, cy = 0;  // the middle of the shape's box
+};
+static Field s_main;      // the traced logo
+static Field s_cc[2][2];  // the two c's: [0] in the ramp's colours, [1] in pale blue
 static float s_inkW, s_inkH;
-static bool s_ready;
+static bool s_ready, s_ccReady;
+static int s_ccMode;      // 0 no cc, 1 in the ramp's colours, 2 in pale blue
 
 struct Seg {
     float x0, y0, x1, y1;
 };
 
-// The path data of every <path> in the SVG, flattened to line segments. The file is our
+// The path data of each <path> in an SVG, flattened to line segments. The files are our
 // own: only M, C and Z, absolute.
-static bool ParseSvg(std::vector<Seg> &segs, float *w, float *h) {
-    const char *s = (const char *)g_lba2LogoSvg, *end = s + g_lba2LogoSvgSize;
+static bool ParseSvg(const unsigned char *data, U32 size, std::vector<std::vector<Seg>> &paths, float *w, float *h) {
+    const char *s = (const char *)data, *end = s + size;
     static const char kBox[] = "viewBox=\"";
     const char *vb = std::search(s, end, kBox, kBox + 9);
     if (vb == end)
@@ -141,6 +165,8 @@ static bool ParseSvg(std::vector<Seg> &segs, float *w, float *h) {
         if (p == end)
             break;
         p += 4;
+        paths.emplace_back();
+        std::vector<Seg> &segs = paths.back();
         float cx = 0, cy = 0, sx = 0, sy = 0;
         while (p < end && *p != '"') {
             const char c = *p;
@@ -175,7 +201,7 @@ static bool ParseSvg(std::vector<Seg> &segs, float *w, float *h) {
             }
         }
     }
-    return !segs.empty();
+    return !paths.empty() && !paths[0].empty();
 }
 
 static void RampAt(float x, float rgb[3]) {
@@ -193,50 +219,53 @@ static void RampAt(float x, float rgb[3]) {
 
 static U8 Byte(float v) { return (U8)(v < 0 ? 0 : v > 255 ? 255 : v + 0.5f); }
 
-void VideoLogo_Init() {
-    std::vector<Seg> segs;
-    if (!ParseSvg(segs, &s_inkW, &s_inkH))
-        return;
-    s_gw = (int)ceilf((s_inkW + 2 * PAD) * TEX);
-    s_gh = (int)ceilf((s_inkH + 2 * PAD) * TEX);
-    s_field.assign((size_t)s_gw * s_gh, Texel{-RANGE, 0, 0, 0, 0});
+// The field of the shape `segs` outline, whose box is w by h units from (x0, y0). blue: the
+// cc's pale blue for the fill, not the ramp.
+static void BuildField(Field &F, const std::vector<Seg> &segs, float x0, float y0, float w, float h, bool blue) {
+    F.ox = x0 - PAD, F.oy = y0 - PAD;
+    F.cx = x0 + w * 0.5f, F.cy = y0 + h * 0.5f;
+    const int gw = F.gw = (int)ceilf((w + 2 * PAD) * TEX);
+    const int gh = F.gh = (int)ceilf((h + 2 * PAD) * TEX);
+    F.ex = F.ox + (float)gw / TEX, F.ey = F.oy + (float)gh / TEX;
+    std::vector<Texel> &field = F.t;
+    field.assign((size_t)gw * gh, Texel{-RANGE, 0, 0, 0, 0});
 
     // Inside or outside, a row at a time: the crossings of the row's centre line, even-odd.
-    std::vector<U8> inside((size_t)s_gw * s_gh, 0);
+    std::vector<U8> inside((size_t)gw * gh, 0);
     std::vector<float> xs;
-    for (int j = 0; j < s_gh; j++) {
-        const float y = (j + 0.5f) / TEX - PAD;
+    for (int j = 0; j < gh; j++) {
+        const float y = (j + 0.5f) / TEX + F.oy;
         xs.clear();
         for (const Seg &s : segs)
             if ((s.y0 <= y) != (s.y1 <= y))
                 xs.push_back(s.x0 + (s.x1 - s.x0) * (y - s.y0) / (s.y1 - s.y0));
         std::sort(xs.begin(), xs.end());
         for (size_t k = 0; k + 1 < xs.size(); k += 2) {
-            int i0 = (int)ceilf((xs[k] + PAD) * TEX - 0.5f), i1 = (int)floorf((xs[k + 1] + PAD) * TEX - 0.5f);
+            int i0 = (int)ceilf((xs[k] - F.ox) * TEX - 0.5f), i1 = (int)floorf((xs[k + 1] - F.ox) * TEX - 0.5f);
             i0 = i0 < 0 ? 0 : i0;
-            i1 = i1 >= s_gw ? s_gw - 1 : i1;
+            i1 = i1 >= gw ? gw - 1 : i1;
             for (int i = i0; i <= i1; i++)
-                inside[(size_t)j * s_gw + i] = 1;
+                inside[(size_t)j * gw + i] = 1;
         }
     }
 
     // The exact distance to the nearest segment, found through a grid of cells RANGE wide.
     const float CELL = RANGE;
-    const int cw = (int)ceilf((s_inkW + 2 * PAD) / CELL) + 1, ch = (int)ceilf((s_inkH + 2 * PAD) / CELL) + 1;
+    const int cw = (int)ceilf((w + 2 * PAD) / CELL) + 1, ch = (int)ceilf((h + 2 * PAD) / CELL) + 1;
     std::vector<std::vector<int>> cells((size_t)cw * ch);
     for (size_t n = 0; n < segs.size(); n++) {
         const Seg &s = segs[n];
-        const int a0 = (int)floorf((std::min(s.x0, s.x1) + PAD) / CELL), a1 = (int)floorf((std::max(s.x0, s.x1) + PAD) / CELL);
-        const int b0 = (int)floorf((std::min(s.y0, s.y1) + PAD) / CELL), b1 = (int)floorf((std::max(s.y0, s.y1) + PAD) / CELL);
+        const int a0 = (int)floorf((std::min(s.x0, s.x1) - F.ox) / CELL), a1 = (int)floorf((std::max(s.x0, s.x1) - F.ox) / CELL);
+        const int b0 = (int)floorf((std::min(s.y0, s.y1) - F.oy) / CELL), b1 = (int)floorf((std::max(s.y0, s.y1) - F.oy) / CELL);
         for (int b = std::max(b0, 0); b <= std::min(b1, ch - 1); b++)
             for (int a = std::max(a0, 0); a <= std::min(a1, cw - 1); a++)
                 cells[(size_t)b * cw + a].push_back((int)n);
     }
-    for (int j = 0; j < s_gh; j++) {
-        const float y = (j + 0.5f) / TEX - PAD;
-        for (int i = 0; i < s_gw; i++) {
-            const float x = (i + 0.5f) / TEX - PAD;
-            const int ca = (int)floorf((x + PAD) / CELL), cb = (int)floorf((y + PAD) / CELL);
+    for (int j = 0; j < gh; j++) {
+        const float y = (j + 0.5f) / TEX + F.oy;
+        for (int i = 0; i < gw; i++) {
+            const float x = (i + 0.5f) / TEX + F.ox;
+            const int ca = (int)floorf((x - F.ox) / CELL), cb = (int)floorf((y - F.oy) / CELL);
             float best = RANGE * RANGE, nx = 0, ny = 0;
             for (int b = std::max(cb - 1, 0); b <= std::min(cb + 1, ch - 1); b++)
                 for (int a = std::max(ca - 1, 0); a <= std::min(ca + 1, cw - 1); a++)
@@ -249,14 +278,17 @@ void VideoLogo_Init() {
                         if (d2 < best)
                             best = d2, nx = dx, ny = dy;
                     }
-            const bool in = inside[(size_t)j * s_gw + i] != 0;
+            const bool in = inside[(size_t)j * gw + i] != 0;
             const float dist = sqrtf(best);
-            Texel &t = s_field[(size_t)j * s_gw + i];
+            Texel &t = field[(size_t)j * gw + i];
             t.d = in ? dist : -dist;
             // The colour: the ramp, and near the edge the bevel by the way the edge faces
             // (from the nearest point outwards).
             float rgb[3];
-            RampAt(x, rgb);
+            if (blue)
+                rgb[0] = kCcBlue[0], rgb[1] = kCcBlue[1], rgb[2] = kCcBlue[2];
+            else
+                RampAt(x, rgb);
             if (dist < RANGE && dist > 1e-4f) {
                 const float sgn = in ? -1.0f : 1.0f;
                 const float c = sgn * nx / dist, s = -sgn * ny / dist;  // y grows downwards
@@ -266,37 +298,71 @@ void VideoLogo_Init() {
                 float wb = 0, wg = 0;
                 for (int k = 0; k < 5; k++)
                     wb += kBevelBlue[k] * turn[k], wg += kBevelGreen[k] * turn[k];
-                rgb[2] += wgt * wb * (BEVEL_PALE - rgb[2]);
-                rgb[1] *= 1 + wgt * wg;
-                rgb[1] = rgb[1] > GREEN_TOP ? GREEN_TOP : rgb[1];
+                if (blue) {
+                    // The same light on another colour: towards white where the gold pales,
+                    // darker where its green falls.
+                    const float light = wgt * wb * CC_BLUE_LIGHT, shade = 1 + wgt * (wg < 0 ? wg : 0) * CC_BLUE_SHADE;
+                    for (int k = 0; k < 3; k++)
+                        rgb[k] = (rgb[k] + (light > 0 ? light * (255 - rgb[k]) : 0)) * shade;
+                } else {
+                    rgb[2] += wgt * wb * (BEVEL_PALE - rgb[2]);
+                    rgb[1] *= 1 + wgt * wg;
+                    rgb[1] = rgb[1] > GREEN_TOP ? GREEN_TOP : rgb[1];
+                }
             }
             t.r = Byte(rgb[0]), t.g = Byte(rgb[1]), t.b = Byte(rgb[2]);
         }
     }
+}
+
+void VideoLogo_Init() {
+    std::vector<std::vector<Seg>> paths;
+    if (!ParseSvg(g_lba2LogoSvg, g_lba2LogoSvgSize, paths, &s_inkW, &s_inkH))
+        return;
+    std::vector<Seg> all;
+    for (const std::vector<Seg> &path : paths)
+        all.insert(all.end(), path.begin(), path.end());
+    BuildField(s_main, all, 0, 0, s_inkW, s_inkH, false);
     s_ready = true;
+
+    // The cc: a field for each c, in each of its two colours.
+    std::vector<std::vector<Seg>> cc;
+    float w, h;
+    if (!ParseSvg(g_lba2CcSvg, g_lba2CcSvgSize, cc, &w, &h) || cc.size() != 2 || cc[1].empty())
+        return;
+    for (int k = 0; k < 2; k++) {
+        float x0 = cc[k][0].x0, y0 = cc[k][0].y0, x1 = x0, y1 = y0;
+        for (const Seg &g : cc[k])
+            x0 = std::min(x0, g.x1), y0 = std::min(y0, g.y1), x1 = std::max(x1, g.x1), y1 = std::max(y1, g.y1);
+        for (int blue = 0; blue < 2; blue++)
+            BuildField(s_cc[blue][k], cc[k], x0, y0, x1 - x0, y1 - y0, blue != 0);
+    }
+    s_ccReady = true;
 }
 
 bool VideoLogo_Ready() { return s_ready; }
 float VideoLogo_Aspect() { return s_ready ? s_inkW / s_inkH : 1.5f; }
 
 // The distance at (x, y) units, between texels.
-static inline float FieldD(float x, float y, int *i0, int *j0, float *ax, float *ay) {
-    float u = (x + PAD) * TEX - 0.5f, v = (y + PAD) * TEX - 0.5f;
-    u = u < 0 ? 0 : u > s_gw - 1.001f ? s_gw - 1.001f : u;
-    v = v < 0 ? 0 : v > s_gh - 1.001f ? s_gh - 1.001f : v;
+static inline float FieldD(const Field &F, float x, float y, int *i0, int *j0, float *ax, float *ay) {
+    const int gw = F.gw, gh = F.gh;
+    float u = (x - F.ox) * TEX - 0.5f, v = (y - F.oy) * TEX - 0.5f;
+    u = u < 0 ? 0 : u > gw - 1.001f ? gw - 1.001f : u;
+    v = v < 0 ? 0 : v > gh - 1.001f ? gh - 1.001f : v;
     const int i = (int)u, j = (int)v;
     const float a = u - i, b = v - j;
-    const Texel *t = &s_field[(size_t)j * s_gw + i];
+    const Texel *t = &F.t[(size_t)j * gw + i];
     *i0 = i, *j0 = j, *ax = a, *ay = b;
-    return (t[0].d * (1 - a) + t[1].d * a) * (1 - b) + (t[s_gw].d * (1 - a) + t[s_gw + 1].d * a) * b;
+    return (t[0].d * (1 - a) + t[1].d * a) * (1 - b) + (t[gw].d * (1 - a) + t[gw + 1].d * a) * b;
 }
 
-static inline void FieldRgb(int i, int j, float a, float b, float rgb[3]) {
-    const Texel *t = &s_field[(size_t)j * s_gw + i];
+static inline void FieldRgb(const Field &F, int i, int j, float a, float b, float rgb[3]) {
+    const int gw = F.gw;
+    const Texel *t = &F.t[(size_t)j * gw + i];
     const float w00 = (1 - a) * (1 - b), w10 = a * (1 - b), w01 = (1 - a) * b, w11 = a * b;
-    rgb[0] = t[0].r * w00 + t[1].r * w10 + t[s_gw].r * w01 + t[s_gw + 1].r * w11;
-    rgb[1] = t[0].g * w00 + t[1].g * w10 + t[s_gw].g * w01 + t[s_gw + 1].g * w11;
-    rgb[2] = t[0].b * w00 + t[1].b * w10 + t[s_gw].b * w01 + t[s_gw + 1].b * w11;
+    rgb[0] = t[0].r * w00 + t[1].r * w10 + t[gw].r * w01 + t[gw + 1].r * w11;
+    rgb[1] = t[0].g * w00 + t[1].g * w10 + t[gw].g * w01 + t[gw + 1].g * w11;
+    rgb[2] = t[0].b * w00 + t[1].b * w10 + t[gw].b * w01 + t[gw + 1].b * w11;
 }
 
 // ───────────────────────────── A moment ─────────────────────────────
@@ -315,6 +381,8 @@ struct Moment {
     bool ring;
     float ringGain;
     float twoAlpha, twoTwist, twoScale, twoThin, twoWide;
+    bool cc;  // the cc is part of the logo
+    float ccAlpha[2], ccScale[2];
     bool still;  // nothing moves: the settled logo
 };
 
@@ -342,8 +410,14 @@ static Moment MomentAt(float f, bool ripple, bool ring, float gain = 1) {
     m.twoWide = ripple ? 0 : TWO_SQUASH * (1 - t) * sinf(t * 12.566371f);
     m.twoScale = ripple ? 1 : 1 + TWO_GROW * left;
     m.twoThin = ripple ? 0 : TWO_THIN * left;
+    m.cc = s_ccMode != 0 && s_ccReady;
+    for (int k = 0; k < 2; k++) {
+        const float since = f - CC_FROM - k * CC_GAP, left = 1 - Clamp01(since / CC_SETTLE);
+        m.ccAlpha[k] = !m.cc ? 0 : ripple ? 1 : Clamp01(since / CC_FADE);
+        m.ccScale[k] = ripple ? 1 : 1 + CC_GROW * left * left;
+    }
     m.still = !m.wave[0] && !m.wave[1] && !m.ring && m.opacity >= 1 && m.tint >= 1 && m.twoAlpha >= 1 &&
-              (ripple || f >= TWO_TO);
+              (ripple || (f >= TWO_TO && (!m.cc || f >= CC_END)));
     if (f >= TWO_TO)
         m.twoTwist = m.twoWide = m.twoThin = 0, m.twoScale = 1;
     return m;
@@ -368,18 +442,63 @@ static inline void RippleAt(const Moment &m, float x, float y, float *ux, float 
     }
 }
 
+// Where a c is read for the place (x, y): about its middle, shrunk by how much larger it is drawn.
+static inline void CcPlace(const Moment &m, int k, const Field &F, float x, float y, float *gx, float *gy) {
+    *gx = F.cx + (x - F.cx) / m.ccScale[k], *gy = F.cy + (y - F.cy) / m.ccScale[k];
+}
+
+// The cc's distance at (x, y) units: the nearer c's, as it is drawn at this moment.
+static inline float CcD(const Moment &m, float x, float y) {
+    float best = -RANGE;
+    for (int k = 0; k < 2; k++) {
+        if (m.ccAlpha[k] <= 0)
+            continue;
+        const Field &F = s_cc[s_ccMode - 1][k];
+        float gx, gy, ax, ay;
+        int i, j;
+        CcPlace(m, k, F, x, y, &gx, &gy);
+        const float d = FieldD(F, gx, gy, &i, &j, &ax, &ay) * m.ccScale[k];
+        best = d > best ? d : best;
+    }
+    return best;
+}
+
+// The cc laid over what the logo gave at (x, y): rgb and coverage a in, both out.
+static inline float CcOver(const Moment &m, float x, float y, float soft, float rgb[3], float a) {
+    for (int k = 0; k < 2; k++) {
+        if (m.ccAlpha[k] <= 0)
+            continue;
+        const Field &F = s_cc[s_ccMode - 1][k];
+        float gx, gy, ax, ay;
+        int i, j;
+        CcPlace(m, k, F, x, y, &gx, &gy);
+        if (gx < F.ox || gy < F.oy || gx > F.ex || gy > F.ey)
+            continue;
+        const float d = FieldD(F, gx, gy, &i, &j, &ax, &ay) * m.ccScale[k];
+        const float c = Clamp01(d / soft + 0.5f) * m.ccAlpha[k];
+        if (c <= 0)
+            continue;
+        float ink[3];
+        FieldRgb(F, i, j, ax, ay, ink);
+        const float under = a * (1 - c), out = c + under;
+        for (int n = 0; n < 3; n++)
+            rgb[n] = a > 0 ? (ink[n] * c + rgb[n] * under) / out : ink[n];
+        a = out;
+    }
+    return a;
+}
+
 // The logo looked up at (lx, ly) units at a moment: colour and coverage, `soft` units of
 // edge softness (half a screen pixel either side).
 static inline float LogoAt(const Moment &m, float lx, float ly, float soft, float rgb[3]) {
+    const float ccX = lx, ccY = ly;  // the 2's swirl does not turn the cc
     float alpha = m.opacity, thin = 0;
     // The 2 in its swirl: looked up turned and shrunk about its centre.
     const float tx = lx - TWO_X, ty = ly - TWO_Y, tr2 = tx * tx + ty * ty;
     if (tr2 < TWO_REACH * TWO_REACH) {
-        if (m.twoAlpha <= 0)
-            return 0;
         alpha *= m.twoAlpha;
         thin = m.twoThin;
-        if (m.twoTwist != 0 || m.twoScale != 1 || m.twoWide != 0) {
+        if (alpha > 0 && (m.twoTwist != 0 || m.twoScale != 1 || m.twoWide != 0)) {
             // All of it eases to nothing at the reach, so the swirl has no rim.
             const float fall = Smooth(1 - tr2 / (TWO_REACH * TWO_REACH));
             const float a = m.twoTwist * fall, c = cosf(a), s = sinf(a);
@@ -388,15 +507,19 @@ static inline float LogoAt(const Moment &m, float lx, float ly, float soft, floa
             thin *= fall;
         }
     }
-    int i, j;
-    float ax, ay;
-    const float d = FieldD(lx, ly, &i, &j, &ax, &ay) - thin;
-    const float cover = Clamp01(d / soft + 0.5f);
-    if (cover <= 0)
-        return 0;
-    FieldRgb(i, j, ax, ay, rgb);
-    rgb[1] *= m.tint, rgb[2] *= m.tint;
-    return cover * alpha;
+    float a = 0;
+    if (alpha > 0) {
+        int i, j;
+        float ax, ay;
+        const float d = FieldD(s_main, lx, ly, &i, &j, &ax, &ay) - thin;
+        const float cover = Clamp01(d / soft + 0.5f);
+        if (cover > 0) {
+            FieldRgb(s_main, i, j, ax, ay, rgb);
+            rgb[1] *= m.tint, rgb[2] *= m.tint;
+            a = cover * alpha;
+        }
+    }
+    return m.cc ? CcOver(m, ccX, ccY, soft, rgb, a) : a;
 }
 
 // The blue rings' light at (x, y) units: 0 to 1, and how pale (0 blue, 1 pale).
@@ -460,7 +583,9 @@ static void Render(U32 *argb, U32 pitch, S32 cx0, S32 cy0, S32 cx1, S32 cy1, con
             v.lx = x - v.ux, v.ly = y - v.uy;
             int i, j;
             float ax, ay;
-            v.d = FieldD(v.lx, v.ly, &i, &j, &ax, &ay);
+            v.d = FieldD(s_main, v.lx, v.ly, &i, &j, &ax, &ay);
+            if (m.cc)
+                v.d = std::max(v.d, CcD(m, v.lx, v.ly));
             v.light = v.pale = 0;
             if (m.ring) {
                 v.light = RingAt(m, x, y, &v.pale);
@@ -580,6 +705,13 @@ static int s_idle = 1;
 void VideoLogo_BeginFrame() { s_queued = false; }
 void VideoLogo_Restart() { s_started = false; }
 void VideoLogo_SetIdle(int mode) { s_idle = mode; }
+void VideoLogo_SetCc(int mode) {
+    mode = mode < 0 || mode > 2 ? 0 : mode;
+    if (mode == s_ccMode)
+        return;
+    s_ccMode = mode;
+    s_still.clear();  // the settled logo kept for painting is another picture now
+}
 
 static U32 CanvasSum(S32 x0, S32 y0, S32 x1, S32 y1) {
     U32 h = 2166136261u;
@@ -622,9 +754,10 @@ void VideoLogo_Queue(S32 x0, S32 y0, S32 x1, S32 y1, bool still) {
 static Moment MomentNow() {
     const U32 ms = Host_TimeMs() - s_startMs;
     const float f = ms * FPS / 1000.0f;
-    if (f < BUILD_END)
+    const float end = s_ccMode && s_ccReady ? CC_END : BUILD_END;  // the cc's beat comes after the video's
+    if (f < end)
         return MomentAt(f, false, true);
-    const U32 since = ms - (U32)(BUILD_END * 1000.0f / FPS);
+    const U32 since = ms - (U32)(end * 1000.0f / FPS);
     const float rf = RIPPLE_FROM + (since % RIPPLE_EVERY_MS) * FPS / 1000.0f;
     if (since >= RIPPLE_EVERY_MS && rf < BUILD_END)
         return MomentAt(rf, true, s_idle == 3, s_idle == 1 ? RIPPLE_GENTLE : 1);

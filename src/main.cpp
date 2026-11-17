@@ -500,8 +500,12 @@ int Lba2Main(int argc, char *argv[]) {
             Menu_SetSwitch("propscale", Menu_GetSwitch("propscale") == 5 ? 1 : 5);
         if (Host_Pressed(KEY_F8))
             Menu_SetSwitch("legendfit", !Menu_GetSwitch("legendfit"));
-        if (Host_Pressed(KEY_F9))  // the wordmark, then the intro's logo with each of its three idle ripples
-            Menu_SetSwitch("videologo", (Menu_GetSwitch("videologo") + 1) % 4);
+        if (Host_Pressed(KEY_F9)) {
+            if (Host_ShiftHeld())  // the logo's cc: none, in the logo's colours, pale blue
+                Menu_SetSwitch("logocc", (Menu_GetSwitch("logocc") + 1) % 3);
+            else  // the wordmark, then the intro's logo with each of its three idle ripples
+                Menu_SetSwitch("videologo", (Menu_GetSwitch("videologo") + 1) % 4);
+        }
         if (Host_Pressed(KEY_F6))
             Menu_SetSwitch("zsub", !Menu_GetSwitch("zsub"));
         if (Host_Pressed(KEY_F12))

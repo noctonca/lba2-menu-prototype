@@ -74,6 +74,14 @@ add_custom_command(
             "-DOUTPUT=${EMBEDDED_LOGO_CPP}" "-DSYMBOL=g_lba2LogoSvg" -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed_binary.cmake
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/assets/logo/lba2-logo.svg ${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed_binary.cmake
     COMMENT "Embedding lba2-logo.svg")
+# The cc laid over it (assets/logo/cc.svg, written by assets/logo/make_cc.py).
+set(EMBEDDED_CC_CPP ${CMAKE_BINARY_DIR}/embedded_cc.cpp)
+add_custom_command(
+    OUTPUT ${EMBEDDED_CC_CPP}
+    COMMAND ${CMAKE_COMMAND} "-DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/assets/logo/cc.svg"
+            "-DOUTPUT=${EMBEDDED_CC_CPP}" "-DSYMBOL=g_lba2CcSvg" -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed_binary.cmake
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/assets/logo/cc.svg ${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed_binary.cmake
+    COMMENT "Embedding cc.svg")
 
 add_executable(lba2menu
     src/main.cpp
@@ -82,6 +90,7 @@ add_executable(lba2menu
     src/word_fire.cpp
     src/video_logo.cpp
     ${EMBEDDED_LOGO_CPP}
+    ${EMBEDDED_CC_CPP}
     src/menu.cpp
     src/bindings.cpp
     src/more_options.cpp
