@@ -117,7 +117,7 @@ def run_one(binary, outdir, job):
         body.append("quit")
         trace = os.path.join(outdir, name + ".trace")
         cmd = [binary, "--headless", "--fixed-dt", "16", "--size", size, "--trace", trace,
-               "--script", "/dev/stdin"] + (["--first"] if first else [])
+               "--script", "/dev/stdin"] + (["--first"] if first else ["--saves", "20"])
         p = subprocess.run(cmd, input="\n".join(body) + "\n", capture_output=True, text=True,
                            encoding="cp850", timeout=600)
         with open(os.path.join(outdir, name + ".script"), "w", encoding="utf-8") as f:

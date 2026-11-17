@@ -131,7 +131,7 @@ def run_scripts(binary, size, combo, only, shots):
         if shots:
             lines += [f"shot {shots}/{tag}-More_options.png"]
     lines.append("quit")
-    p = subprocess.run([binary, "--headless", "--size", size, "--script", "/dev/stdin"],
+    p = subprocess.run([binary, "--headless", "--saves", "20", "--size", size, "--script", "/dev/stdin"],
                        input="\n".join(lines) + "\n", capture_output=True, text=True, timeout=300)
     found = {}
     label = json.dumps(switches)
@@ -143,7 +143,7 @@ def run_scripts(binary, size, combo, only, shots):
     if not only or only == MORE_OPTIONS_PAGE:
         # The table as the first thing drawn after a start shows its defaults, nothing
         # changed (its values were once set on first read, and it drew zeros).
-        q = subprocess.run([binary, "--headless", "--size", size, "--script", "/dev/stdin"],
+        q = subprocess.run([binary, "--headless", "--saves", "20", "--size", size, "--script", "/dev/stdin"],
                            input=f"open {MORE_OPTIONS_PAGE}\nwait 1\nstate\nquit\n",
                            capture_output=True, text=True, timeout=60)
         for l in q.stdout.splitlines():

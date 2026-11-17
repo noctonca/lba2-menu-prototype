@@ -11,6 +11,8 @@
 #include "word_fire.h"
 #include "video_logo.h"
 #include "twinsun.h"
+#include "game_scene.h"
+#include "screen_picture.h"
 #include "screen_font.h"
 #include "prop_scale.h"
 #include "pad_icons.h"
@@ -476,7 +478,7 @@ enum { SAVES_MAX = 32 };
 static_assert(SAVES_MAX + 1 <= MORE_OPTIONS_MAX, "Save game's rows fit PAGE_ROWS_MAX");
 static char g_saves[SAVES_MAX][64];
 static int g_saveCount;
-static int g_savesAtStart = 20;  // --saves N; 0: a player with no saves (no Resume game, no Load game)
+static int g_savesAtStart = 0;  // --saves N; 0, a fresh install, at start: no Resume game, no Load game
 static bool g_haveCurrent;  // current.lba: Resume game is offered
 static char g_currentWhat[64];  // what Resume game plays at a start
 static char g_currentIsland[32];
@@ -495,6 +497,49 @@ static int g_saveClock;  // the minutes the fake clock moved since the first sav
 static const char *const kIslands[] = {"Citadel Island", "Desert Island", "Emerald Moon", "Otringal",
                                        "Celebration Island"};
 static const char *const kAutosaveName = "AUTOSAVE";  // the autosave's player name, as 1997 lists it
+
+// Where the pretend game is (game_scene.h), and where each save left it: its picture is that
+// spot drawn at 160x120, as lba2cc keeps the screen in a save when it writes one.
+static GameSpot g_spot;         // in play, as of g_playFrom
+static U32 g_playFrom;          // Host_TimeMs when the game was last shown
+static GameSpot g_currentSpot;  // current.lba: as a game starts or loads, and when Esc leaves play
+static GameSpot g_autosaveSpot; // autosave.lba: as a game starts or loads, and at every scene change
+struct SaveSpot {
+    char name[64];
+    GameSpot spot;
+};
+static SaveSpot g_saveSpots[SAVES_MAX * 4];  // the saves made here; a fake one's spot comes from its name
+static int g_saveSpotCount;
+
+static int IslandOf(const char *where) {
+    for (int i = 0; i < SAVE_PICTURE_ISLANDS; i++)
+        if (!strncmp(where, kIslands[i], strlen(kIslands[i])))
+            return i;
+    return 0;
+}
+
+// A fake save's spot: its island, and a scene and moment of its own, from its name.
+static GameSpot SpotOfName(const char *name) {
+    U32 h = 2166136261u;
+    for (const char *p = name; *p; p++)
+        h = (h ^ (U8)*p) * 16777619u;
+    return {IslandOf(name), (int)(h % 6), (h >> 8) % 60000};
+}
+
+static GameSpot SpotOf(const char *name) {
+    for (int i = g_saveSpotCount - 1; i >= 0; i--)
+        if (!strcmp(g_saveSpots[i].name, name))
+            return g_saveSpots[i].spot;
+    return SpotOfName(name);
+}
+
+// The game as it is on screen now.
+static GameSpot LiveSpot() {
+    GameSpot s = g_spot;
+    if (g_playing)
+        s.t += Host_TimeMs() - g_playFrom;
+    return s;
+}
 
 static int CompareSaves(const void *a, const void *b) { return strcmp((const char *)a, (const char *)b); }
 static void SortSaves() { qsort(g_saves, (size_t)g_saveCount, sizeof g_saves[0], CompareSaves); }
@@ -518,6 +563,10 @@ static void MakeSaves(int n) {
     snprintf(g_currentWhat, sizeof g_currentWhat, "%s", g_saveCount ? g_saves[0] : "");
     snprintf(g_currentIsland, sizeof g_currentIsland, "%s", kIslands[0]);
     snprintf(g_autosaveIsland, sizeof g_autosaveIsland, "%s", kIslands[0]);
+    g_currentSpot = SpotOfName(g_currentWhat);
+    g_autosaveSpot = SpotOfName(kAutosaveName);
+    g_autosaveSpot.island = 0;
+    g_saveSpotCount = 0;
     SortSaves();
 }
 
@@ -543,6 +592,11 @@ static int SaveNow(int over) {
     snprintf(made, sizeof g_saves[0], "%s 2026-11-%02d %02d:%02d", g_island, 14 + minutes / (24 * 60),
              minutes / 60 % 24, minutes % 60);
     snprintf(g_playingWhat, sizeof g_playingWhat, "%s", made);  // the game goes on from it
+    if (g_saveSpotCount < (int)(sizeof g_saveSpots / sizeof g_saveSpots[0])) {
+        SaveSpot &k = g_saveSpots[g_saveSpotCount++];
+        snprintf(k.name, sizeof k.name, "%s", made);
+        k.spot = LiveSpot();
+    }
     SortSaves();
     g_unsaved = false;
     Trace("save %s", g_playingWhat);
@@ -1026,12 +1080,14 @@ static void Play() {
     g_playing = true;
     g_inGame = true;
     g_unsaved = true;
+    g_playFrom = Host_TimeMs();
     // Started, loaded or resumed: 1997 writes the current save then (CurrentSaveGame), and the
-    // first scene change the autosave.
+    // first scene change the autosave. Each keeps the screen as it is now.
     g_haveCurrent = g_haveAutosave = true;
     snprintf(g_currentWhat, sizeof g_currentWhat, "%s", g_playingWhat);
     snprintf(g_currentIsland, sizeof g_currentIsland, "%s", g_island);
     snprintf(g_autosaveIsland, sizeof g_autosaveIsland, "%s", g_island);
+    g_currentSpot = g_autosaveSpot = LiveSpot();
     g_confirm = false;
     g_menuNote = "";
     Trace(TopPage() == P_HUB && g_depth == 1 ? "close options" : "close menu");
@@ -1040,6 +1096,7 @@ static void Play() {
 static void NewGame() {
     g_playingWhat[0] = 0;
     snprintf(g_island, sizeof g_island, "%s", kIslands[0]);  // a new game starts on Citadel Island
+    g_spot = {0, 0, 0};
     Trace("new game");
     Play();
 }
@@ -1049,11 +1106,13 @@ static void LoadSave(int i) {
     if (i < 0) {
         snprintf(g_playingWhat, sizeof g_playingWhat, "%s", kAutosaveName);
         snprintf(g_island, sizeof g_island, "%s", g_autosaveIsland);
+        g_spot = g_autosaveSpot;
     } else {
         snprintf(g_playingWhat, sizeof g_playingWhat, "%s", g_saves[i]);
         snprintf(g_island, sizeof g_island, "%s", g_saves[i]);
         if (char *date = strstr(g_island, " 2026-"))
             *date = 0;
+        g_spot = SpotOf(g_saves[i]);
     }
     Trace("load %s", g_playingWhat);
     Play();
@@ -1063,6 +1122,7 @@ static void LoadSave(int i) {
 static void ResumeCurrent() {
     snprintf(g_playingWhat, sizeof g_playingWhat, "%s", g_currentWhat);
     snprintf(g_island, sizeof g_island, "%s", g_currentIsland);
+    g_spot = g_currentSpot;
     Trace("resume %s", g_playingWhat);
     Play();
 }
@@ -1564,8 +1624,22 @@ void Menu_Update() {
         return;
     }
     if (g_playing) {
-        if (Host_Pressed(KEY_ESC))  // the Menus key in play
+        if (Host_Pressed(KEY_ESC)) {  // the Menus key in play: current.lba keeps this screen
+            g_spot = LiveSpot();
+            g_currentSpot = g_spot;
+            snprintf(g_currentIsland, sizeof g_currentIsland, "%s", g_island);
             OpenGameMenu();
+        } else if (Host_Pressed(KEY_ENTER)) {  // on to the next place: a scene change writes the autosave
+            g_spot = LiveSpot();
+            g_playFrom = Host_TimeMs();
+            if (++g_spot.scene % 3 == 0) {  // every third place, a boat to the next island
+                g_spot.island = (g_spot.island + 1) % SAVE_PICTURE_ISLANDS;
+                snprintf(g_island, sizeof g_island, "%s", kIslands[g_spot.island]);
+            }
+            g_autosaveSpot = g_spot;
+            snprintf(g_autosaveIsland, sizeof g_autosaveIsland, "%s", g_island);
+            Trace("scene %s %d", g_island, g_spot.scene);
+        }
         return;
     }
     if (g_quitShown) {
@@ -2352,11 +2426,11 @@ enum { PICTURE_H = SAVE_PICTURE_H + 2 + ROW_GAP - 1 };
 enum { MAIN_ROWS_WITH_SAVE = 5 };
 static bool MainBeforeGame() { return !g_confirm && TopPage() == P_MAIN && !g_inGame; }
 
-static int IslandOf(const char *where) {
-    for (int i = 0; i < SAVE_PICTURE_ISLANDS; i++)
-        if (!strncmp(where, kIslands[i], strlen(kIslands[i])))
-            return i;
-    return 0;
+// A save's picture, drawn from where it left the game.
+static const U8 *Picture(const GameSpot &spot) {
+    static U8 picture[SAVE_PICTURE_W * SAVE_PICTURE_H];
+    GameScene_Picture(picture, spot);
+    return picture;
 }
 
 // The picture this page shows, NULL for none.
@@ -2364,13 +2438,13 @@ static const U8 *PagePicture() {
     if (g_confirm)
         return NULL;
     if (TopPage() == P_MAIN)
-        return !g_inGame && g_haveCurrent ? Host_SavePicture(IslandOf(g_currentIsland)) : NULL;
+        return !g_inGame && g_haveCurrent ? Picture(g_currentSpot) : NULL;
     if (TopPage() == P_LOAD) {
         const Row *r = CursorRow();
         if (r && r->type == R_SAVE)
-            return Host_SavePicture(IslandOf(g_saves[r->arg]));
+            return Picture(SpotOf(g_saves[r->arg]));
         if (r && r->type == R_AUTOSAVE)
-            return Host_SavePicture(IslandOf(g_autosaveIsland));
+            return Picture(g_autosaveSpot);
     }
     return NULL;
 }
@@ -2844,32 +2918,43 @@ static void SyncBackgroundRes() {
         Host_SetBackgroundRes(want);
 }
 
-// The pretend game, or Quit's screen: black, as the game is not drawn here, and two lines in
-// the voice at its pitch (on one, 784 wide, they would not fit 640).
+// The pretend game, or Quit's screen. The game is a landscape drawn in code (game_scene.h),
+// its saves' pictures taken from it, with three lines in the voice at its pitch near the
+// bottom (on one, 784 wide, they would not fit 640). Quit's screen is black, two lines.
 static void DrawClosed() {
     const S32 W = (S32)Host_LogicalW(), H = (S32)Host_LogicalH();
-    Box(0, 0, W - 1, H - 1, 0);
     char what[128];
-    const char *lines[2];
+    const char *lines[3];
+    int n;
+    S32 y0;
     if (g_quitShown) {
+        Box(0, 0, W - 1, H - 1, 0);
         lines[0] = Ui_Tr("The game would close here.");
         lines[1] = Ui_Tr("<ENTER> starts it again. <ESC> quits.");
+        n = 2;
+        y0 = H / 2 - TEXT_LINE_H;
     } else {
+        GameScene_Draw((U8 *)Log + TabOffLine[0], TabOffLine[1] - TabOffLine[0], (U32)W, (U32)H, LiveSpot());
+        ScreenPicture_NoPicture(0);  // the menu picture is gone: the canvas is all game
         if (g_playingWhat[0])
             snprintf(what, sizeof what, "%s", g_playingWhat);
         else
             snprintf(what, sizeof what, "%s", Ui_Tr("A new game."));
         lines[0] = what;
-        lines[1] = Ui_Tr("<ESC> opens the game menu.");
+        lines[1] = Ui_Tr("<ENTER> walks on to the next place.");
+        lines[2] = Ui_Tr("<ESC> opens the game menu.");
+        n = 3;
+        y0 = H - 3 * TEXT_LINE_H - 8;
+        GamePieces_Shade(0, y0 - 6, W - 1, H - 1, MENU_SHADE_LVL);  // the menu's darkening, so the lines read on any scene
     }
-    for (int i = 0; i < 2; i++) {
-        const S32 w = Ui_TextWidthAsIs(lines[i]);
+    for (int i = 0; i < n; i++) {
+        const S32 w = Ui_TextWidthAsIs(lines[i]), y = y0 + i * TEXT_LINE_H;
         // the dialogue shadow
-        Ui_TextAsIs(W / 2 - w / 2 + 2, H / 2 - TEXT_LINE_H + i * TEXT_LINE_H + 4, lines[i], INK_BLACK);
-        Ui_TextAsIs(W / 2 - w / 2, H / 2 - TEXT_LINE_H + i * TEXT_LINE_H, lines[i], DIALOGUE_HERO * 16 + 12);
-        Menu_Record(g_quitShown ? "quit" : "game", lines[i], "", FILL_SHADE, W / 2 - w / 2,
-                    H / 2 - TEXT_LINE_H + i * TEXT_LINE_H, W / 2 + w / 2, H / 2 + i * TEXT_LINE_H).textLeft =
-            W / 2 - w / 2;
+        Ui_TextAsIs(W / 2 - w / 2 + 2, y + 4, lines[i], INK_BLACK);
+        Ui_TextAsIs(W / 2 - w / 2, y, lines[i], DIALOGUE_HERO * 16 + 12);
+        Menu_Record(g_quitShown ? "quit" : "game", lines[i], "", FILL_SHADE, W / 2 - w / 2, y, W / 2 + w / 2,
+                    y + TEXT_LINE_H)
+            .textLeft = W / 2 - w / 2;
     }
 }
 

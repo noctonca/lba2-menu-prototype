@@ -1,6 +1,6 @@
 #!/bin/bash
 # Play the prototype in a window on the maintainer's data (the US CD image).
-#   ./play.sh [--size 1920x1080] [--first] [other lba2menu arguments]   (--first: a fresh install)
+#   ./play.sh [--size 1920x1080] [--saves 20] [other lba2menu arguments]   (a fresh install; --saves 20: a returning player)
 # Writes .runs/play/<time>/: trace.log (every key and change), out.log (command
 # replies) and control (append commands here to drive the open window).
 set -euo pipefail

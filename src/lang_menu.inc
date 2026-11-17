@@ -164,4 +164,5 @@
 {"The game would close here.", "Le jeu se fermerait ici.", "Hier w\x81""rde das Spiel enden.", "Aqu\xa1"" se cerrar\xa1""a el juego.", "Qui il gioco si chiuderebbe.", "O jogo fechar-se-ia aqui."},
 {"<ENTER> starts it again. <ESC> quits.", "<ENTER> le relance. <ESC> quitte.", "<ENTER> startet es neu. <ESC> beendet.", "<ENTER> lo vuelve a abrir. <ESC> sale.", "<ENTER> lo riavvia. <ESC> esce.", "<ENTER> volta a abri-lo. <ESC> sai."},
 {"A new game.", "Une nouvelle partie.", "Ein neues Spiel.", "Una partida nueva.", "Una nuova partita.", "Um jogo novo."},
+{"<ENTER> walks on to the next place.", "<ENTER> m\x8a""ne au lieu suivant.", "<ENTER> geht weiter zum n\x84""chsten Ort.", "<ENTER> lleva al lugar siguiente.", "<ENTER> porta al luogo successivo.", "<ENTER> leva ao lugar seguinte."},
 {"<ESC> opens the game menu.", "<ESC> ouvre le menu du jeu.", "<ESC> \x94""ffnet das Spielmen\x81"".", "<ESC> abre el men\xa3"" del juego.", "<ESC> apre il menu di gioco.", "<ESC> abre o menu do jogo."},

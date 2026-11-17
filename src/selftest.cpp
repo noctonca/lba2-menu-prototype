@@ -1937,7 +1937,7 @@ struct Walker {
         // A player with no saves: New game first, no Resume game, no Load game.
         Menu_SetSavesAtStart(0);
         Start();
-        path.clear();  // the again line lacks --saves 0: add it by hand
+        path.clear();  // the again line says --saves 20: make it 0 by hand
         OnPage("Game menu", "New game", "no saves");
         Expect(!Drawn("Load game") && !Drawn("Resume game"),
                Fmt("flow: no saves: Load game %s, Resume game %s", Drawn("Load game") ? "shown" : "gone",
@@ -2353,6 +2353,7 @@ int Selftest_Run(const SelftestOptions &opt, const char *self) {
         specs.assign(kCombos, kCombos + sizeof kCombos / sizeof kCombos[0]);
 
     Host_SetPixels(false);
+    Menu_SetSavesAtStart(20);  // a returning player: the walks need the save lists (the again lines say so)
     Walker w;
     w.opt = &opt;
     w.size = Fmt("%ux%u", (unsigned)Host_PhysW(), (unsigned)Host_PhysH());
@@ -2372,7 +2373,7 @@ int Selftest_Run(const SelftestOptions &opt, const char *self) {
             return 2;
         }
         w.switches = combo;
-        w.again = Fmt("%s --size %s", self, w.size.c_str());
+        w.again = Fmt("%s --saves 20 --size %s", self, w.size.c_str());
         for (size_t s = 0; s < combo.size(); s++)
             w.again += Fmt(" --switch %s=%d", combo[s].name.c_str(), combo[s].value);
         w.again += " --switch whole=1";

@@ -102,6 +102,7 @@ add_executable(lba2menu
     src/screen_font.cpp
     src/prop_scale.cpp
     src/twinsun.cpp
+    src/game_scene.cpp
     src/lang.cpp
     ${EMBEDDED_FONTS_CPP}
     src/selftest.cpp

@@ -92,16 +92,15 @@ rule there that breaks a promise changes the panel too.
 
 ## Play
 
-    ./play.sh                      # 640x480, one column
+    ./play.sh                      # 640x480, one column, a fresh install: no saves, on Modern
     ./play.sh --size 1920x1080     # the wide layout (logical 960x540 at 2x)
-    ./play.sh --first              # a fresh install: no saves, on Modern
-    ./play.sh --saves 0            # a player with no saves
+    ./play.sh --saves 20           # a returning player: 20 saves, Resume game first
     ./play.sh --options            # in a game, Options open as the Options key opens them
 
 ### The game menu
 
-It starts on the game menu (1997's main menu, GAMEMENU.CPP), before any game. A
-fresh install starts there too, on Modern, after the logos: nothing is asked,
+It starts on the game menu (1997's main menu, GAMEMENU.CPP), before any game, as
+a fresh install: New game, Options and Quit, on Modern, after the logos: nothing is asked,
 and nothing plays before the player could open Options (decided 2026-11-16;
 1997 went straight into the intro with no save). New game plays the intro. Its rows come and go as 1997's do:
 Resume game when there is a current save (1997's current.lba: the game last
@@ -110,13 +109,23 @@ a game; New game, Options and Quit always. There is nothing for Esc to go back
 to before a game, so the legend leaves it out and Esc puts the cursor on Quit,
 as 1997's does.
 
-The game is a black screen that names what it plays (a save, or a new game).
-Esc there opens the game menu over it, on Resume game, as the Menus key does in
-play; Esc on the game menu goes back to the game.
+The game is a landscape drawn in code (`src/game_scene.h`): sky, sea and an
+island's hills, a lighthouse on Citadel Island, towers on Otringal, the Emerald
+Moon at night, with clouds and waves moving. It names what it plays (a save, or
+a new game). Enter walks on to the next place, as a scene change does in the
+game, and every third place takes the boat to the next island. Esc opens the
+game menu over it, on Resume game, as the Menus key does in play; Esc on the
+game menu goes back to the game.
 
-Load game and Save game are lists of 20 fake saves in alphabetical order, as
+A game goes as lba2cc's does: New game, play, Esc and Quit; then the game
+starts again (Enter on Quit's screen) on the game menu with Resume game and
+the picture of where Esc left it, and Resume game plays from there. Nothing is
+written to disk: closing the prototype is a fresh install again. `./play-flow.sh`
+walks it step by step.
+
+Load game and Save game are lists of the saves in alphabetical order, as
 1997 lists them, named as lba2cc names a save it makes, shorter (see
-docs/UX.md); they scroll. Load game's last row is AUTOSAVE, the save the game
+docs/UX.md). `--saves 20` starts with 20 fake ones, enough that the lists scroll. Load game's last row is AUTOSAVE, the save the game
 writes as it goes: it loads like the others and cannot be deleted, and Save
 game does not list it. Save game's last row, New save, adds one and goes back
 to the game menu, where the voice says "Game saved." Del on a save deletes
@@ -126,9 +135,13 @@ their last row, as 1997's do.
 The save picture is where 1997 shows it: Resume game's on the first game
 menu, in place of the title, and on Load game the picture of the save under
 the cursor, under the title. In play the game menu has none: six rows and a
-picture do not fit 640x480. The game data has no screenshots of play, so a
-save's picture is its island's arrival picture from screen.hqr, shrunk to
-160x120 and fitted to the menu palette as 1997 fits a save's.
+picture do not fit 640x480. As in lba2cc a save keeps the screen as it was
+when the save was written, 160x120: the current save as a game starts or loads
+and when Esc leaves play, the autosave then and at every scene change, a named
+save on Save game. Here that is the landscape drawn at 160x120 at that moment
+(the screen's centre at 4:3), so no picture comes from the game's data. A fake
+save's picture is drawn from its name: its island, and a place and moment of
+its own.
 
 Off Resume game, and on the first game menu with no save, the title is the
 product's name. It is centred in the picture's place, and with no save it
@@ -472,8 +485,8 @@ the cursor on the group's first row.
 Then it walks the menu by its keys and checks what they do. Each problem a
 walk finds starts with the walk's name:
 
-- `flow:` the game menu around Options. At a start: Resume game first, no
-  Save game, Load game with a row for each of the 20 saves in alphabetical
+- `flow:` the game menu around Options. With 20 saves (`--saves 20`), at a
+  start: Resume game first, no Save game, Load game with a row for each of the 20 saves in alphabetical
   order and AUTOSAVE last, opening on AUTOSAVE, where Del does nothing and the
   legend has no Del. The first game menu has Resume game's picture and no
   title, Load game its title and a picture; in play the game menu has its
@@ -491,7 +504,7 @@ walk finds starts with the walk's name:
   again on the game menu with Resume game and without Save game, where New
   game asks, No keeps the game and Resume game plays it; Load there plays at
   once. Deleting every named save leaves
-  AUTOSAVE alone on Load game. With no saves (`--saves 0`) the game menu
+  AUTOSAVE alone on Load game. With no saves (a fresh install, the start) the game menu
   starts on New game without Resume game and Load game, and both come after
   the first game.
 

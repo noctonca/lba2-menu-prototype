@@ -5,8 +5,8 @@
 //            [--switch name=v ...]
 //   lba2menu --selftest [--size WxH] [--combo name=v,name=v ...] [--only PAGE] [--no-again] [--layout-only]
 //
-// It starts on the game menu before a game, with N fake saves (20; 0 for a player with none).
-// --first is a fresh install: no save, on Modern, as --saves 0 (a fresh install asks nothing
+// It starts on the game menu before a game, as a fresh install, or with N fake saves (--saves 20:
+// a returning player). --first is a fresh install, as the start is (a fresh install asks nothing
 // and opens on the game menu, decided 2026-11-16); --options in a game, with Options
 // open as the Options key opens them in play (Esc goes back to the game), as the prototype
 // started before it had the game menu.
