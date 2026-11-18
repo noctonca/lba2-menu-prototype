@@ -61,6 +61,14 @@ own keys or its own view, give it `PageHooks`. To ask something, fill in a
 `Question` and call `Menu_Ask`: the loop, the pointer, the legend and both
 layouts already know how to show one and take its answer.
 
+Once a file here has moved to lba2cc, lba2cc's is the only copy (the menu
+plan, "One copy, and a bench to try it on"): this repository then builds it
+from the lba2cc submodule against the stand-ins, and is the bench a change to
+it is tried on. So a file in the table above is to reach the rest of this
+repository through the doors alone, and what lba2cc will not take (the
+Background and Font rows in the tables, the switches) comes out of it before
+it moves.
+
 ## Build
 
     git submodule update --init
