@@ -466,6 +466,23 @@ bool Bindings_AreDefault() {
     return true;
 }
 
+bool Bindings_ActionPressed(const char *action) {
+    const S32 raw = Host_RawPressed();
+    // F1 to F12 are the prototype's own switches, whatever they are bound to.
+    if (!raw || (raw >= K_F1 && raw <= K_F12))
+        return false;
+    for (int a = 0; a < ACTION_COUNT; a++) {
+        if (strcmp(kActions[a].name, action) != 0)
+            continue;
+        for (int c = 0; c < 4; c++) {
+            const int code = g_bindingsReady ? g_bind[a][c] : (c < 2 ? kActions[a].key[c] : kActions[a].pad[c - 2]);
+            if (code && code == raw)
+                return true;
+        }
+    }
+    return false;
+}
+
 // ───────────────────────────── Input ─────────────────────────────
 
 static void CodeName(int column, int code, char *out, size_t n) {

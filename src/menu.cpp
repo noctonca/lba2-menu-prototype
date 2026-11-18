@@ -502,6 +502,15 @@ static const char *const kAutosaveName = "AUTOSAVE";  // the autosave's player n
 // spot drawn at 160x120, as lba2cc keeps the screen in a save when it writes one.
 static GameSpot g_spot;         // in play, as of g_playFrom
 static U32 g_playFrom;          // Host_TimeMs when the game was last shown
+// In a game the menu is drawn over the game as it was left. Esc dims all of it first, as
+// MainGameMenu does (ShadeBoxBlk, SCREEN_SHADE_LVL); the Options, Save and Load keys open
+// their page over the scene as it is, only the boxes shaded (PERSO.CPP, I_OPTIONS and on).
+static bool g_dimGame;
+// What SCREEN_SHADE_LVL (DEFINES.H, 8) keeps of the light through the menu palette's fog table,
+// measured on this scene outside the boxes (2026-11-18: r 0.71, g 0.67, b 0.68).
+static const float GAME_DIM_KEEP = 0.69f;
+static U32 g_savedAt;           // Host_TimeMs of a save made from play, for "Game saved." there
+static bool g_savedFromPlay;
 static GameSpot g_currentSpot;  // current.lba: as a game starts or loads, and when Esc leaves play
 static GameSpot g_autosaveSpot; // autosave.lba: as a game starts or loads, and at every scene change
 struct SaveSpot {
@@ -1155,6 +1164,32 @@ static void OpenGameMenu() {
     Trace("open page=%s", g_pages[P_MAIN].name);
 }
 
+// The Options, Save and Load keys in play: their page alone, over the game as it is, and Esc
+// goes back to the game (Pop on the only page plays).
+static void OpenFromPlay(int page) {
+    g_spot = LiveSpot();
+    g_playing = false;
+    g_dimGame = false;
+    g_confirm = false;
+    g_menuNote = "";
+    g_depth = 0;
+    if (page == P_HUB) {
+        Push(P_HUB);
+    } else {
+        OpenList(page);
+    }
+}
+
+// Saved from the Save key's page: back in the game, which says so for a moment, as lba2cc
+// shows "Game saved." over the scene (ShowGameSaveResult).
+static void NoteSavedFromPlay() {
+    if (!g_playing)
+        return;
+    g_savedAt = Host_TimeMs();
+    g_savedFromPlay = true;
+    Trace("game saved, back in play");
+}
+
 // Esc goes somewhere: everywhere but the game menu before a game (1997's first menu).
 static bool EscGoesBack() { return !(g_depth == 1 && TopPage() == P_MAIN && !g_inGame); }
 
@@ -1312,6 +1347,7 @@ static void Activate(const Row &r) {
         SaveNow(-1);
         Pop();  // back on the game menu's Save game row, as 1997 after a save
         g_menuNote = "Game saved.";
+        NoteSavedFromPlay();
         break;
     case R_ACTION:
         if (r.arg == A_RESET)
@@ -1628,7 +1664,15 @@ void Menu_Update() {
             g_spot = LiveSpot();
             g_currentSpot = g_spot;
             snprintf(g_currentIsland, sizeof g_currentIsland, "%s", g_island);
+            g_dimGame = true;
             OpenGameMenu();
+        } else if (Bindings_ActionPressed("Options")) {
+            OpenFromPlay(P_HUB);
+        } else if (Bindings_ActionPressed("Save")) {
+            OpenFromPlay(P_SAVE);
+        } else if (Bindings_ActionPressed("Load")) {
+            if (HaveSaves())
+                OpenFromPlay(P_LOAD);
         } else if (Host_Pressed(KEY_ENTER)) {  // on to the next place: a scene change writes the autosave
             g_spot = LiveSpot();
             g_playFrom = Host_TimeMs();
@@ -1680,6 +1724,7 @@ void Menu_Update() {
                     SaveNow(g_questionSave);
                     Pop();
                     g_menuNote = "Game saved.";
+                    NoteSavedFromPlay();
                     break;
                 case Q_DELETE:
                     DeleteSave(g_questionSave);
@@ -2936,7 +2981,9 @@ static void DrawClosed() {
     } else {
         GameScene_Draw((U8 *)Log + TabOffLine[0], TabOffLine[1] - TabOffLine[0], (U32)W, (U32)H, LiveSpot());
         ScreenPicture_NoPicture(0);  // the menu picture is gone: the canvas is all game
-        if (g_playingWhat[0])
+        if (g_savedFromPlay && Host_TimeMs() - g_savedAt < 2500)
+            snprintf(what, sizeof what, "%s", Lang_Tr("Game saved.", g_val[S_TEXT_LANG]));
+        else if (g_playingWhat[0])
             snprintf(what, sizeof what, "%s", g_playingWhat);
         else
             snprintf(what, sizeof what, "%s", Ui_Tr("A new game."));
@@ -2983,6 +3030,13 @@ void Menu_Draw() {
     Host_SetBackdrop(g_val[S_BACKGROUND]);
     Host_DrawBackground();
     GamePieces_AnimatePlasma();
+    if (g_inGame && !MenuClosed()) {  // in a game the menu is over the game as it was left
+        const U32 W = Host_LogicalW(), H = Host_LogicalH();
+        // Esc's dimming in RGB as the scene is drawn: the fog table on a dithered scene speckles.
+        GameScene_Draw((U8 *)Log + TabOffLine[0], TabOffLine[1] - TabOffLine[0], W, H, LiveSpot(),
+                       g_dimGame ? GAME_DIM_KEEP : 1.0f);
+        ScreenPicture_NoPicture(0);
+    }
 
     Ui_SetBackRight(BackShown() ? BackLeft() + BackWidth() : 0);
     g_backBox.shown = false;
@@ -3104,6 +3158,7 @@ bool Menu_Open(const char *name) {
         g_quitShown = false;
         if (p == P_SAVE)
             g_inGame = true;  // Save game is there only in a game
+        g_dimGame = true;  // as Esc opens the game menu
         OpenGameMenu();
         if (p != P_MAIN) {
             PutCursorOn(R_GAME, p == P_LOAD ? M_LOAD : M_SAVE);
@@ -3124,6 +3179,7 @@ bool Menu_Open(const char *name) {
         g_confirm = false;
         g_playing = g_quitShown = false;
         g_inGame = true;
+        g_dimGame = false;  // the Options key's: the scene as it is
         g_depth = 1;
         g_stack[0].page = P_HUB;
         g_stack[0].row = hubRow;

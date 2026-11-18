@@ -21,8 +21,9 @@ struct GameSpot {
     U32 t;       // milliseconds of play, for what moves
 };
 
-// The scene at w x h into dst (rows `pitch` bytes apart), in the menu palette.
-void GameScene_Draw(U8 *dst, U32 pitch, U32 w, U32 h, const GameSpot &spot);
+// The scene at w x h into dst (rows `pitch` bytes apart), in the menu palette. dim: the share
+// of each colour kept, 1 for none (behind the game menu: what SCREEN_SHADE_LVL keeps).
+void GameScene_Draw(U8 *dst, U32 pitch, U32 w, U32 h, const GameSpot &spot, float dim = 1.0f);
 
 // The save picture of that spot: 160x120, as SaveGame keeps it.
 void GameScene_Picture(U8 *out, const GameSpot &spot);

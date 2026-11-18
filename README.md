@@ -114,8 +114,15 @@ island's hills, a lighthouse on Citadel Island, towers on Otringal, the Emerald
 Moon at night, with clouds and waves moving. It names what it plays (a save, or
 a new game). Enter walks on to the next place, as a scene change does in the
 game, and every third place takes the boat to the next island. Esc opens the
-game menu over it, on Resume game, as the Menus key does in play; Esc on the
-game menu goes back to the game.
+game menu over it, on Resume game, as the Menus key does in play: the game
+stays behind the menu, all of it dimmed as lba2cc's MainGameMenu shades it
+(`SCREEN_SHADE_LVL`). Esc on the game menu goes back to the game. The Options,
+Save and Load keys (O, S and L, or what Keys and buttons binds them to; their
+F4, F2 and F3 stay the prototype's switches here) open their page on its own over the game as it is, only the boxes
+shaded, as lba2cc's do in play; Esc goes back to the game, and so does New
+save, the game then saying "Game saved." for a moment. Load has nothing to
+open with no save. The Background setting is what is behind the menu before a
+game; in a game the game is.
 
 A game goes as lba2cc's does: New game, play, Esc and Quit; then the game
 starts again (Enter on Quit's screen) on the game menu with Resume game and

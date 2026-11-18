@@ -1,9 +1,13 @@
 #include "game_scene.h"
 
 #include "host.h"
+#include "pad_icons.h"
+#include "ui.h"
 
 #include <math.h>
 #include <string.h>
+
+#include <vector>
 
 // Colours are chosen in RGB and put in the menu palette through a table of the nearest index
 // for each 5-bit RGB, with a 4x4 ordered dither so the sky's gradient does not band.
@@ -36,6 +40,10 @@ void BuildNear() {
         const int r = ((i >> 10) & 31) * 255 / 31, g = ((i >> 5) & 31) * 255 / 31, b = (i & 31) * 255 / 31;
         int best = 0, bestD = 1 << 30;
         for (int c = 1; c < 256; c++) {  // 0 stays the menu's black
+            // The menu's own inks stay the menu's: the self-test finds a chip's letters by them,
+            // and pad chips are shaded, not filled, so the scene shows inside them.
+            if (c == INK_CONFIG_MENU || Ui_IsRoleInk((U8)c) || PadIcons_IsColour((U8)c))
+                continue;
             const int dr = pal[c * 3] - r, dg = pal[c * 3 + 1] - g, db = pal[c * 3 + 2] - b;
             const int d = dr * dr * 3 + dg * dg * 4 + db * db * 2;
             if (d < bestD)
@@ -84,8 +92,27 @@ const Look kLooks[5] = {
 
 }  // namespace
 
-void GameScene_Draw(U8 *dst, U32 pitch, U32 w, U32 h, const GameSpot &spot) {
+static void DrawScene(U8 *dst, U32 pitch, U32 w, U32 h, const GameSpot &spot, float dim);
+
+// Behind the menu the game is stopped: the same spot every frame, drawn once and copied after.
+void GameScene_Draw(U8 *dst, U32 pitch, U32 w, U32 h, const GameSpot &spot, float dim) {
+    static std::vector<U8> kept;
+    static GameSpot keptSpot = {-1, -1, 0};
+    static U32 keptW, keptH;
+    static float keptDim = -1;
+    static const U8 *keptPal;
     BuildNear();
+    if (keptSpot.island != spot.island || keptSpot.scene != spot.scene || keptSpot.t != spot.t ||
+        keptW != w || keptH != h || keptDim != dim || keptPal != s_nearFor) {
+        kept.resize((size_t)w * h);
+        DrawScene(kept.data(), w, w, h, spot, dim);
+        keptSpot = spot, keptW = w, keptH = h, keptDim = dim, keptPal = s_nearFor;
+    }
+    for (U32 y = 0; y < h; y++)
+        memcpy(dst + (size_t)y * pitch, kept.data() + (size_t)y * w, w);
+}
+
+static void DrawScene(U8 *dst, U32 pitch, U32 w, U32 h, const GameSpot &spot, float dim) {
     const int island = spot.island < 0 || spot.island > 4 ? 0 : spot.island;
     const Look &L = kLooks[island];
     const U32 seed = Hash((U32)island, (U32)spot.scene);
@@ -184,6 +211,8 @@ void GameScene_Draw(U8 *dst, U32 pitch, U32 w, U32 h, const GameSpot &spot) {
                     }
                 }
             }
+            if (dim < 1.0f)
+                c = {c.r * dim, c.g * dim, c.b * dim};
             dst[(size_t)y * pitch + x] = Index(c, x, y);
         }
     }

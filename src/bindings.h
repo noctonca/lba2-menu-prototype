@@ -40,6 +40,9 @@ void Bindings_Get(int *out);
 void Bindings_Put(const int *in);
 void Bindings_PutDefaults();
 bool Bindings_AreDefault();
+// A key or button bound to `action` ("Save", "Load", "Options") was pressed this frame;
+// never F1 to F12, the prototype's switches.
+bool Bindings_ActionPressed(const char *action);
 // The chips the last Bindings_Draw drew, for the self test.
 struct ChipView {
     const char *action;
