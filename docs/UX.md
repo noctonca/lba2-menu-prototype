@@ -94,7 +94,9 @@ the call is answered.
 - **A question takes the page's place** in the wide layout: its answers replace
   the page's rows under its title, on the label edge, and the voice asks it in
   the band. At
-  640x480 it stays the centred box (decided 2026-11-03).
+  640x480 it stays the centred box (decided 2026-11-03), as wide as a page's
+  rows so a translated answer fits (decided 2026-11-18: at 360 px it cut "Nein,
+  meine Einstellungen behalten" off).
 - **One pane at a time** (decided 2026-11-03): the hub's
   categories, then a page, as the 1997 menu goes from a page to a sub-page.
   Two panes side by side left the page 416 pixels at 960 wide, short of what

@@ -416,8 +416,8 @@ static void DrawLegendStacked(S32 x0, S32 y0, const char **keys, const char **ra
 }
 
 // The question's answers, the safe one first; the question itself is in the voice.
-// One column: a small panel in the middle, labels centred, as 1997. Wide: in place
-// of the page's rows, labels on their label edge.
+// One column: two rows in the middle, as wide as a page's rows, labels centred. Wide: in
+// place of the page's rows, labels on their label edge.
 void Menu_DrawAnswers(const char *pane, S32 x0, S32 x1, S32 top, bool centred) {
     assert(g_asking && "answers are drawn while a question is up");
     for (int i = 0; i < 2; i++) {
@@ -866,14 +866,9 @@ static void DrawColumn() {
     int cursor = Position(t.page, t.row);
 
     if (g_asking) {
-        Menu_DrawAnswers("confirm", W / 2 - 180, W / 2 + 180, 120, true);
-        // Known, and the panel's width not yet decided (found 2026-11-18): in the five other
-        // Text languages "No, keep my settings" is wider than this 360 px panel, by 10 to 87 px
-        // (German), and swings; Keys and buttons' reset question takes the rows' width so its
-        // answers fit. Until that is decided these two rows' record leaves out where their
-        // text ends, as it always did, so the fit check does not see them.
-        for (int i = g_drawnCount - 2; i < g_drawnCount; i++)
-            g_drawn[i].textRight = g_drawn[i].x0;
+        // As wide as the page's rows, so a translated answer fits ("Nein, meine Einstellungen
+        // behalten"): the 360 px panel this was cut the safe answer off in five languages.
+        Menu_DrawAnswers("confirm", W / 2 - COLUMN_HALF_W, W / 2 + COLUMN_HALF_W, 120, true);
     } else {
         // Help in the dialogue window on every one-column page (decided 2026-11-03); the game
         // menu's pages, which have none, take a strip one line tall, so its six rows fit at
