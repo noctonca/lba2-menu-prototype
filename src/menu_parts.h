@@ -1,4 +1,7 @@
-// What menu.cpp shares with the pages drawn in their own files (bindings.cpp).
+// What a page in its own file needs of the menu (bindings.cpp, more_options.cpp): the page
+// model, the row kinds' and pages' handlers, the question, the draw record and the pointer's
+// targets, the voice. A page added later uses this and nothing of menu_internal.h, which is
+// for the menu's own files.
 #pragma once
 
 #include "ui.h"
@@ -15,6 +18,7 @@ enum RowType {
     R_SAVE,      // a save on the Load game or Save game page (arg: its place in the list, newest first)
     R_NEW_SAVE,  // Save game's last row: a save of its own
     R_AUTOSAVE,  // Load game's last row: the autosave, which loads and is never deleted
+    R_COUNT
 };
 
 // A check on the menu's state, for the menu plan's "shown when" and "active when".
@@ -33,11 +37,82 @@ struct Row {
     const char *needs;
 };
 
+// What a page brings besides its rows (docs/plan/MENU_PLAN.md, "A row kind brings its own
+// handlers"). Any of them may be NULL, and a page with none is a list of rows the menu draws,
+// speaks and records as every other. The menu's loop calls these for the page on top of the
+// stack and knows nothing else of it, so a page with its own view is added in its own file.
+struct PageHooks {
+    void (*opened)();          // just put on the stack: what it starts with
+    void (*draw)();            // its own view, in place of the list of rows
+    void (*say)();             // what the voice says on it, in place of the row's help
+    bool (*busy)();            // it takes every key and button, and the pointer stays out (the wait for a key)
+    void (*updateBusy)();      // a frame while busy
+    void (*keys)();            // its own keys, after Up and Down and before the row's
+    void (*del)();             // Del on a row whose kind takes none
+    void (*chip)(int chip);    // the pointer on a chip of the cursor's row (POINT_CHIP)
+    void (*left)();            // the menu went elsewhere without Esc (`open`): nothing waits
+    // The place string, whole ("Keys and buttons | Keyboard | Movement"); returns how much
+    // deeper than its place on the stack it is (1 while it waits for a key).
+    int (*where)(char *buf, size_t n);
+    const char *stateName;     // its part of `state`, under this name
+    void (*writeState)(FILE *f);
+};
+
 struct Page {
     const char *name;
     const Row *rows;
     int count;
+    const PageHooks *hooks;  // NULL: a list of rows
+    bool keepsReturn;        // it shows its Return row (the "original" fixture alone)
 };
+
+// What a kind of row does (the same section of the plan). The loop calls the handlers of the
+// row under the cursor; a kind that lacks one takes no such key. A file that brings a kind
+// of its own (a binding, a More options value) sets it with Menu_SetRowKind before the menu
+// opens.
+struct RowKind {
+    void (*enter)(const Row &r);  // Enter, or a click on it
+    void (*keys)(const Row &r);   // Left and Right on it, and what else it takes before Enter
+    void (*del)(const Row &r);    // Del, after Enter
+    // It shows a value Left and Right change; *enterSteps: Enter steps it too.
+    bool (*value)(const Row &r, bool *enterSteps);
+    // The legend's entries for it, before Esc. NULL: "Enter Choose".
+    void (*legend)(const Row &r, const char **keys, const char **words, int *n);
+    const char *(*label)(const Row &r);  // NULL: the row's own
+    const char *(*help)(const Row &r);   // NULL, or NULL returned: the row's own
+    bool (*shown)(const Row &r);         // besides the row's "shown when"
+};
+void Menu_SetRowKind(RowType type, const RowKind *kind);
+
+// A question (docs/plan/MENU_PLAN.md, "One mode"): its title, what the voice asks, two answers
+// with the safe one first, and what Yes does. One is up at a time. While it is, the loop
+// gives it Up, Down, Enter and Esc and the pointer its answers, whatever page asked; Esc and
+// No leave everything as it was. A question whose words depend on what it is about (a key
+// another action has) builds them: `say` and `answer` in place of `voice` and `answers`.
+struct Question {
+    const char *name;        // as the trace names it
+    const char *title;
+    const char *voice;
+    const char *answers[2];  // No, Yes
+    void (*yes)();
+    void (*say)(char *buf, size_t n);                        // the voice's line, in the Text language
+    void (*answer)(int i, char *out, size_t n, bool shown);  // shown: in the Text language, as drawn
+};
+void Menu_Ask(const Question *q);
+const Question *Menu_Asking();  // NULL: none
+int Menu_Answer();              // the answer under the cursor: 0 No, 1 Yes
+// The legend while a question is up.
+void Menu_QuestionLegend(const char **keys, const char **words, int *n);
+// The two answers as rows from `top`, the cursor's lit: centred (the one column) or on the
+// label edge (wide). The view that draws the page places them where its rows go.
+void Menu_DrawAnswers(const char *pane, S32 x0, S32 x1, S32 top, bool centred);
+// What the kinds in other files need of the loop: Esc's way back, and the cursor put on a
+// row of the top page (Page Up and Page Down).
+void Menu_Back();
+void Menu_TopRowTo(int row);
+// After the screen changed size in the middle of a frame (a preset, Reset settings, an undo):
+// the view starts its scroll again if the layout crossed between the one column and wide.
+void Menu_SyncView();
 
 // The pages: the Options pages, then Keys and buttons (its groups) and a page of each group's
 // actions, which bindings.cpp makes from its tables (Bindings_Pages), then More options, a row

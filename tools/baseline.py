@@ -7,10 +7,13 @@ meant to move code without changing what a player sees.
                          [--max N] [--context N]
     tools/baseline.py scripts [--bin build/lba2menu] [--out FILE] [--jobs N]
 
-record runs 28 scripts headless under a fixed clock: at each of four screen
+record runs 32 scripts headless under a fixed clock: at each of four screen
 sizes, six seeded random walks of 400 keys (now and then a pad button, a size
 change or an `open`) with a `state` after every key and a picture every 25
-keys, and the sweep's layout walk with a picture per page. Each run leaves
+keys, the sweep's layout walk with a picture per page, and the play walk (the
+keys in play and the game around the menu, a picture after every key: a random
+walk seldom gets there, and whether the scene is dimmed is only in the
+picture). Each run leaves
 <name>.script (what was run), <name>.states (one JSON per line), <name>.trace
 and <name>.shots (a sha256 per picture, in order). The game writes its text in
 code page 850; .script and .states are kept in UTF-8.
@@ -82,6 +85,28 @@ def walk_lines(seed):
     return lines
 
 
+def play_lines():
+    """The game around the menu: the Options, Save and Load keys in play, the Menus key,
+    scene changes, a save and a delete, Quit's screen and starting again, and `open` over a
+    game. Found missing 2026-11-18: a fault put in each of these left every other run the
+    same, so each step here is one that a fault was seen to change."""
+    steps = ["key down", "key enter",                      # New game: in play
+             "press O", "key enter", "key esc", "key esc",  # the Options key: the page over the scene as it is
+             "key enter", "key enter", "key enter",         # three places on; the autosave follows
+             "key esc", "key enter",                        # the Menus key: the menu over the scene, dimmed; Resume
+             "press S", "key enter",                        # the Save key: a new save, and the game says so
+             "press L", "key esc",                          # the Load key, and back
+             "key esc"] + ["key down"] * 5 + ["key enter",  # Quit's screen
+             "key enter", "key enter", "key esc",           # the game starts again; Resume game; the menu
+             "open Options", "key esc", "open Save game", "open Game menu", "open Load game",
+             "key del", "key down", "key enter",            # delete a save: it asks, Yes
+             "open Display and graphics"]
+    lines = []
+    for s in steps:
+        lines += [s, "wait 2", "state", SHOT]
+    return lines
+
+
 def jobs():
     """(name, size, fresh install (--first), lines) for each run."""
     out = []
@@ -100,6 +125,7 @@ def jobs():
             lines.append(SHOT)
         lines += sweep.more_options_lines() + [SHOT]
         out.append((f"layout-{size}", size, False, lines))
+        out.append((f"play-{size}", size, False, play_lines()))
     return out
 
 

@@ -293,24 +293,32 @@ static int g_column;      // the chip: an index into Columns()
 static bool g_waiting;
 static U32 g_waitStart, g_waitFrame;
 static char g_lastBound[96];
-// A key another action has: the page asks before it moves it,
-// as Options asks before Classic or Reset settings: the voice says who has it, two
-// answer rows take the actions' place, No first. Yes swaps (the other action gets
-// this chip's old key, or nothing); No or Esc keeps both as they were.
+// A key another action has: the page asks before it moves it, as Options asks before Classic
+// or Reset settings (menu_parts.h Question): the voice says who has it, two answer rows take
+// the actions' place, No first. Yes swaps (the other action gets this chip's old key, or
+// nothing); No or Esc keeps both as they were. What the question is about:
 static struct {
-    int action = -1, column;  // the chip the key was meant for
-    int code;                 // the key or button pressed
-    int holder, slot;         // the action that has it, and its slot
-    int answer;               // 0 No (the safe answer, first), 1 Yes
+    int action, column;  // the chip the key was meant for
+    int code;            // the key or button pressed
+    int holder, slot;    // the action that has it, and its slot
 } g_swap;
+static void Swap();
+static void SwapSay(char *buf, size_t n);
+static void SwapAnswer(int i, char *out, size_t n, bool shown);
+static const Question kAskSwapKey = {"swap key", "Confirm key swap", NULL, {NULL, NULL}, Swap, SwapSay, SwapAnswer};
+static const Question kAskSwapButton = {"swap button", "Confirm button swap", NULL, {NULL, NULL}, Swap, SwapSay,
+                                        SwapAnswer};
 
 // Del on the groups page puts the device in view back as the game ships it, after a
 // question as Options' Reset settings asks (EPmager, 2026-11-11: no way back to the
 // defaults but Reset settings, which resets everything). No first; No or Esc keeps them.
-static struct {
-    bool asking;
-    int answer;  // 0 No, 1 Yes
-} g_reset;
+static void ResetDeviceInView();
+static const Question kAskResetKeys = {"reset keys", "Confirm keyboard reset",
+                                       "Put every key back as the game ships them?",
+                                       {"No, keep my keys", "Yes, reset keys"}, ResetDeviceInView, NULL, NULL};
+static const Question kAskResetButtons = {"reset buttons", "Confirm gamepad reset",
+                                          "Put every button back as the game ships them?",
+                                          {"No, keep my buttons", "Yes, reset buttons"}, ResetDeviceInView, NULL, NULL};
 
 static bool g_bindingsReady;
 
@@ -370,17 +378,44 @@ static int CursorAction() { return OnGroups() ? -1 : GroupFirst(CurrentGroup()) 
 static Row s_groupRows[1 + GROUP_COUNT];
 static Row s_actionRows[ACTION_COUNT];
 
+// What the pages bring the menu's loop (menu_parts.h): their view, voice, place and state,
+// the wait and the question that take every key, and a binding row's keys. The groups page
+// also takes Del (the device's defaults); a group's page starts on its first chip.
+static void BindingKeys(const Row &);
+static void BindingEnter(const Row &) { Bindings_Enter(); }
+static void BindingDel(const Row &) { Bindings_Clear(); }
+static const RowKind kBindingKind = {BindingEnter, BindingKeys, BindingDel, NULL, NULL, NULL, NULL, NULL};
+static void PageKeys() {
+    if (Host_Pressed(KEY_TAB))
+        Bindings_SwitchDevice();
+}
+static int PageWhere(char *buf, size_t n) {
+    // One name for the page and its groups' pages, which the inner part names.
+    char inner[200];
+    const int d = Bindings_Where(inner, sizeof inner);
+    snprintf(buf, n, "Keys and buttons | %s", inner);
+    (void)d;
+    return g_waiting ? 1 : 0;  // waiting for a key: one more than its page (a question counts itself)
+}
+#define BINDINGS_HOOKS(opened, del) \
+    {opened, Bindings_Draw, Bindings_Say, Bindings_Busy, Bindings_UpdateBusy, PageKeys, del, Bindings_PointChip, \
+     Bindings_Close, PageWhere, "bindings", Bindings_WriteState}
+static const PageHooks kGroupsHooks = BINDINGS_HOOKS(Bindings_Open, Bindings_AskReset);
+static const PageHooks kGroupHooks = BINDINGS_HOOKS(Bindings_GroupOpened, NULL);
+#undef BINDINGS_HOOKS
+
 void Bindings_Pages(Page *pages) {
+    Menu_SetRowKind(R_BINDING, &kBindingKind);
     s_groupRows[0] = {R_RETURN, "Return to previous menu", 0, "", NULL, NULL, NULL};
     for (int g = 0; g < GROUP_COUNT; g++)
         s_groupRows[1 + g] = {R_CATEGORY, kGroups[g].name, P_KEY_GROUP + g, kGroups[g].help, NULL, NULL, NULL};
-    pages[P_KEYS] = {"Keys and buttons", s_groupRows, 1 + GROUP_COUNT};
+    pages[P_KEYS] = {"Keys and buttons", s_groupRows, 1 + GROUP_COUNT, &kGroupsHooks, false};
     for (int a = 0; a < ACTION_COUNT; a++) {
         assert((a == 0 || kActions[a].group >= kActions[a - 1].group) && "a group's actions are together");
         s_actionRows[a] = {R_BINDING, kActions[a].name, a, kActions[a].help, NULL, NULL, NULL};
     }
     for (int g = 0; g < GROUP_COUNT; g++)
-        pages[P_KEY_GROUP + g] = {kGroups[g].name, &s_actionRows[GroupFirst(g)], GroupCount(g)};
+        pages[P_KEY_GROUP + g] = {kGroups[g].name, &s_actionRows[GroupFirst(g)], GroupCount(g), &kGroupHooks, false};
 }
 
 static int CursorColumn() {
@@ -399,7 +434,6 @@ void Bindings_Open() {
     g_column = 0;
     g_waiting = false;
     g_lastBound[0] = 0;
-    g_swap.action = -1;
     if (!g_bindingsReady) {
         ResetBindings();
         g_bindingsReady = true;
@@ -407,12 +441,8 @@ void Bindings_Open() {
     Trace("bindings open device=%s", DeviceName(g_device));
 }
 
-// The page left by other means (`open` another page): nothing waits or asks.
-void Bindings_Close() {
-    g_waiting = false;
-    g_swap.action = -1;
-    g_reset.asking = false;
-}
+// The page left by other means (`open` another page): nothing waits.
+void Bindings_Close() { g_waiting = false; }
 
 bool Bindings_Active() {
     const int p = Menu_TopPage();
@@ -423,10 +453,8 @@ void Bindings_GroupOpened() { g_column = 0; }
 
 void Bindings_Reset() {
     g_waiting = false;
-    g_reset.asking = false;
     g_device = g_column = 0;
     g_lastBound[0] = 0;
-    g_swap.action = -1;
     g_bindingsReady = false;
 }
 
@@ -513,7 +541,8 @@ static void Bind(int action, int column, int code) {
     if (holder >= 0) {
         CodeName(column, code, name, sizeof name);
         g_swap.action = action, g_swap.column = column, g_swap.code = code;
-        g_swap.holder = holder, g_swap.slot = slot, g_swap.answer = 0;
+        g_swap.holder = holder, g_swap.slot = slot;
+        Menu_Ask(column < 2 ? &kAskSwapKey : &kAskSwapButton);
         Trace("bind asks action=\"%s\" column=\"%s\" key=\"%s\" holder=\"%s\"", kActions[action].name,
               ColumnHead(column), name, kActions[holder].name);
         return;
@@ -550,7 +579,6 @@ static void Swap() {
     int other = k ^ 1;  // the holder's other slot on the same device
     if (old && g_bind[h][other] == old)
         g_bind[h][k] = 0;  // it had the old key already: one key in both slots says nothing
-    g_swap.action = -1;
     Bind(a, c, g_swap.code);  // the holder no longer has it, so this goes in
     Trace("swap action=\"%s\" key=\"%s\" holder=\"%s\" gets=\"%s\"", kActions[a].name, name, kActions[h].name,
           gave[0] ? gave : "-");
@@ -558,7 +586,7 @@ static void Swap() {
 
 // The question's answers: what each leaves the other action with. shown: in the Text
 // language, as drawn; otherwise English, as recorded.
-static void SwapAnswer(int i, char *out, size_t n, bool shown = false) {
+static void SwapAnswer(int i, char *out, size_t n, bool shown) {
     const Action &h = kActions[g_swap.holder];
     const char *name = shown ? Ui_Tr(h.name) : h.name;
 #define TR(s) (shown ? Ui_Tr(s) : (s))
@@ -581,7 +609,6 @@ static void SwapAnswer(int i, char *out, size_t n, bool shown = false) {
 }
 
 static void StartWaiting() {
-    g_swap.action = -1;
     g_waiting = true;
     g_waitStart = Host_TimeMs();
     g_waitFrame = Host_Frame();
@@ -628,6 +655,14 @@ bool Bindings_StepColumn(int dir) {
     return true;
 }
 
+// Left and Right go along the row's chips; wide, Left from the first goes back.
+static void BindingKeys(const Row &) {
+    if (Host_Pressed(KEY_RIGHT))
+        Bindings_StepColumn(+1);
+    if (Host_Pressed(KEY_LEFT) && !Bindings_StepColumn(-1) && Wide())
+        Menu_Back();
+}
+
 static void ResetDevice(int device) {
     for (int a = 0; a < ACTION_COUNT; a++) {
         if (device == 0) {
@@ -643,18 +678,9 @@ static void ResetDevice(int device) {
 
 void Bindings_AskReset() {
     BindingsReady();
-    g_reset.asking = true;
-    g_reset.answer = 0;  // the safe answer first
-    Trace("ask reset device=%s", DeviceName(g_device));
+    Menu_Ask(g_device ? &kAskResetButtons : &kAskResetKeys);
 }
-
-// The reset question's answers and title, by the device in view.
-static const char *ResetAnswer(int i) {
-    static const char *const k[2][2] = {{"No, keep my keys", "Yes, reset keys"},
-                                        {"No, keep my buttons", "Yes, reset buttons"}};
-    return k[g_device][i];
-}
-static const char *ResetTitle() { return g_device ? "Confirm gamepad reset" : "Confirm keyboard reset"; }
+static void ResetDeviceInView() { ResetDevice(g_device); }
 
 void Bindings_Enter() {
     if (FixedChip(CursorAction(), CursorColumn()))
@@ -676,8 +702,7 @@ void Bindings_Clear() {
     Trace("clear action=\"%s\" column=\"%s\"", kActions[a].name, ColumnHead(c));
 }
 
-bool Bindings_Busy() { return g_waiting || g_swap.action >= 0 || g_reset.asking; }
-bool Bindings_Waiting() { return g_waiting; }
+bool Bindings_Busy() { return g_waiting; }
 
 void Bindings_PointChip(int chip) {
     int cols[3];
@@ -687,45 +712,19 @@ void Bindings_PointChip(int chip) {
     }
 }
 
-void Bindings_PointAnswer(int answer) {
-    int &a = g_reset.asking ? g_reset.answer : g_swap.answer;
-    if (a != answer) {
-        a = answer;
-        Trace("cursor %s (pointer)", a ? "Yes" : "No");
-    }
-}
+// The wait for a key takes every key and button.
+void Bindings_UpdateBusy() { UpdateWaiting(); }
 
-// The wait for a key, and the question about a key another action has: each takes every key.
-void Bindings_UpdateBusy() {
-    if (g_waiting) {
-        UpdateWaiting();
-    } else if (g_reset.asking) {
-        if (Host_Pressed(KEY_UP) || Host_Pressed(KEY_DOWN)) {
-            g_reset.answer ^= 1;
-            Trace("cursor %s", g_reset.answer ? "Yes" : "No");
-        }
-        if (Host_Pressed(KEY_ENTER) && g_reset.answer) {
-            g_reset.asking = false;
-            Trace("answer yes");
-            ResetDevice(g_device);
-        } else if (Host_Pressed(KEY_ENTER) || Host_Pressed(KEY_ESC)) {
-            g_reset.asking = false;
-            Trace("answer no");
-        }
-    } else {
-        if (Host_Pressed(KEY_UP) || Host_Pressed(KEY_DOWN)) {
-            g_swap.answer ^= 1;
-            Trace("cursor %s", g_swap.answer ? "Yes" : "No");
-        }
-        if (Host_Pressed(KEY_ENTER) && g_swap.answer) {
-            Trace("answer yes");
-            Swap();
-        } else if (Host_Pressed(KEY_ENTER) || Host_Pressed(KEY_ESC)) {
-            g_swap.action = -1;
-            Trace("answer no");
-        }
-    }
-    Bindings_Say();
+// What the swap question asks: who has the key. What each answer leaves the other action
+// with is on the answer rows.
+static void SwapSay(char *buf, size_t n) {
+    const Action &h = kActions[g_swap.holder];
+    char key[32], where[64] = "";
+    SaidCode(g_swap.column, g_swap.code, key, sizeof key);
+    // One pane at a time shows one group: name the other action's when it is not this one.
+    if (h.group != CurrentGroup())
+        snprintf(where, sizeof where, Menu_Tr(", in %s"), Ui_Tr(kGroups[h.group].name));
+    snprintf(buf, n, Menu_Tr("%s is on %s%s."), key, Ui_Tr(h.name), where);
 }
 
 void Bindings_Say() {
@@ -743,30 +742,16 @@ void Bindings_Say() {
             snprintf(buf, sizeof buf, Menu_Tr("Press a button, or %s to keep it."), start);
             text = buf;
         }
-    } else if (OnGroups() && g_reset.asking) {
-        text = g_device ? "Put every button back as the game ships them?" : "Put every key back as the game ships them?";
     } else if (OnGroups()) {
         if (CurrentGroup() >= 0)
             text = kGroups[CurrentGroup()].help;
     } else {
         int a = CursorAction(), c = CursorColumn();
         int other = ConflictOf(a, c);
-        if (g_swap.action >= 0 && (g_swap.action != a || g_swap.column != c))
-            g_swap.action = -1;  // the cursor moved on
-        if (g_swap.action < 0 && FixedChip(a, c)) {
+        if (FixedChip(a, c)) {
             char start[16];
             Bindings_StartSaid(start, sizeof start);
             snprintf(buf, sizeof buf, Menu_Tr("%s always opens the game menu, so it can't be changed."), start);
-            text = buf;
-        } else if (g_swap.action >= 0) {
-            const Action &h = kActions[g_swap.holder];
-            char key[32], where[64] = "";
-            SaidCode(c, g_swap.code, key, sizeof key);
-            // One pane at a time shows one group: name the other action's when it is not this
-            // one. What each answer leaves it with is on the answer rows.
-            if (h.group != CurrentGroup())
-                snprintf(where, sizeof where, Menu_Tr(", in %s"), Ui_Tr(kGroups[h.group].name));
-            snprintf(buf, sizeof buf, Menu_Tr("%s is on %s%s."), key, Ui_Tr(h.name), where);
             text = buf;
         } else if (other >= 0) {
             char name[32];
@@ -922,10 +907,8 @@ static void Legend(const char **keys, const char **words, int *n) {
         keys[*n] = start, words[(*n)++] = "Cancel";
         return;
     }
-    if (g_swap.action >= 0 || g_reset.asking) {  // as Options' questions
-        keys[*n] = "\x18\x19", words[(*n)++] = "Choose";
-        keys[*n] = "Enter", words[(*n)++] = "Answer";
-        keys[*n] = "Esc", words[(*n)++] = "Cancel";
+    if (Menu_Asking()) {  // as Options' questions
+        Menu_QuestionLegend(keys, words, n);
         return;
     }
     if (!OnGroups() && !FixedChip(CursorAction(), CursorColumn())) {
@@ -948,52 +931,11 @@ static void Legend(const char **keys, const char **words, int *n) {
 
 // The column heads from y top, then rows for the actions of the group 22 below, scrolled
 // to keep the cursor in view; with the heads inside the first row, the rows from y top.
-// The swap question's two answers in place of the actions, as Options draws its
-// questions: wide, labels on the pane's label edge; one column, centred.
-static void DrawAnswers(S32 x0, S32 x1, S32 top, const char *pane, const char *const labels[2],
-                        const char *const shownText[2], int answer) {
-    bool centred = !Wide();
-    for (int i = 0; i < 2; i++) {
-        const char *label = labels[i], *shown = shownText[i];
-        S32 y0 = top + i * ROW_PITCH, yc = y0 + ROW_H / 2;
-        RowFill fill = i == answer && Menu_CursorLit() ? FILL_CURSOR : FILL_SHADE;
-        Ui_RowBackground(x0, y0, x1, y0 + ROW_H, fill);
-        DrawnRow &d = Menu_Record(pane, label, "", fill, x0, y0, x1, y0 + ROW_H);
-        Menu_Point(POINT_ANSWER, x0, y0, x1, y0 + ROW_H, i);
-        if (centred) {
-            Menu_RowLabelCentred(x0, x1, yc, shown, INK_WHITE, true, i == answer);
-            d.textLeft = (x0 + x1) / 2 - Ui_TextWidthAsIs(shown) / 2;
-            d.textRight = d.textLeft + Ui_TextWidthAsIs(shown);
-        } else {
-            const ClipSave clip;
-            SetClip(x0 + 1, y0, x1 - 1, y0 + ROW_H);
-            Ui_TextInRoom(x0 + ROW_TEXT_INSET, x1 - ROW_TEXT_INSET, yc - ROW_TEXT_RISE, shown, INK_WHITE, i == answer);
-            clip.Restore();
-            d.textLeft = x0 + ROW_TEXT_INSET;
-            d.textRight = x0 + ROW_TEXT_INSET + Ui_TextWidthAsIs(shown);
-        }
-    }
-}
-
-static void DrawSwapAnswers(S32 x0, S32 x1, S32 top, const char *pane) {
-    char label[2][96], shown[2][128];
-    for (int i = 0; i < 2; i++) {
-        SwapAnswer(i, label[i], sizeof label[i]);
-        SwapAnswer(i, shown[i], sizeof shown[i], true);
-    }
-    const char *const l[2] = {label[0], label[1]}, *const s[2] = {shown[0], shown[1]};
-    DrawAnswers(x0, x1, top, pane, l, s, g_swap.answer);
-}
-
-static void DrawResetAnswers(S32 x0, S32 x1, S32 top, const char *pane) {
-    const char *const l[2] = {ResetAnswer(0), ResetAnswer(1)};
-    const char *const s[2] = {Ui_Tr(ResetAnswer(0)), Ui_Tr(ResetAnswer(1))};
-    DrawAnswers(x0, x1, top, pane, l, s, g_reset.answer);
-}
-
 static void DrawActions(S32 x0, S32 x1, S32 headsTop, S32 limit, const char *pane) {
-    if (g_swap.action >= 0) {
-        DrawSwapAnswers(x0, x1, headsTop, pane);
+    if (Menu_Asking()) {
+        // A key in use asks: the two answers in place of the actions, as Options draws its
+        // questions: wide, labels on the pane's label edge; one column, centred.
+        Menu_DrawAnswers(pane, x0, x1, headsTop, !Wide());
         return;
     }
     int cols[3];
@@ -1035,8 +977,8 @@ static void DrawWideControls() {
     WideFrame f = Menu_WideFrame();
     const S32 top = f.y0 + WIDE_INSET_Y;
     const S32 x0 = f.x0 + (f.w - DRILL_W) / 2, x1 = x0 + DRILL_W - 1;
-    if (OnGroups() && g_reset.asking) {
-        DrawResetAnswers(x0, x1, Ui_Title(x0, x1, top, ResetTitle()), "bindings-left");
+    if (OnGroups() && Menu_Asking()) {
+        Menu_DrawAnswers("bindings-left", x0, x1, Ui_Title(x0, x1, top, Menu_Asking()->title), false);
     } else if (OnGroups()) {
         // Under the page's title, as every wide page is, so the corner Back has the title's
         // line and does not sit on the first group. Six of the seven fit; the rest scroll.
@@ -1084,9 +1026,7 @@ static void DrawWideControls() {
         S32 block = 56 + shown * ROW_PITCH - ROW_GAP;
         S32 y = top + (limit - top - block > 0 ? (limit - top - block) / 2 : 0);
         // A key in use asks, titled as the other questions are; the answers stand in for the rows.
-        const char *title = g_swap.action < 0 ? kGroups[CurrentGroup()].name
-                            : g_device        ? "Confirm button swap"
-                                              : "Confirm key swap";
+        const char *title = Menu_Asking() ? Menu_Asking()->title : kGroups[CurrentGroup()].name;
         S32 atop = Ui_Title(x0, x1, y, title);
         DrawActions(x0, x1, atop, limit, "bindings-right");
     }
@@ -1100,10 +1040,10 @@ static void DrawWideControls() {
 static void DrawColumnControls() {
     S32 W = (S32)Host_LogicalW(), H = (S32)Host_LogicalH();
     S32 x0 = W / 2 - COLUMN_HALF_W, x1 = W / 2 + COLUMN_HALF_W;
-    if (OnGroups() && g_reset.asking) {
+    if (OnGroups() && Menu_Asking()) {
         // The question: two answers, centred, as wide as the groups' rows so a translated
         // answer fits ("Nein, meine Tasten behalten").
-        DrawResetAnswers(x0, x1, 120, "confirm");
+        Menu_DrawAnswers("confirm", x0, x1, 120, true);
         const char *keys[4], *words[4];
         int nk;
         Legend(keys, words, &nk);
@@ -1166,9 +1106,7 @@ static void DrawColumnControls() {
     S32 shown = n < fit ? n : fit;
     S32 block = ROW_PITCH + 22 + shown * ROW_PITCH - ROW_GAP;
     const S32 y = top + (limit - top - block > 0 ? (limit - top - block) / 2 : 0);
-    const char *title = g_swap.action < 0 ? kGroups[CurrentGroup()].name
-                        : g_device        ? "Confirm button swap"
-                                          : "Confirm key swap";
+    const char *title = Menu_Asking() ? Menu_Asking()->title : kGroups[CurrentGroup()].name;
     Ui_Title(x0, x1, y, title);
     Menu_Record("title", title, "", FILL_SHADE, x0, y, x1, y + TEXT_LINE_H).textLeft = (x0 + x1 + 1) / 2 - Ui_TextWidth(title) / 2;
     DrawActions(x0, x1, y + ROW_PITCH, limit, "column");
@@ -1231,15 +1169,15 @@ int Bindings_Where(char *buf, size_t n) {
     if (OnGroups()) {
         const int g = CurrentGroup();
         snprintf(buf, n, "%s | %s%s", DeviceName(g_device), g < 0 ? "Return to previous menu" : kGroups[g].name,
-                 !g_reset.asking ? "" : g_reset.answer ? " | asking reset | Yes" : " | asking reset | No");
-        return g_reset.asking ? 2 : 1;  // Esc takes the question back to the groups
+                 !Menu_Asking() ? "" : Menu_Answer() ? " | asking reset | Yes" : " | asking reset | No");
+        return Menu_Asking() ? 2 : 1;  // Esc takes the question back to the groups
     }
     char chip[32];
     int a = CursorAction(), c = CursorColumn();
     ChipText(a, c, chip, sizeof chip);
     snprintf(buf, n, "%s | %s | %s | %s | %s%s", DeviceName(g_device), kGroups[CurrentGroup()].name, kActions[a].name,
-             ColumnHead(c), chip, g_waiting ? " | waiting" : g_swap.action < 0 ? "" : g_swap.answer ? " | asking | Yes" : " | asking | No");
-    return g_waiting || g_swap.action >= 0 ? 3 : 2;  // Esc takes either back to the chip
+             ColumnHead(c), chip, g_waiting ? " | waiting" : !Menu_Asking() ? "" : Menu_Answer() ? " | asking | Yes" : " | asking | No");
+    return g_waiting || Menu_Asking() ? 3 : 2;  // Esc takes either back to the chip
 }
 
 bool Bindings_Text(const char *action, int column, char *out, size_t n) {

@@ -242,12 +242,29 @@ static void StatusText(int i, char *buf, size_t n, S32 width, S32 s) {
 // A row for each value, in the table's order: the cursor's row is the value's index.
 static Row s_rows[TUNING_COUNT];
 
+// What the page brings the menu's loop (menu_parts.h): its view, voice, place and state,
+// Page Up and Page Down, and a value row's keys.
+static void TuningEnter(const Row &r) { MoreOptions_Enter(r.arg); }
+static void TuningKeys(const Row &r) { MoreOptions_Keys(r.arg); }  // Left, Right, and Del for the default
+static bool TuningValue(const Row &r, bool *enterSteps);
+static const RowKind kTuningKind = {TuningEnter, TuningKeys, NULL, TuningValue, NULL, NULL, NULL, NULL};
+static void PageKeys();
+static int PageWhere(char *buf, size_t n) {
+    char inner[200];
+    MoreOptions_Where(inner, sizeof inner);
+    snprintf(buf, n, "More options | %s", inner);
+    return 0;
+}
+static const PageHooks kHooks = {NULL, MoreOptions_Draw, MoreOptions_Say, NULL, NULL, PageKeys, NULL, NULL,
+                                 NULL, PageWhere, "more_options", MoreOptions_WriteState};
+
 void MoreOptions_Pages(Page *pages) {
+    Menu_SetRowKind(R_TUNING, &kTuningKind);
     for (int i = 0; i < TUNING_COUNT; i++) {
         assert((i == 0 || kTuning[i].group >= kTuning[i - 1].group) && "a group's rows are together");
         s_rows[i] = {R_TUNING, kTuning[i].name, i, kTuning[i].help, NULL, NULL, NULL};
     }
-    pages[P_MORE] = {"More options", s_rows, TUNING_COUNT};
+    pages[P_MORE] = {"More options", s_rows, TUNING_COUNT, &kHooks, false};
 }
 
 bool MoreOptions_Active() { return Menu_TopPage() == P_MORE; }
@@ -305,6 +322,23 @@ void MoreOptions_Enter(int i) {
 }
 
 int MoreOptions_PageStep() { return g_visible > 3 ? g_visible - 2 : 1; }  // the group heads take lines too
+
+// A long table: Page Up and Page Down, stopping at its ends.
+static void PageKeys() {
+    const int step = MoreOptions_PageStep(), last = TUNING_COUNT - 1;
+    int row = Menu_TopRow();
+    if (Host_Pressed(KEY_PGUP))
+        row = row > step ? row - step : 0;
+    if (Host_Pressed(KEY_PGDN))
+        row = row + step < last ? row + step : last;
+    Menu_TopRowTo(row);
+}
+
+// Enter steps a switch or a choice and leaves a number.
+static bool TuningValue(const Row &r, bool *enterSteps) {
+    *enterSteps = kTuning[r.arg].kind != T_NUM;
+    return true;
+}
 
 // The row's help as the table shows it: the console's words, "Experimental: " before an
 // experimental row's.

@@ -92,6 +92,11 @@ add_executable(lba2menu
     ${EMBEDDED_LOGO_CPP}
     ${EMBEDDED_CC_CPP}
     src/menu.cpp
+    src/menu_pages.cpp
+    src/menu_draw.cpp
+    src/menu_state.cpp
+    src/menu_settings.cpp
+    src/fake_game.cpp
     src/bindings.cpp
     src/more_options.cpp
     src/ui.cpp
@@ -125,6 +130,9 @@ else()
     target_link_options(lba2menu PRIVATE -static -municode -mwindows -Wl,--wrap=exit)
 endif()
 set_target_properties(lba2menu PROPERTIES CXX_STANDARD 17)
+# The prototype's asserts stay on in every build, the optimised one the tests run too
+# (RelWithDebInfo defines NDEBUG): a bound a test walks past should stop the test.
+target_compile_options(lba2menu PRIVATE -UNDEBUG)
 if(EMSCRIPTEN)
     target_sources(lba2menu PRIVATE src/web.cpp)
     # The web build: the page in web/ asks for the game files and starts the menu (tools/build-web.sh).

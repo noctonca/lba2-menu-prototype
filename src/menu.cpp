@@ -1,724 +1,39 @@
+// The menu's loop: the stack of pages, the question, the kinds of row and what each does,
+// the pointer. It holds no pixel: menu_draw.cpp draws what this says is up.
 #include "menu.h"
 
-#include "game_pieces.h"
-#include "bindings.h"
-#include "host.h"
-#include "more_options.h"
-#include "trace.h"
-#include "menu_parts.h"
-#include "lang.h"
-#include "ui.h"
-#include "word_fire.h"
-#include "video_logo.h"
-#include "twinsun.h"
-#include "game_scene.h"
-#include "screen_picture.h"
-#include "screen_font.h"
-#include "prop_scale.h"
-#include "pad_icons.h"
+#include "menu_internal.h"
 
-#include <SVGA/BOX.H>
-#include <SVGA/CLIP.H>
-#include <SVGA/SCREEN.H>
-#include <SVGA/FIL_LINE.H>
-#include <SVGA/FONT.H>
+#include "bindings.h"
+#include "trace.h"
+#include "lang.h"
 
 #include <assert.h>
-#include <math.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
-// ───────────────────────────── The fake settings ─────────────────────────────
-
-enum Kind { K_CHOICE, K_TOGGLE, K_STEPS, K_SLIDER };
-
-struct Setting {
-    const char *id;
-    const char *label;
-    Kind kind;
-    int max;                 // last value (choices: count - 1)
-    const char *names[10];   // value names for choices, toggles and steps
-    int fresh;               // what a fresh install has (= Modern)
-    int classic;             // what Classic sets, when presetSets
-    bool presetSets;
-    const char *help;
-};
-
-enum {
-    S_TEXT_LANG, S_VOICE_LANG, S_SUBTITLES, S_BACKGROUND, S_FONT,
-    S_RESOLUTION, S_FULLSCREEN, S_VSYNC, S_FPS, S_IMAGE,
-    S_MASTER, S_SFX, S_VOICES, S_MUSIC, S_REVERSE,
-    S_PADNAMES, S_CAM_OUT, S_CAM_IN, S_MOVIE_CAM, S_INVERT, S_SENS,
-    S_FIXBUGS,
-    S_COUNT
-};
-
-// Example values only: the prototype's settings live in memory.
-static const Setting kSettings[S_COUNT] = {
-    {"text_lang", "Text", K_CHOICE, 5, {"English", "Fran\x87""ais", "Deutsch", "Espa\xa4""ol", "Italiano", "Portugu\x88""s"}, 0, 0, false,
-     "The language the game writes in."},
-    {"voice_lang", "Voices", K_CHOICE, 2, {"English", "Fran\x87""ais", "Deutsch"}, 0, 0, false,
-     "The language the characters speak."},
-    {"subtitles", "Subtitles", K_TOGGLE, 1, {"Off", "On"}, 1, 1, false,
-     "Shows what is said while the voices play."},
-    // What the menu is drawn over (asked for 2026-11-11). Blue is menu palette 181, the
-    // picture's second most common colour (picked over 196); rows and the band darken it
-    // as they darken the picture. Twinsun is the holomap's planet turning once in three minutes on
-    // stars (src/twinsun.cpp; asked for 2026-11-11). Off is black.
-    {"background", "Background", K_CHOICE, 3, {"Picture", "Blue", "Twinsun", "Off"}, 0, 0, false,
-     "The picture behind the menu."},
-    // The menu's letters (asked for 2026-11-11): the game font, or Zilla Slab Bold drawn at
-    // the screen's resolution (src/screen_font.cpp), the face lba2cc's parked HD UI overlay chose.
-    // Bold over Medium and the size, decided after play (2026-11-11).
-    {"font", "Font", K_CHOICE, 1, {"Game", "Zilla Slab"}, 0, 0, false,
-     "The game's letters, or sharp Zilla Slab."},
-    // Not a stored value: the row shows the screen in use and steps it through
-    // Host_SizeAt's list, as F2 does. g_val keeps its fresh value; the screen is the
-    // engine's, which presets (prototype only, kLook), Reset settings and their undo set.
-    {"resolution", "Resolution", K_CHOICE, 9,
-     {"640 x 480", "768 x 480", "1024 x 480", "1280 x 720", "1280 x 800", "1920 x 1080", "2400 x 1080", "2560 x 1440", "3440 x 1440", "3840 x 2160"},
-     5, 5, false,
-     "The size of the picture the game draws."},
-    // Not a stored value either: the row shows the window as it is and turns it.
-    {"fullscreen", "Fullscreen", K_TOGGLE, 1, {"Off", "On"}, 1, 1, false,
-     "Fills the screen, or plays in a window."},
-    {"vsync", "Vsync", K_TOGGLE, 1, {"Off", "On"}, 1, 1, false,
-     "Stops the picture tearing. Off can raise the frame rate on a slow display."},
-    // Not kept in lba2.cfg: off at every start, as the console's fps and the SPEED code have it.
-    {"fps", "Frame rate", K_TOGGLE, 1, {"Off", "On"}, 0, 0, false,
-     "Shows the frame rate while you play."},
-    // Detail level and Videos (the films' size) were here: settings for 1997's machines, they
-    // are on More options now, in its From 1997 group (decided 2026-11-11).
-    {"image", "Image", K_CHOICE, 1, {"Classic", "Smooth"}, 0, 0, false,
-     "Sharp pixels as in 1997, or smoothed when scaled."},
-    {"master", "Master volume", K_SLIDER, 127, {0}, 100, 100, false, "Everything at once."},
-    {"sfx", "Sound effects", K_SLIDER, 127, {0}, 100, 100, false, "Footsteps, doors, magic."},
-    {"voices", "Voices volume", K_SLIDER, 127, {0}, 110, 110, false, "The characters' voices."},
-    {"music", "Music", K_SLIDER, 127, {0}, 90, 90, false, "The score."},
-    // ReverseStereo, back from More options' From 1997 group (EPmager, 2026-11-11): speakers
-    // or headphones the wrong way round are not a 1997 machine's limit. The 1997 game's label.
-    {"reverse_stereo", "Reverse stereo", K_TOGGLE, 1, {"Off", "On"}, 0, 0, false, "Swaps the left and right speakers."},
-    // The names the prompts give the pad's buttons (EPmager, 2026-11-11: a Switch pad in a
-    // browser showed Xbox names). Auto takes the connected pad's family, Xbox when none or
-    // unknown; the others hold one. Was the prototype's F11 switch, which now steps it.
-    {"button_names", "Button names", K_CHOICE, 3, {"Auto", "Xbox", "PlayStation", "Nintendo"}, 0, 0, false,
-     "The pad's button names in the prompts. Auto reads the pad."},
-    {"cam_out", "Outdoors camera", K_CHOICE, 1, {"Classic", "Auto"}, 0, 0, true,
-     "Classic holds still and cuts; Auto turns to follow you."},
-    {"cam_in", "Indoors camera", K_CHOICE, 1, {"Classic", "Follow"}, 0, 0, true,
-     "Follow keeps Twinsen in view inside houses."},
-    // AllCameras, the 1997 "scenario cameras" (lba2cc's Movie camera, on Advanced options there):
-    // off skips the outdoor shots that cut once as the hero walks in; held shots and interiors
-    // stay. Camera behavior, not a machine's limit, so it sits with the cameras (2026-11-11).
-    {"movie_cam", "Movie camera", K_TOGGLE, 1, {"Off", "On"}, 1, 1, false,
-     "Cuts to the designers' shots outdoors."},
-    {"invert", "Invert camera", K_TOGGLE, 1, {"Off", "On"}, 0, 0, false,
-     "Turns the camera the other way. Only with the Auto camera."},
-    {"sensitivity", "Camera speed", K_SLIDER, 10, {0}, 5, 5, false,
-     "How fast the camera turns. Only with the Auto camera."},
-    {"fix_bugs", "Fix retail bugs", K_TOGGLE, 1, {"Off", "On"}, 1, 0, true,
-     "Fixes the 1997 release's known bugs. Off plays them as they were."},
-};
-
-static int g_val[S_COUNT];
-static int g_preset;  // 0 Modern, 1 Classic
-
-static const char *kPresetNames[2] = {"Modern", "Classic"};
-
-// The languages: Reset settings leaves them as they are (the menu plan), so a player who
-// reads French still reads French after a reset.
-static bool IsLanguage(int s) { return s == S_TEXT_LANG || s == S_VOICE_LANG; }
-
-// A preset also sets the look (asked for 2026-11-12, prototype only), so choosing one shows
-// the difference. Classic: the 1997 picture, the game font, Classic cameras, 640 x 480.
-// Modern: Twinsun, Zilla Slab, Auto and Follow cameras, the screen the prototype started at
-// (the display's own size on a console). The plan has presets set the rules only; a real
-// port may leave the screen alone.
-
-struct LookDef {
-    int s;
-    int modern, classic;
-};
-static const LookDef kLook[] = {
-    {S_BACKGROUND, 2, 0},  // Twinsun / Picture
-    {S_FONT, 1, 0},        // Zilla Slab / Game
-    {S_CAM_OUT, 1, 0},     // Auto / Classic
-    {S_CAM_IN, 1, 0},      // Follow / Classic
-};
-static const int kLookCount = (int)(sizeof kLook / sizeof kLook[0]);
-
-static const LookDef *Look(int s) {
-    for (int i = 0; i < kLookCount; i++)
-        if (kLook[i].s == s)
-            return &kLook[i];
-    return NULL;
+// The kinds of row (menu_parts.h RowKind). The menu's own are set as it starts (SetOwnKinds);
+// Keys and buttons and More options set theirs as they make their pages.
+static const RowKind *g_kinds[R_COUNT];
+static const RowKind kPlainKind = {};
+const RowKind &KindOf(const Row &r) {
+    assert(r.type >= 0 && r.type < R_COUNT && "a row's kind is one of RowType");
+    return g_kinds[r.type] ? *g_kinds[r.type] : kPlainKind;
 }
-
-static bool PresetSets(int s) { return kSettings[s].presetSets || Look(s); }
-
-// What a fresh install has (= Modern).
-static int FreshValue(int s) {
-    const LookDef *l = Look(s);
-    return l ? l->modern : kSettings[s].fresh;
+void Menu_SetRowKind(RowType type, const RowKind *kind) {
+    assert(type >= 0 && type < R_COUNT && "a row's kind is one of RowType");
+    g_kinds[type] = kind;
 }
+static void SetOwnKinds();
 
-static int PresetValue(int preset, int s) {
-    if (!PresetSets(s))
-        return FreshValue(s);
-    if (preset != 1)
-        return FreshValue(s);
-    const LookDef *l = Look(s);
-    return l ? l->classic : kSettings[s].classic;
+const char *RowLabel(const Row &r) {
+    const RowKind &k = KindOf(r);
+    return k.label ? k.label(r) : r.label;
 }
+bool RowActive(const Row &r) { return !r.active || r.active(); }
 
-// The screen: Classic's is 640 x 480, Modern's the native size as it is when Modern is
-// chosen (EPmager, 2026-11-11: Modern took the launch size, which can be smaller).
-struct ScreenSize {
-    U32 w, h;
-};
-
-static ScreenSize ScreenNow() { return ScreenSize{Host_PhysW(), Host_PhysH()}; }
-static ScreenSize NativeScreen() {
-    ScreenSize n;
-    Host_NativeSize(&n.w, &n.h);
-    return n;
-}
-static bool SameScreen(ScreenSize a, ScreenSize b) { return a.w == b.w && a.h == b.h; }
-static ScreenSize PresetScreen(int preset) { return preset == 1 ? ScreenSize{640, 480} : NativeScreen(); }
-
-static void SyncView();
-
-// A preset, Reset settings or an undo can cross between the one column and the wide layout
-// in the middle of a frame; the view starts its scroll again at once, as at any crossing.
-static void SetScreenTo(ScreenSize to) {
-    if (SameScreen(to, ScreenNow()))
-        return;
-    if (Host_SetScreen(to.w, to.h, true))
-        Menu_NoteScreen();
-    SyncView();
-}
-
-// "Changed": the player's values differ from the chosen preset in a setting presets set,
-// or a tuning value differs from its default (a preset puts every one back). The player's
-// settings, on Options or on More options, and the screen do not mark the preset changed.
-static bool PresetChanged() {
-    for (int s = 0; s < S_COUNT; s++)
-        if (PresetSets(s) && g_val[s] != PresetValue(g_preset, s))
-            return true;
-    return MoreOptions_PresetChanged();
-}
-
-// A settings backup, taken before a preset or Reset settings changes anything, which its
-// undo row puts back. What the undo puts back and what its help names both come from the
-// Covers functions, so the help names exactly what the undo changes (2026-11-11: the help
-// named the five settings presets set while the undo put back every setting).
-//   A preset's backup covers what presets set: their settings, the tuning values, the
-//   preset and (prototype only) the screen. A player's setting changed since stays, as the
-//   menu plan's Undo preset has it.
-//   Reset's covers what Reset changes: every setting but the languages, every More options
-//   row, the bindings, the preset and the screen.
-struct Backup {
-    bool have;
-    bool reset;
-    int val[S_COUNT];
-    int exp[MORE_OPTIONS_MAX];
-    int binds[BINDINGS_MAX];
-    int preset;
-    ScreenSize screen;
-};
-static Backup g_presetBackup;  // the preset page's Undo preset
-static Backup g_resetBackup;   // the Advanced page's Undo reset
-
-static bool CoversSetting(const Backup &b, int s) { return b.reset ? !IsLanguage(s) : PresetSets(s); }
-static bool CoversExp(const Backup &b, int i) { return b.reset || MoreOptions_PresetsSet(i); }
-
-static void TakeBackup(Backup &b, bool reset) {
-    b.have = true;
-    b.reset = reset;
-    memcpy(b.val, g_val, sizeof g_val);
-    MoreOptions_Get(b.exp);
-    Bindings_Get(b.binds);
-    b.preset = g_preset;
-    b.screen = ScreenNow();
-}
-
-static const char *const kPresetBackupNames[2] = {"Modern preset", "Classic preset"};
-
-// What the undo would change, in the order its help names it: the preset, the settings
-// (Resolution for the screen), the bindings, the More options rows. Settings in the Text
-// language, More options' rows by their console names. None: the undo row is not offered.
-enum { BACKUP_DIFF_MAX = 1 + S_COUNT + 1 + MORE_OPTIONS_MAX };
-static int BackupDiffers(const Backup &b, const char **names) {
-    if (!b.have)
-        return 0;
-    int n = 0;
-    if (b.preset != g_preset)
-        names[n++] = Ui_Tr(kPresetBackupNames[b.preset]);
-    for (int s = 0; s < S_COUNT; s++) {
-        const bool differs = s == S_RESOLUTION ? !SameScreen(b.screen, ScreenNow())
-                                               : CoversSetting(b, s) && b.val[s] != g_val[s];
-        if (differs)
-            names[n++] = Ui_Tr(kSettings[s].label);
-    }
-    if (b.reset) {
-        int now[BINDINGS_MAX];
-        Bindings_Get(now);
-        if (memcmp(b.binds, now, sizeof(int) * Bindings_Count()) != 0)
-            names[n++] = Ui_Tr("Keys and buttons");
-    }
-    int now[MORE_OPTIONS_MAX];
-    MoreOptions_Get(now);
-    for (int i = 0; i < MoreOptions_Count(); i++)
-        if (CoversExp(b, i) && b.exp[i] != now[i])
-            names[n++] = MoreOptions_Name(i);
-    return n;
-}
-
-static bool UndoOffered(const Backup &b) {
-    const char *names[BACKUP_DIFF_MAX];
-    return BackupDiffers(b, names) > 0;
-}
-
-static void RestoreBackup(Backup &b) {
-    for (int s = 0; s < S_COUNT; s++)
-        if (CoversSetting(b, s))
-            g_val[s] = b.val[s];
-    int exp[MORE_OPTIONS_MAX];
-    MoreOptions_Get(exp);
-    for (int i = 0; i < MoreOptions_Count(); i++)
-        if (CoversExp(b, i))
-            exp[i] = b.exp[i];
-    MoreOptions_Put(exp);
-    if (b.reset)
-        Bindings_Put(b.binds);
-    g_preset = b.preset;
-    b.have = false;
-    SetScreenTo(b.screen);
-}
-
-static void ApplyPreset(int p) {
-    if (!g_presetBackup.have)
-        TakeBackup(g_presetBackup, false);
-    g_preset = p;
-    for (int s = 0; s < S_COUNT; s++)
-        if (PresetSets(s))
-            g_val[s] = PresetValue(p, s);
-    MoreOptions_PresetDefaults();  // the tuning values; the player's rows on More options stay
-    SetScreenTo(PresetScreen(p));
-    Trace("apply preset=%s", kPresetNames[p]);
-}
-
-// Every setting but the languages back as a fresh install has it, every More options row,
-// the bindings and the preset (the menu plan's Reset settings).
-static void ResetSettings() {
-    bool fresh = g_preset == 0 && !MoreOptions_AnyChanged() && Bindings_AreDefault();
-    for (int s = 0; s < S_COUNT; s++)
-        fresh = fresh && (IsLanguage(s) || g_val[s] == FreshValue(s));
-    fresh = fresh && SameScreen(ScreenNow(), NativeScreen());
-    if (!fresh)  // a second reset with nothing changed keeps the first one's undo
-        TakeBackup(g_resetBackup, true);
-    for (int s = 0; s < S_COUNT; s++)
-        if (!IsLanguage(s))
-            g_val[s] = FreshValue(s);
-    MoreOptions_Defaults();
-    Bindings_PutDefaults();
-    g_preset = 0;
-    g_presetBackup.have = false;
-    SetScreenTo(NativeScreen());
-    Trace("reset settings");
-}
-
-// ───────────────────────────── Pages as data ─────────────────────────────
-
-enum { A_KEYS, A_RESET, A_EXP, A_CONSOLE };  // R_ACTION: opens Keys and buttons, asks to reset, opens More
-                                              // options, opens the console
-enum { BACK_PRESET, BACK_RESET };  // R_BACK_TO_MINE: undoes a preset, or a reset
-
-// Switches (prototype aids; every review switch was pruned 2026-11-12, keeping what was decided).
-static int sw_overlay = 0;
-// Help typed on every cursor move (decided 2026-11-03); 1 shows it whole at once, for the self test.
-static int sw_whole = 0;
-static int sw_propscale = 5;  // proportional scale (prop_scale.h), mode 5 decided 2026-11-16
-static int sw_zsub = 0;       // Zilla Slab letters at quarter pixels
-// The intro's logo in the product name's place (a trial, 2026-11-17; video_logo.h): 0 the
-// wordmark; 1 the logo, its ripple every 30 seconds at half the video's height; 2 that
-// ripple at the video's height; 3 at the video's height with the blue ring.
-// The intro's logo for the name: 0 the wordmark, 1 to 3 the logo with one of its ripples
-// every 30 seconds. The build-in is the same for all three: the intro's, at its full
-// height with the blue ring. 1, the gentle ripple after it, was chosen in play: the full
-// one with the ring as the logo fades in, then the gentle one every 30 seconds (the
-// maintainer, 2026-11-17, after trying 3 as the start).
-static int sw_videologo = 1;
-static int sw_logosub = 0;    // 1 = CLASSIC COMMUNITY kept under the logo in the picture's place
-static int sw_logocc = 1;     // the cc under the logo's 2; 0 = the logo as the intro has it
-static int sw_legendfit = 1;  // the help window's legend at the size that fits (EPmager, 2026-11-16)
-// The chosen preset: "(current)" after its name always; 1 also gives it the green
-// current-value plasma, as before (EPmager, 2026-11-11: green and the blue cursor read alike,
-// so he asked for the words alone). F3; off at start, to show his proposal.
-static int sw_greencurrent = 0;
-// Long help (asked for 2026-11-12, after the short help read as too short to be useful): a row's
-// help is its short line, then a second window saying when or why to change it, turned with
-// Space or the pad's Y ("More" in the legend); no 750 px cap. 0: the short help alone, as the
-// 2026-11-03 cap left it. F4.
-static int sw_longhelp = 1;
-// The pointer used last, as the host has it, or fixed for a test: switch pointer, 1 the mouse,
-// 2 a finger (the self test's combos lay every screen out as each shows it).
-static int sw_pointer = 0;
-static int LastPointer() { return sw_pointer ? sw_pointer : Host_LastPointer(); }
-
-// What a build off main says: lba2cc's LBA2_VERSION_STRING and the commit's first 7. A release
-// says its number alone. An example; the prototype has no build of its own to name.
-static const char *kVersion = "0.13.3-dev 011394f";
-static const char *kVersionString = "0.13.3-dev";  // LBA2_VERSION_STRING alone, as the log's first line has it
-static const char *kCommit = "011394fbc247";
-
-// The preset row: "Preset: Modern", the page's own name (2026-11-11, after playing on the
-// Xbox: "Modern settings" read as a page of settings, not the preset).
-static const char *FormatPresetRow(char *buf, size_t n, const char *name, bool changed) {
-    snprintf(buf, n, "Preset: %s%s", name, changed ? ", changed" : "");
-    return buf;
-}
-
-static bool UndoPresetOffered() { return UndoOffered(g_presetBackup); }
-static bool UndoResetOffered() { return UndoOffered(g_resetBackup); }
-int Menu_ButtonNames() { return g_val[S_PADNAMES]; }
-static bool AutoCamera() { return g_val[S_CAM_OUT] == 1; }  // Invert and speed only mean something with it
-
-#define SETTING_ROW(s) {R_SETTING, NULL, s, NULL, NULL, NULL, NULL}
-#define AUTO_CAMERA_ROW(s) {R_SETTING, NULL, s, NULL, NULL, AutoCamera, "Only with the Auto camera."}
-#define RETURN_ROW {R_RETURN, "Return to previous menu", 0, "", NULL, NULL, NULL}
-
-static const Row kHubRows[] = {
-    {R_RETURN, "Return to the game", 0, "Back to where you were.", NULL, NULL, NULL},
-    {R_PRESET_ROW, "", P_PRESET, "As in 1997, or today's look with bugs fixed.", NULL, NULL, NULL},
-    {R_CATEGORY, "Language and interface", P_LANG, "Text, voices, the font and the background.", NULL, NULL, NULL},
-    {R_CATEGORY, "Display and graphics", P_DISPLAY, "Resolution, window and detail.", NULL, NULL, NULL},
-    {R_CATEGORY, "Sound", P_SOUND, "Volumes.", NULL, NULL, NULL},
-    {R_CATEGORY, "Controls and camera", P_CONTROLS, "Keys, pad and the camera.", NULL, NULL, NULL},
-    {R_CATEGORY, "Advanced and reset", P_ADVANCED, "The rules switch, experiments and a fresh start.", NULL, NULL,
-     NULL},
-};
-
-static const Row kPresetRows[] = {
-    RETURN_ROW,
-    {R_PRESET_CHOICE, "Modern", 0, "Today's look, cameras that follow, bugs fixed.", NULL, NULL, NULL},
-    {R_PRESET_CHOICE, "Classic", 1, "The 1997 look and cameras, bugs and all.", NULL, NULL, NULL},
-    {R_BACK_TO_MINE, "Undo preset", BACK_PRESET, "Puts back the settings you had before you chose a preset.",
-     UndoPresetOffered, NULL, NULL},
-};
-
-static const Row kLangRows[] = {
-    RETURN_ROW, SETTING_ROW(S_TEXT_LANG), SETTING_ROW(S_VOICE_LANG), SETTING_ROW(S_SUBTITLES),
-    SETTING_ROW(S_BACKGROUND), SETTING_ROW(S_FONT),
-};
-
-static const Row kDisplayRows[] = {
-    RETURN_ROW, SETTING_ROW(S_RESOLUTION), SETTING_ROW(S_FULLSCREEN), SETTING_ROW(S_VSYNC),
-    SETTING_ROW(S_FPS), SETTING_ROW(S_IMAGE),
-};
-
-static const Row kSoundRows[] = {
-    RETURN_ROW, SETTING_ROW(S_MASTER), SETTING_ROW(S_SFX), SETTING_ROW(S_VOICES), SETTING_ROW(S_MUSIC),
-    SETTING_ROW(S_REVERSE),
-};
-
-static const Row kControlsRows[] = {
-    RETURN_ROW,
-    {R_ACTION, "Keys and buttons", A_KEYS, "Change which key or button does what.", NULL, NULL, NULL},
-    SETTING_ROW(S_PADNAMES),
-    SETTING_ROW(S_CAM_OUT),
-    SETTING_ROW(S_CAM_IN),
-    SETTING_ROW(S_MOVIE_CAM),
-    AUTO_CAMERA_ROW(S_INVERT),
-    AUTO_CAMERA_ROW(S_SENS),
-};
-
-static const Row kAdvancedRows[] = {
-    RETURN_ROW,
-    SETTING_ROW(S_FIXBUGS),
-    // Always offered (decided 2026-11-03): its help carries the warning a switch once did.
-    // The page holds every console setting without a row of its own: tuning for finished
-    // features and the few unfinished ones, which it marks experimental.
-    // Help within 750 px (2026-11-12); an experimental row's own help says it is experimental.
-    {R_ACTION, "More options", A_EXP, "Tuning and 1997 extras, in English.", NULL, NULL, NULL},
-    // The row's value is the version, so a bug report can name the build from the menu.
-    {R_ACTION, "Console", A_CONSOLE, "Messages, and commands from a keyboard.", NULL, NULL, NULL},
-    {R_ACTION, "Reset settings", A_RESET, "Puts every setting back as a fresh install has it.", NULL, NULL, NULL},
-    {R_BACK_TO_MINE, "Undo reset", BACK_RESET, "Puts back what you had before the reset.", UndoResetOffered, NULL,
-     NULL},
-};
-
-// A fixture: today's Options page from the boot menu, to diff against lba2cc's
-// `ui menu-main-options` capture.
-static const Row kOriginalRows[] = {
-    RETURN_ROW,
-    {R_ACTION, "Display", 0, "", NULL, NULL, NULL},
-    {R_ACTION, "Sound volume", 0, "", NULL, NULL, NULL},
-    {R_ACTION, "Choose language", 0, "", NULL, NULL, NULL},
-    {R_ACTION, "Advanced options", 0, "", NULL, NULL, NULL},
-    {R_ACTION, "Controls", 0, "", NULL, NULL, NULL},
-};
-
-// ───────────────────────────── The game around the menu ─────────────────────────────
-// Fakes, as the settings are: no game runs and nothing is written. A game is going on or not
-// (the 1997 menu's firstloop). The saves, as 1997 keeps them (333929a GAMEMENU.CPP, and the GOG
-// DOS LBA2.EXE seen 2026-11-14):
-//   - named saves, in alphabetical order as PlayerGameList sorts them, named as lba2cc names a
-//     save it makes ("<island> - <date time>", GAMEMENU.CPP MakeAutoSaveName), shorter:
-//     "Celebration Island - 2026-11-08 15-57-23" spills a 640x480 row by up to 33 px, and
-//     without the seconds still by 8 (self test, 2026-11-14), so neither seconds nor the dash;
-//   - the current save (current.lba), written as a game starts, loads or is left for the menu:
-//     Resume game plays it;
-//   - the autosave (autosave.lba), written at every scene change: Load game's last row,
-//     "AUTOSAVE" (its player name), never in Save game's list and never deleted.
-// Enough named saves that the lists scroll.
-
-enum { SAVES_MAX = 32 };
-static_assert(SAVES_MAX + 1 <= MORE_OPTIONS_MAX, "Save game's rows fit PAGE_ROWS_MAX");
-static char g_saves[SAVES_MAX][64];
-static int g_saveCount;
-static int g_savesAtStart = 0;  // --saves N; 0, a fresh install, at start: no Resume game, no Load game
-static bool g_haveCurrent;  // current.lba: Resume game is offered
-static char g_currentWhat[64];  // what Resume game plays at a start
-static char g_currentIsland[32];
-static bool g_haveAutosave; // autosave.lba: Load game's AUTOSAVE row
-static char g_autosaveIsland[32];
-static bool g_inGame;    // a game is going on: Resume game goes back to it, Save game is offered
-// Played since the last save. 1997 keeps that play in current.lba (written when Esc leaves
-// play), which Resume game continues even after Quit; New game and Load write over it.
-static bool g_unsaved;
-static bool g_playing;   // the pretend game is on screen, the menu closed
-static bool g_quitShown; // Quit chosen: the screen that says the game would close
-static char g_playingWhat[64];  // what the pretend game plays: a save's name, AUTOSAVE, or a new game
-static char g_island[32];       // where it is, for the next save's name
-static int g_saveClock;  // the minutes the fake clock moved since the first save made here
-
-static const char *const kIslands[] = {"Citadel Island", "Desert Island", "Emerald Moon", "Otringal",
-                                       "Celebration Island"};
-static const char *const kAutosaveName = "AUTOSAVE";  // the autosave's player name, as 1997 lists it
-
-// Where the pretend game is (game_scene.h), and where each save left it: its picture is that
-// spot drawn at 160x120, as lba2cc keeps the screen in a save when it writes one.
-static GameSpot g_spot;         // in play, as of g_playFrom
-static U32 g_playFrom;          // Host_TimeMs when the game was last shown
-// In a game the menu is drawn over the game as it was left. Esc dims all of it first, as
-// MainGameMenu does (ShadeBoxBlk, SCREEN_SHADE_LVL); the Options, Save and Load keys open
-// their page over the scene as it is, only the boxes shaded (PERSO.CPP, I_OPTIONS and on).
-static bool g_dimGame;
-// What SCREEN_SHADE_LVL (DEFINES.H, 8) keeps of the light through the menu palette's fog table,
-// measured on this scene outside the boxes (2026-11-18: r 0.71, g 0.67, b 0.68).
-static const float GAME_DIM_KEEP = 0.69f;
-static U32 g_savedAt;           // Host_TimeMs of a save made from play, for "Game saved." there
-static bool g_savedFromPlay;
-static GameSpot g_currentSpot;  // current.lba: as a game starts or loads, and when Esc leaves play
-static GameSpot g_autosaveSpot; // autosave.lba: as a game starts or loads, and at every scene change
-struct SaveSpot {
-    char name[64];
-    GameSpot spot;
-};
-static SaveSpot g_saveSpots[SAVES_MAX * 4];  // the saves made here; a fake one's spot comes from its name
-static int g_saveSpotCount;
-
-static int IslandOf(const char *where) {
-    for (int i = 0; i < SAVE_PICTURE_ISLANDS; i++)
-        if (!strncmp(where, kIslands[i], strlen(kIslands[i])))
-            return i;
-    return 0;
-}
-
-// A fake save's spot: its island, and a scene and moment of its own, from its name.
-static GameSpot SpotOfName(const char *name) {
-    U32 h = 2166136261u;
-    for (const char *p = name; *p; p++)
-        h = (h ^ (U8)*p) * 16777619u;
-    return {IslandOf(name), (int)(h % 6), (h >> 8) % 60000};
-}
-
-static GameSpot SpotOf(const char *name) {
-    for (int i = g_saveSpotCount - 1; i >= 0; i--)
-        if (!strcmp(g_saveSpots[i].name, name))
-            return g_saveSpots[i].spot;
-    return SpotOfName(name);
-}
-
-// The game as it is on screen now.
-static GameSpot LiveSpot() {
-    GameSpot s = g_spot;
-    if (g_playing)
-        s.t += Host_TimeMs() - g_playFrom;
-    return s;
-}
-
-static int CompareSaves(const void *a, const void *b) { return strcmp((const char *)a, (const char *)b); }
-static void SortSaves() { qsort(g_saves, (size_t)g_saveCount, sizeof g_saves[0], CompareSaves); }
-
-// The fake saves a run starts with: a week of play, a few hours apart. The newest is where the
-// current save and the autosave are too.
-static void MakeSaves(int n) {
-    g_saveCount = n < SAVES_MAX ? n : SAVES_MAX;
-    int day = 14, hour = 21, minute = 40;
-    for (int i = 0; i < g_saveCount; i++) {
-        snprintf(g_saves[i], sizeof g_saves[i], "%s 2026-11-%02d %02d:%02d", kIslands[(i / 4) % 5], day, hour,
-                 minute);
-        hour -= 3 + i % 4;
-        minute = (minute + 23) % 60;
-        if (hour < 9) {
-            hour += 13;
-            day--;
-        }
-    }
-    g_haveCurrent = g_haveAutosave = g_saveCount > 0;
-    snprintf(g_currentWhat, sizeof g_currentWhat, "%s", g_saveCount ? g_saves[0] : "");
-    snprintf(g_currentIsland, sizeof g_currentIsland, "%s", kIslands[0]);
-    snprintf(g_autosaveIsland, sizeof g_autosaveIsland, "%s", kIslands[0]);
-    g_currentSpot = SpotOfName(g_currentWhat);
-    g_autosaveSpot = SpotOfName(kAutosaveName);
-    g_autosaveSpot.island = 0;
-    g_saveSpotCount = 0;
-    SortSaves();
-}
-
-static int FindSave(const char *name) {
-    for (int i = 0; i < g_saveCount; i++)
-        if (!strcmp(g_saves[i], name))
-            return i;
-    return -1;
-}
-
-// A save made now: on the island the game is on, at the fake clock's time. Returns its place.
-static int SaveNow(int over) {
-    if (over >= 0) {  // Save over a save: it goes, and the new one takes its place in the order
-        for (int i = over; i + 1 < g_saveCount; i++)
-            memcpy(g_saves[i], g_saves[i + 1], sizeof g_saves[i]);
-        g_saveCount--;
-    }
-    if (g_saveCount == SAVES_MAX)
-        g_saveCount--;  // the list is full: the last goes
-    g_saveClock += 7;
-    const int minutes = 22 * 60 + g_saveClock;  // from 22:00, after the newest fake save
-    char *made = g_saves[g_saveCount++];
-    snprintf(made, sizeof g_saves[0], "%s 2026-11-%02d %02d:%02d", g_island, 14 + minutes / (24 * 60),
-             minutes / 60 % 24, minutes % 60);
-    snprintf(g_playingWhat, sizeof g_playingWhat, "%s", made);  // the game goes on from it
-    if (g_saveSpotCount < (int)(sizeof g_saveSpots / sizeof g_saveSpots[0])) {
-        SaveSpot &k = g_saveSpots[g_saveSpotCount++];
-        snprintf(k.name, sizeof k.name, "%s", made);
-        k.spot = LiveSpot();
-    }
-    SortSaves();
-    g_unsaved = false;
-    Trace("save %s", g_playingWhat);
-    return FindSave(g_playingWhat);
-}
-
-static void DeleteSave(int i) {
-    Trace("delete %s", g_saves[i]);
-    for (; i + 1 < g_saveCount; i++)
-        memcpy(g_saves[i], g_saves[i + 1], sizeof g_saves[i]);
-    g_saveCount--;
-}
-
-void Menu_SetSavesAtStart(int n) { g_savesAtStart = n < 0 ? 0 : n; }
-const char *Menu_PlayingWhat() { return g_playingWhat; }
-
-static bool HaveSaves() { return g_saveCount > 0 || g_haveAutosave; }  // 1997 counts the autosave
-static bool InGame() { return g_inGame; }
-static bool HaveAutosave() { return g_haveAutosave; }
-static bool CanResume() { return g_inGame || g_haveCurrent; }
-
-enum { M_RESUME, M_NEW, M_LOAD, M_SAVE, M_OPTIONS, M_QUIT };
-
-// The 1997 main menu (GAMEMENU.CPP RealGameMainMenu, texts 70 to 75), each row there only when
-// BuildGameMainMenu would show it. No help: each row's name says what it does (docs/UX.md,
-// "Rows that say what they do"); the voice speaks only when something would be lost.
-static const Row kMainRows[] = {
-    {R_GAME, "Resume game", M_RESUME, "", CanResume, NULL, NULL},
-    {R_GAME, "New game", M_NEW, "", NULL, NULL, NULL},
-    {R_GAME, "Load game", M_LOAD, "", HaveSaves, NULL, NULL},
-    {R_GAME, "Save game", M_SAVE, "", InGame, NULL, NULL},
-    {R_GAME, "Options", M_OPTIONS, "", NULL, NULL, NULL},
-    {R_GAME, "Quit", M_QUIT, "", NULL, NULL, NULL},
-};
-
-#define SAVE_ROW(i) {R_SAVE, NULL, i, "", NULL, NULL, NULL}
-#define SAVE_ROWS_8(i) SAVE_ROW(i), SAVE_ROW(i + 1), SAVE_ROW(i + 2), SAVE_ROW(i + 3), SAVE_ROW(i + 4), \
-    SAVE_ROW(i + 5), SAVE_ROW(i + 6), SAVE_ROW(i + 7)
-#define SAVE_ROWS SAVE_ROWS_8(0), SAVE_ROWS_8(8), SAVE_ROWS_8(16), SAVE_ROWS_8(24)
-// 1997's order: the named saves, then AUTOSAVE in Load game and the new save's row in Save game.
-static const Row kLoadRows[] = {SAVE_ROWS, {R_AUTOSAVE, NULL, 0, "", HaveAutosave, NULL, NULL}};
-static const Row kSaveRows[] = {SAVE_ROWS, {R_NEW_SAVE, "New save", 0, "", NULL, NULL, NULL}};
-static_assert(sizeof kLoadRows / sizeof kLoadRows[0] == SAVES_MAX + 1, "a row for every save, and the autosave");
-#undef SAVE_ROWS
-#undef SAVE_ROWS_8
-#undef SAVE_ROW
-
-// The Options pages; Keys and buttons and its groups are filled in from bindings.cpp's tables.
-#define PAGE(name, rows) {name, rows, (int)(sizeof rows / sizeof rows[0])}
-static Page g_pages[P_COUNT] = {
-    PAGE("Options", kHubRows),
-    PAGE("Preset", kPresetRows),
-    PAGE("Language and interface", kLangRows),
-    PAGE("Display and graphics", kDisplayRows),
-    PAGE("Sound", kSoundRows),
-    PAGE("Controls and camera", kControlsRows),
-    PAGE("Advanced and reset", kAdvancedRows),
-    PAGE("original", kOriginalRows),
-};
-static const Page kGamePages[3] = {PAGE("Game menu", kMainRows), PAGE("Load game", kLoadRows), PAGE("Save game", kSaveRows)};
-#undef PAGE
-
-static const char *RowLabel(const Row &r) {
-    if (r.type == R_SETTING)
-        return kSettings[r.arg].label;
-    if (r.type == R_SAVE)
-        return g_saves[r.arg];
-    if (r.type == R_AUTOSAVE)
-        return kAutosaveName;
-    if (r.type == R_PRESET_CHOICE && r.arg == g_preset) {
-        static char marked[2][64];  // two rows can be drawn before the first is used
-        static int next;
-        char *out = marked[next++ & 1];
-        // Changed since it was chosen, it is no longer what it says: wide, the row's value
-        // says Changed; in the one column, where a choice shows no value, the mark does.
-        if (PresetChanged()) {
-            if (Menu_Wide())
-                return r.label;
-            snprintf(out, sizeof marked[0], "%s (changed)", r.label);
-            return out;
-        }
-        snprintf(out, sizeof marked[0], "%s (current)", r.label);  // Ui_Tr takes the parts apart
-        return out;
-    }
-    return r.label;
-}
-static const char *RowHelp(const Row &r) { return r.type == R_SETTING ? kSettings[r.arg].help : r.help; }
-static bool RowActive(const Row &r) { return !r.active || r.active(); }
-
-static const char *PresetRowLabel(char *buf, size_t n) {
-    return FormatPresetRow(buf, n, kPresetNames[g_preset], PresetChanged());
-}
-
-static const char *ValueText(int s, char *buf, size_t n) {
-    const Setting &st = kSettings[s];
-    if (s == S_RESOLUTION)
-        snprintf(buf, n, "%u x %u%s", (unsigned)Host_PhysW(), (unsigned)Host_PhysH(),
-                 SameScreen(ScreenNow(), NativeScreen()) ? " (native)" : "");
-    else if (s == S_FULLSCREEN)
-        snprintf(buf, n, "%s", st.names[Host_Fullscreen() ? 1 : 0]);
-    else if (st.kind == K_SLIDER)
-        snprintf(buf, n, "%d", g_val[s]);
-    else
-        snprintf(buf, n, "%s", st.names[g_val[s]]);
-    return buf;
-}
-
-// "Changed is a colour": differs from a fresh install, or for a setting presets
-// set, from the chosen preset.
-static bool ValueChanged(int s) {
-    if (s == S_RESOLUTION || s == S_FULLSCREEN)
-        return false;  // the player's screen, not a choice a preset makes
-    return g_val[s] != PresetValue(g_preset, s);
+const char *PresetRowLabel(char *buf, size_t n) {
+    return FormatPresetRow(buf, n, Presets_Name(Presets_Chosen()), Presets_Changed());
 }
 
 // ───────────────────────────── Navigation state ─────────────────────────────
@@ -726,55 +41,56 @@ static bool ValueChanged(int s) {
 // Where the player is: one stack of pages, each with the row its cursor is on, the same in
 // every layout (the menu plan's page model). A row is its index in the page's table, never a
 // position on the screen, so a layout change or a row that comes or goes leaves it in place.
-struct Place {
-    int page;
-    int row;
-};
-static Place g_stack[8];
-static int g_depth;
-static int g_scroll;       // the first shown row drawn: the view's, counted as its layout shows rows
-static bool g_confirm;     // a question is up: Classic, Reset settings, or one of the game menu's
-static int g_confirmCursor;
-enum Question { Q_CLASSIC, Q_RESET, Q_NEW_GAME, Q_SAVE_OVER, Q_DELETE, Q_COUNT };
-static Question g_question;
-static int g_questionSave;  // the save Q_SAVE_OVER and Q_DELETE are about
+Place g_stack[8];
+int g_depth;
+int g_scroll;       // the first shown row drawn: the view's, counted as its layout shows rows
+// The question that is up, if any (menu_parts.h Question), and its cursor. Every question the
+// menu asks goes through here, whichever page asks it.
+const Question *g_asking;
+int g_answer;        // 0 No, the safe answer, where it starts; 1 Yes
+static int g_questionSave;  // the save the save-over and delete questions are about
 
-// A question's title (in place of the page's, so the screen says it is a question:
-// EPmager, 2026-11-11), what it says in the voice, and its answers: the safe one first.
-struct QuestionText {
-    const char *title;
-    const char *voice;
-    const char *answers[2];
-};
-// The game menu asks only where something would be lost: the game in progress, or a save.
-// Quit loses nothing (current.lba keeps the game), so it does not ask. 1997 asked none of
-// these; lba2cc asks before a delete (SavedConfirmMenu).
-static const QuestionText kQuestions[Q_COUNT] = {
-    {"Confirm Classic preset", "Play as in 1997? Sound and keys stay as they are.", {"No, keep Modern", "Yes, play Classic"}},
-    {"Confirm settings reset", "Put every setting back as a fresh install has it?", {"No, keep my settings", "Yes, reset settings"}},
-    {"Confirm new game", "Start a new game? The game in progress ends; your saves stay.", {"No, keep my game", "Yes, start again"}},
-    {"Confirm save", "Save over this save? It becomes the game as it is now.", {"No, keep it", "Yes, save over it"}},
-    {"Confirm delete", "Delete this save? It cannot be brought back.", {"No, keep it", "Yes, delete it"}},
-};
-static const char *const kQuestionNames[Q_COUNT] = {"classic", "reset", "new game", "save over", "delete"};
-
-static void Ask(Question q) {
-    g_confirm = true;
-    g_question = q;
-    g_confirmCursor = 0;  // the safe answer first
-    Trace("ask %s", kQuestionNames[q]);
+void Menu_Ask(const Question *q) {
+    g_asking = q;
+    g_answer = 0;  // the safe answer first
+    Trace("ask %s", q->name);
 }
-static bool g_quit;        // Esc on the Quit screen: the prototype ends (a fullscreen window has no close box)
+const Question *Menu_Asking() { return g_asking; }
+int Menu_Answer() { return g_answer; }
+
+// A question's title is in place of the page's, so the screen says it is a question (EPmager,
+// 2026-11-11). The game menu asks only where something would be lost: the game in progress,
+// or a save. Quit loses nothing (current.lba keeps the game), so it does not ask. 1997 asked
+// none of these; lba2cc asks before a delete (SavedConfirmMenu).
+static void YesClassic();
+static void YesReset();
+static void YesNewGame();
+static void YesSaveOver();
+static void YesDelete();
+static const Question kAskClassic = {"classic", "Confirm Classic preset",
+                                     "Play as in 1997? Sound and keys stay as they are.",
+                                     {"No, keep Modern", "Yes, play Classic"}, YesClassic, NULL, NULL};
+static const Question kAskReset = {"reset", "Confirm settings reset",
+                                   "Put every setting back as a fresh install has it?",
+                                   {"No, keep my settings", "Yes, reset settings"}, YesReset, NULL, NULL};
+static const Question kAskNewGame = {"new game", "Confirm new game",
+                                     "Start a new game? The game in progress ends; your saves stay.",
+                                     {"No, keep my game", "Yes, start again"}, YesNewGame, NULL, NULL};
+static const Question kAskSaveOver = {"save over", "Confirm save",
+                                      "Save over this save? It becomes the game as it is now.",
+                                      {"No, keep it", "Yes, save over it"}, YesSaveOver, NULL, NULL};
+static const Question kAskDelete = {"delete", "Confirm delete", "Delete this save? It cannot be brought back.",
+                                    {"No, keep it", "Yes, delete it"}, YesDelete, NULL, NULL};
+bool g_quit;        // Esc on the Quit screen: the prototype ends (a fullscreen window has no close box)
 // What the voice says on the game menu until the cursor moves: "Game saved." (1997 showed a
 // brief overlay after a save, ShowGameSaveResult).
 static const char *g_menuNote = "";
 // The console (#679), opened from its row: by the device used last, the full console
 // (keyboard, touch) or read-only (pad: the messages, and any button closes it).
-enum { CON_CLOSED, CON_FULL, CON_READONLY };
-static int g_console;
-static Voice g_voice;
-static char g_toast[128];
-static U32 g_toastUntil;
+int g_console;
+Voice g_voice;
+char g_toast[128];
+U32 g_toastUntil;
 
 bool Menu_Wide() {
     return Host_RuleChoseWide();
@@ -786,9 +102,9 @@ WideFrame Menu_WideFrame() {
     return f;
 }
 
-static bool Wide() { return Menu_Wide(); }
+bool Wide() { return Menu_Wide(); }
 
-static void Toast(const char *fmt, const char *a, int v) {
+void Toast(const char *fmt, const char *a, int v) {
     snprintf(g_toast, sizeof g_toast, fmt, a, v);
     g_toastUntil = Host_TimeMs() + 2000;
 }
@@ -803,7 +119,7 @@ void Menu_NoteScreen() {
     Trace("screen %s", note);
 }
 
-static int TopPage() { return g_stack[g_depth - 1].page; }
+int TopPage() { return g_stack[g_depth - 1].page; }
 
 // A row as the layout shows it. No page shows a Return row (decided 2026-11-12, EPmager:
 // clutter): Esc goes back, and a mouse or a finger has the corner Back (DrawBack). The
@@ -811,17 +127,16 @@ static int TopPage() { return g_stack[g_depth - 1].page; }
 // check is there only while it holds.
 static bool RowShown(const Page &p, int i) {
     const Row &r = p.rows[i];
-    if (r.type == R_RETURN && &p != &g_pages[P_ORIGINAL])
+    if (r.type == R_RETURN && !p.keepsReturn)
         return false;
-    if (r.type == R_SAVE && r.arg >= g_saveCount)
+    const RowKind &k = KindOf(r);
+    if (k.shown && !k.shown(r))
         return false;
     return !r.shown || r.shown();
 }
 
-enum { PAGE_ROWS_MAX = MORE_OPTIONS_MAX };  // More options is the longest page
-
 // The rows a page shows, in order: their indices in its table.
-static int ShownRows(int page, int *out) {
+int ShownRows(int page, int *out) {
     const Page &p = g_pages[page];
     assert(p.count <= PAGE_ROWS_MAX && "PAGE_ROWS_MAX holds every page's rows");
     int n = 0;
@@ -832,7 +147,7 @@ static int ShownRows(int page, int *out) {
 }
 
 // Where a row is among the rows its page shows: 0 the first; -1 when it is not shown.
-static int Position(int page, int row) {
+int Position(int page, int row) {
     int shown[PAGE_ROWS_MAX];
     const int n = ShownRows(page, shown);
     for (int i = 0; i < n; i++)
@@ -858,15 +173,15 @@ static int ResolveRow(int page, int row) {
 
 // The top of the stack, its row checked as it is read: nothing has to remember to move the
 // cursor off a row that went.
-static Place &Top() {
+Place &Top() {
     Place &t = g_stack[g_depth - 1];
     t.row = ResolveRow(t.page, t.row);
     assert(RowShown(g_pages[t.page], t.row) && "the cursor is on a row its page shows");
     return t;
 }
 
-static const Row *CursorRow() {
-    if (g_confirm)
+const Row *CursorRow() {
+    if (g_asking)
         return NULL;
     const Place &t = Top();
     return &g_pages[t.page].rows[t.row];
@@ -880,62 +195,48 @@ int Menu_TopShownCount() {
 }
 int &Menu_Scroll() { return g_scroll; }
 
-static void LegendFor(const Row *r, const char **keys, const char **words, int *n);
-static S32 LegendWidth(const char **keys, const char **words, int n, S32 scale);
+static bool EscGoesBack();
 
-// Whether a line for the row under the cursor fits the voice it will be said in:
-// the band beside the legend, the help line, or the 640x480 dialogue window.
-static S32 BandVoiceWidth(const char **keys, const char **words, int nk);
-
-static bool VoiceFits(const char *text, const Row *r) {
-    S32 W = (S32)Host_LogicalW();
-    if (!Wide())
-        return Voice_Lines(text, W - 49) <= 2;  // the legend has the dialogue window's third line
-    const char *keys[4], *words[4];
-    int nk;
-    LegendFor(r, keys, words, &nk);
-    return Voice_Lines(text, BandVoiceWidth(keys, words, nk)) <= 2;  // as Menu_DrawFoot
+// The legend: only the keys the selected row takes.
+void LegendFor(const Row *r, const char **keys, const char **words, int *n) {
+    *n = 0;
+    if (g_console) {
+        keys[*n] = g_console == CON_READONLY ? "Any" : "Esc";
+        words[(*n)++] = "Close";
+        return;
+    }
+    if (g_asking) {
+        Menu_QuestionLegend(keys, words, n);
+        return;
+    }
+    if (r) {
+        if (KindOf(*r).legend) {
+            KindOf(*r).legend(*r, keys, words, n);
+        } else {
+            keys[*n] = "Enter"; words[(*n)++] = "Choose";
+        }
+    }
+    if (!EscGoesBack())
+        return;  // the first game menu: Esc has nothing to go back to
+    keys[*n] = "Esc";
+    // In play the game menu's Esc goes back to the game: the legend says so, as its first row
+    // does (no corner Back there either).
+    words[(*n)++] = g_depth == 1 && TopPage() == P_MAIN ? "Resume" : "Back";
 }
 
-static char g_helpBuf[256];  // HelpFor's built texts, already in the Text language
+static char g_helpBuf[256];  // a kind's built help (the undo rows'), already in the Text language
 
 static const char *HelpFor(const Row *r) {
-    char *buf = g_helpBuf;
-    const size_t bufSize = sizeof g_helpBuf;
     if (!r)
         return "";
     // One message at a time: a dimmed row says why it is dimmed, not what it does.
     if (!RowActive(*r))
         return r->needs;
-    if (r->type == R_BACK_TO_MINE) {
-        // What the undo puts back (BackupDiffers, as RestoreBackup does it); as many named
-        // as the voice holds, the rest counted, so the help never pages.
-        const char *names[BACKUP_DIFF_MAX];
-        const int n = BackupDiffers(r->arg == BACK_RESET ? g_resetBackup : g_presetBackup, names);
-        for (int shown = n; shown > 0; shown--) {
-            char list[200] = "";
-            for (int i = 0; i < shown; i++) {
-                if (i)
-                    strncat(list, i + 1 == n ? Menu_Tr(" and ") : ", ", sizeof list - strlen(list) - 1);
-                strncat(list, names[i], sizeof list - strlen(list) - 1);
-            }
-            if (shown < n) {
-                char more[24];
-                snprintf(more, sizeof more, Menu_Tr(" and %d more"), n - shown);
-                strncat(list, more, sizeof list - strlen(list) - 1);
-            }
-            snprintf(buf, bufSize, Menu_Tr("Puts back what you had: %s."), list);
-            if (VoiceFits(buf, r))
-                return buf;
-        }
-        return RowHelp(*r);
-    }
-    if (r->type == R_GAME && g_menuNote[0])
-        return g_menuNote;
-    // The preset in use, changed since: Enter puts its settings back, and says so.
-    if (r->type == R_PRESET_CHOICE && r->arg == g_preset && PresetChanged())
-        return "You changed some of its settings. Restore puts them back.";
-    return RowHelp(*r) ? RowHelp(*r) : "";
+    const RowKind &k = KindOf(*r);
+    const char *help = k.help ? k.help(*r) : NULL;
+    if (!help)
+        help = r->help;
+    return help ? help : "";
 }
 
 // The short lines (decided 2026-11-03): each row's first window, the line read while
@@ -988,7 +289,7 @@ static const char *MoreHelp(const char *shortLine) {
     return NULL;
 }
 
-const char *Menu_Tr(const char *english) { return Lang_Tr(english, g_val[S_TEXT_LANG]); }
+const char *Menu_Tr(const char *english) { return Lang_Tr(english, Settings_Value(S_TEXT_LANG)); }
 
 static std::set<std::string> s_voiceMissed;
 const std::set<std::string> &Menu_VoiceMissed() { return s_voiceMissed; }
@@ -999,14 +300,14 @@ static void Say(const char *text, bool translate) {
             if (!strcmp(text, kShortHelp[i][0]))  // the short line comes first under long help too
                 text = kShortHelp[i][1];
         const char *more = sw_longhelp ? MoreHelp(text) : NULL;
-        if (g_val[S_TEXT_LANG] > 0 && text[0] && !Lang_Find(text, g_val[S_TEXT_LANG]))
+        if (Settings_Value(S_TEXT_LANG) > 0 && text[0] && !Lang_Find(text, Settings_Value(S_TEXT_LANG)))
             s_voiceMissed.insert(text);
-        if (more && g_val[S_TEXT_LANG] > 0 && !Lang_Find(more, g_val[S_TEXT_LANG]))
+        if (more && Settings_Value(S_TEXT_LANG) > 0 && !Lang_Find(more, Settings_Value(S_TEXT_LANG)))
             s_voiceMissed.insert(more);
-        text = Lang_Tr(text, g_val[S_TEXT_LANG]);  // the voice speaks the Text language
+        text = Lang_Tr(text, Settings_Value(S_TEXT_LANG));  // the voice speaks the Text language
         if (more) {  // the short line, then the second window (@P ends a window, as in TEXT.HQR)
             static char both[512];
-            snprintf(both, sizeof both, "%s @P %s", text, Lang_Tr(more, g_val[S_TEXT_LANG]));
+            snprintf(both, sizeof both, "%s @P %s", text, Lang_Tr(more, Settings_Value(S_TEXT_LANG)));
             text = both;
         }
     }
@@ -1035,32 +336,49 @@ static void Say(const char *text, bool translate) {
 void Menu_Say(const char *text) { Say(text, true); }
 void Menu_SayAsIs(const char *text) { Say(text, false); }
 
-static void UpdateVoice() {
-    if (Bindings_Active()) {
-        Bindings_Say();
+// The hooks of the page on top of the stack; NULL for a list of rows.
+const PageHooks *TopHooks() { return g_depth ? g_pages[TopPage()].hooks : NULL; }
+
+static bool TopBusy() {
+    const PageHooks *h = TopHooks();
+    return h && h->busy && h->busy();
+}
+
+void UpdateVoice() {
+    if (g_asking) {  // a question asks, whatever page it is on and wherever the pointer is
+        if (g_asking->say) {
+            static char built[256];
+            g_asking->say(built, sizeof built);
+            Menu_SayAsIs(built);  // built from formats already in the Text language
+        } else {
+            Menu_Say(g_asking->voice);
+        }
         return;
     }
-    if (MoreOptions_Active()) {
-        MoreOptions_Say();
+    if (const PageHooks *h = TopHooks(); h && h->say) {
+        h->say();
         return;
     }
-    if (!g_confirm && !Menu_CursorLit()) {  // on Back: no row to speak of; a question still asks
+    if (!Menu_CursorLit()) {  // on Back: no row to speak of
         Menu_SayAsIs("");
         return;
     }
     const Row *r = CursorRow();
-    const char *text = g_confirm ? kQuestions[g_question].voice : HelpFor(r);
+    const char *text = HelpFor(r);
     if (text == g_helpBuf)
         Menu_SayAsIs(text);
     else
         Menu_Say(text);
 }
 
-static void Push(int page) {
+void Push(int page) {
+    assert(g_depth < (int)(sizeof g_stack / sizeof g_stack[0]) && "the stack holds the deepest way in");
     g_stack[g_depth].page = page;
     g_stack[g_depth].row = ResolveRow(page, 0);  // the first row shown: 1997's sub-menus open on their Return row
     g_depth++;
     g_scroll = 0;
+    if (const PageHooks *h = g_pages[page].hooks; h && h->opened)
+        h->opened();
     Trace("open page=%s", g_pages[page].name);
 }
 
@@ -1068,7 +386,7 @@ static void Push(int page) {
 // scroll, which counts rows as a layout shows them, starts again when the layout changes.
 static int g_layoutWide = -1;
 
-static void SyncView() {
+void Menu_SyncView() {
     const int wide = Wide() ? 1 : 0;
     if (g_layoutWide == wide)
         return;
@@ -1081,58 +399,30 @@ static void SyncView() {
     Trace("layout %s page=%s cursor=%d", wide ? "wide" : "column", g_pages[t.page].name, Position(t.page, t.row));
 }
 
-static bool MenuClosed() { return g_playing || g_quitShown; }
+bool MenuClosed() { return Game_Playing() || Game_QuitShown(); }
 
-// The menu closes on the game. The pretend game counts as played the moment it shows: leaving
-// it for another game loses something until the next save.
+// The menu closes on the game.
 static void Play() {
-    g_playing = true;
-    g_inGame = true;
-    g_unsaved = true;
-    g_playFrom = Host_TimeMs();
-    // Started, loaded or resumed: 1997 writes the current save then (CurrentSaveGame), and the
-    // first scene change the autosave. Each keeps the screen as it is now.
-    g_haveCurrent = g_haveAutosave = true;
-    snprintf(g_currentWhat, sizeof g_currentWhat, "%s", g_playingWhat);
-    snprintf(g_currentIsland, sizeof g_currentIsland, "%s", g_island);
-    snprintf(g_autosaveIsland, sizeof g_autosaveIsland, "%s", g_island);
-    g_currentSpot = g_autosaveSpot = LiveSpot();
-    g_confirm = false;
+    Game_Play();
+    g_asking = NULL;
     g_menuNote = "";
     Trace(TopPage() == P_HUB && g_depth == 1 ? "close options" : "close menu");
 }
 
 static void NewGame() {
-    g_playingWhat[0] = 0;
-    snprintf(g_island, sizeof g_island, "%s", kIslands[0]);  // a new game starts on Citadel Island
-    g_spot = {0, 0, 0};
-    Trace("new game");
+    Game_New();
     Play();
 }
 
 // A named save (i >= 0) or the autosave (i < 0).
 static void LoadSave(int i) {
-    if (i < 0) {
-        snprintf(g_playingWhat, sizeof g_playingWhat, "%s", kAutosaveName);
-        snprintf(g_island, sizeof g_island, "%s", g_autosaveIsland);
-        g_spot = g_autosaveSpot;
-    } else {
-        snprintf(g_playingWhat, sizeof g_playingWhat, "%s", g_saves[i]);
-        snprintf(g_island, sizeof g_island, "%s", g_saves[i]);
-        if (char *date = strstr(g_island, " 2026-"))
-            *date = 0;
-        g_spot = SpotOf(g_saves[i]);
-    }
-    Trace("load %s", g_playingWhat);
+    Game_Load(i);
     Play();
 }
 
 // Resume game at a start: the current save.
 static void ResumeCurrent() {
-    snprintf(g_playingWhat, sizeof g_playingWhat, "%s", g_currentWhat);
-    snprintf(g_island, sizeof g_island, "%s", g_currentIsland);
-    g_spot = g_currentSpot;
-    Trace("resume %s", g_playingWhat);
+    Game_ResumeCurrent();
     Play();
 }
 
@@ -1141,7 +431,7 @@ static void ResumeCurrent() {
 static void OpenList(int page) {
     Push(page);
     Place &t = g_stack[g_depth - 1];
-    const int at = g_inGame && g_playingWhat[0] ? FindSave(g_playingWhat) : -1;
+    const int at = Game_PlayingSave();
     if (at >= 0) {
         t.row = at;
         return;
@@ -1155,8 +445,8 @@ static void OpenList(int page) {
 }
 
 // The game menu over the game, as the Menus key opens it in play: on Resume game.
-static void OpenGameMenu() {
-    g_playing = false;
+void OpenGameMenu() {
+    Game_Stop();
     g_depth = 1;
     g_stack[0].page = P_MAIN;
     g_stack[0].row = ResolveRow(P_MAIN, 0);
@@ -1167,10 +457,8 @@ static void OpenGameMenu() {
 // The Options, Save and Load keys in play: their page alone, over the game as it is, and Esc
 // goes back to the game (Pop on the only page plays).
 static void OpenFromPlay(int page) {
-    g_spot = LiveSpot();
-    g_playing = false;
-    g_dimGame = false;
-    g_confirm = false;
+    Game_PageKey();
+    g_asking = NULL;
     g_menuNote = "";
     g_depth = 0;
     if (page == P_HUB) {
@@ -1183,24 +471,21 @@ static void OpenFromPlay(int page) {
 // Saved from the Save key's page: back in the game, which says so for a moment, as lba2cc
 // shows "Game saved." over the scene (ShowGameSaveResult).
 static void NoteSavedFromPlay() {
-    if (!g_playing)
+    if (!Game_Playing())
         return;
-    g_savedAt = Host_TimeMs();
-    g_savedFromPlay = true;
+    Game_NoteSaved();
     Trace("game saved, back in play");
 }
 
 // Esc goes somewhere: everywhere but the game menu before a game (1997's first menu).
-static bool EscGoesBack() { return !(g_depth == 1 && TopPage() == P_MAIN && !g_inGame); }
-
-static void PutCursorOn(RowType type, int arg);
+static bool EscGoesBack() { return !(g_depth == 1 && TopPage() == P_MAIN && !Game_InProgress()); }
 
 static void Pop() {
     if (g_depth > 1) {
         Trace("close page=%s", g_pages[TopPage()].name);
         g_depth--;
         g_scroll = 0;
-    } else if (TopPage() == P_MAIN && !g_inGame) {
+    } else if (TopPage() == P_MAIN && !Game_InProgress()) {
         // Nothing to go back to: 1997 puts the cursor on Quit (firstloop 2), so a second Esc
         // and Enter leave.
         PutCursorOn(R_GAME, M_QUIT);
@@ -1211,19 +496,14 @@ static void Pop() {
 }
 
 void Menu_Init() {
-    for (int s = 0; s < S_COUNT; s++)
-        g_val[s] = FreshValue(s);
-    g_preset = 0;
+    Settings_Fresh();
+    SetOwnKinds();
     Bindings_Pages(g_pages);
     MoreOptions_Pages(g_pages);
     g_pages[P_MAIN] = kGamePages[0];
     g_pages[P_LOAD] = kGamePages[1];
     g_pages[P_SAVE] = kGamePages[2];
-    MakeSaves(g_savesAtStart);
-    g_inGame = g_unsaved = g_playing = g_quitShown = false;
-    g_playingWhat[0] = 0;
-    snprintf(g_island, sizeof g_island, "%s", kIslands[0]);
-    g_saveClock = 0;
+    Game_Start();
     g_menuNote = "";
     // Every start opens on the game menu, a fresh install's too, on Modern: nothing is asked and
     // nothing plays before the player could open Options (decided 2026-11-16).
@@ -1236,136 +516,250 @@ void Menu_Init() {
           (unsigned)Host_LogicalH());
 }
 
-static void ChangeSetting(int s, int dir) {
-    if (s == S_RESOLUTION) {
-        if (Host_StepScreen(dir))
-            Menu_NoteScreen();
-        return;
+// What Yes does on each of the menu's questions.
+static void YesClassic() { Presets_Apply(1); }
+static void YesReset() { Settings_ResetAll(); }
+static void YesNewGame() { NewGame(); }
+static void YesSaveOver() {
+    Game_Save(g_questionSave);
+    Pop();
+    g_menuNote = "Game saved.";
+    NoteSavedFromPlay();
+}
+static void YesDelete() {
+    Game_DeleteSave(g_questionSave);
+    if (TopPage() == P_LOAD && !Game_HaveSaves())
+        Pop();  // nothing left to load: Load game goes from the game menu too
+}
+
+// ───────────────────────────── The kinds of row ─────────────────────────────
+// What each kind of row does under the cursor (menu_parts.h RowKind). The loop, the legend,
+// the help and the labels ask the kind; none of them names one.
+
+static void EnterReturn(const Row &) { Pop(); }
+
+// A row that opens a page: a category, the preset row, a group of keys.
+static void EnterPage(const Row &r) { Push(r.arg); }
+static void PageRowKeys(const Row &r) {
+    if (Wide() && Host_Pressed(KEY_RIGHT))
+        Push(r.arg);  // wide, Right opens what Enter opens
+}
+static void LegendOpen(const Row &, const char **keys, const char **words, int *n) {
+    keys[*n] = "Enter"; words[(*n)++] = "Open";
+}
+
+static const char *SettingLabel(const Row &r) { return Settings_Def(r.arg).label; }
+static const char *SettingHelp(const Row &r) { return Settings_Def(r.arg).help; }
+static bool SettingSteps(const Row &r) {
+    return Settings_Def(r.arg).kind == K_CHOICE || Settings_Def(r.arg).kind == K_TOGGLE;
+}
+static void EnterSetting(const Row &r) {
+    if (SettingSteps(r))
+        Settings_Step(r.arg, +1);
+}
+static void SettingKeys(const Row &r) {
+    if (Host_Pressed(KEY_LEFT))
+        Settings_Step(r.arg, -1);
+    if (Host_Pressed(KEY_RIGHT))
+        Settings_Step(r.arg, +1);
+}
+static bool SettingValue(const Row &r, bool *enterSteps) {
+    *enterSteps = SettingSteps(r);
+    return true;
+}
+static void SettingLegend(const Row &r, const char **keys, const char **words, int *n) {
+    if (!RowActive(r))
+        return;  // a dimmed row takes no key
+    // A choice or a switch also steps on Enter, so the legend names both (EPmager,
+    // 2026-11-11); a slider or steps take Left and Right only.
+    const bool steps = SettingSteps(r);
+    keys[*n] = steps ? "\x11\x10" CHIP_AND "Enter" : "\x11\x10";
+    words[(*n)++] = steps ? "Change" : "Adjust";
+}
+
+static const char *PresetChoiceLabel(const Row &r) {
+    if (r.arg != Presets_Chosen())
+        return r.label;
+    static char marked[2][64];  // two rows can be drawn before the first is used
+    static int next;
+    char *out = marked[next++ & 1];
+    // Changed since it was chosen, it is no longer what it says: wide, the row's value
+    // says Changed; in the one column, where a choice shows no value, the mark does.
+    if (Presets_Changed()) {
+        if (Menu_Wide())
+            return r.label;
+        snprintf(out, sizeof marked[0], "%s (changed)", r.label);
+        return out;
     }
-    if (s == S_FULLSCREEN) {
-        if (Host_SetFullscreen(!Host_Fullscreen()))
-            Menu_NoteScreen();
-        return;
-    }
-    const Setting &st = kSettings[s];
-    int v = g_val[s];
-    if (st.kind == K_SLIDER) {
-        int step = st.max >= 100 ? 8 : 1;
-        v += dir * step;
-        if (v < 0)
-            v = 0;
-        if (v > st.max)
-            v = st.max;
-    } else if (st.kind == K_STEPS) {
-        v += dir;
-        if (v < 0)
-            v = 0;
-        if (v > st.max)
-            v = st.max;
-    } else {
-        v = (v + dir + st.max + 1) % (st.max + 1);
-    }
-    if (v != g_val[s]) {
-        g_val[s] = v;
-        char buf[32];
-        Trace("set %s=%s", st.id, ValueText(s, buf, sizeof buf));
+    snprintf(out, sizeof marked[0], "%s (current)", r.label);  // Ui_Tr takes the parts apart
+    return out;
+}
+static void EnterPresetChoice(const Row &r) {
+    if (r.arg == 1 && Presets_Chosen() != 1)
+        Menu_Ask(&kAskClassic);
+    else
+        Presets_Apply(r.arg);
+}
+// The preset in use, changed since: Enter puts its settings back, and says so.
+static const char *PresetChoiceHelp(const Row &r) {
+    return r.arg == Presets_Chosen() && Presets_Changed() ? "You changed some of its settings. Restore puts them back." : NULL;
+}
+static void PresetChoiceLegend(const Row &r, const char **keys, const char **words, int *n) {
+    if (r.arg != Presets_Chosen()) {
+        keys[*n] = "Enter"; words[(*n)++] = "Choose";
+    } else if (Presets_Changed()) {  // the preset in use: Enter does nothing until it is changed
+        keys[*n] = "Enter"; words[(*n)++] = "Restore";
     }
 }
 
-// Enter (or a click) on a row.
-static void Activate(const Row &r) {
-    switch (r.type) {
-    case R_RETURN:
-        Pop();
-        break;
-    case R_CATEGORY:
-    case R_PRESET_ROW:
-        Push(r.arg);
-        if (r.arg >= P_KEY_GROUP && r.arg < P_KEY_GROUP + KEY_GROUPS)
-            Bindings_GroupOpened();
-        break;
-    case R_BINDING:
-        Bindings_Enter();  // waits for a key, or says the chip is fixed
-        break;
-    case R_TUNING:
-        MoreOptions_Enter(r.arg);
-        break;
-    case R_SETTING:
-        if (kSettings[r.arg].kind == K_CHOICE || kSettings[r.arg].kind == K_TOGGLE)
-            ChangeSetting(r.arg, +1);
-        break;
-    case R_PRESET_CHOICE:
-        if (r.arg == 1 && g_preset != 1)
-            Ask(Q_CLASSIC);
-        else
-            ApplyPreset(r.arg);
-        break;
-    case R_BACK_TO_MINE:
-        RestoreBackup(r.arg == BACK_RESET ? g_resetBackup : g_presetBackup);
-        Trace("back to my settings");
-        break;
-    case R_GAME:
-        g_menuNote = "";
-        switch (r.arg) {
-        case M_RESUME:
-            if (!g_inGame)  // at the start: the current save
-                ResumeCurrent();
-            else
-                Play();
-            break;
-        case M_NEW:
-            if (g_unsaved)  // in play, or kept in current.lba from before a Quit
-                Ask(Q_NEW_GAME);
-            else
-                NewGame();
-            break;
-        case M_LOAD:
-            OpenList(P_LOAD);
-            break;
-        case M_SAVE:
-            OpenList(P_SAVE);
-            break;
-        case M_OPTIONS:
-            Push(P_HUB);
-            break;
-        case M_QUIT:
-            g_quitShown = true;
-            Trace("quit chosen");
-            break;
-        }
-        break;
-    case R_AUTOSAVE:
-    case R_SAVE:
-        g_questionSave = r.type == R_AUTOSAVE ? -1 : r.arg;
-        if (TopPage() == P_SAVE)
-            Ask(Q_SAVE_OVER);  // a save would be lost
-        else
-            LoadSave(g_questionSave);  // no question: choosing a save on Load game is the choice,
-                                       // and runners load often (AUTOSAVE keeps the last scene)
-        break;
-    case R_NEW_SAVE:
-        SaveNow(-1);
-        Pop();  // back on the game menu's Save game row, as 1997 after a save
-        g_menuNote = "Game saved.";
-        NoteSavedFromPlay();
-        break;
-    case R_ACTION:
-        if (r.arg == A_RESET)
-            Ask(Q_RESET);
-        else if (r.arg == A_EXP)
-            Push(P_MORE);
-        else if (r.arg == A_CONSOLE) {
-            g_console = Host_LastInputWasPad() ? CON_READONLY : CON_FULL;
-            Trace("open console mode=%s", g_console == CON_READONLY ? "read-only" : "full");
-        }
-        else {
-            Bindings_Open();
-            Push(P_KEYS);
-            Top().row = 1;  // on its first group, not its Return row
-        }
-        break;
-    }
+static void EnterUndo(const Row &r) {
+    Presets_Undo(r.arg);
+    Trace("back to my settings");
 }
+// What the undo puts back (Presets_UndoNames, as Presets_Undo does it); as many named as the
+// voice holds, the rest counted, so the help never pages.
+static const char *UndoHelp(const Row &r) {
+    char *buf = g_helpBuf;
+    const size_t bufSize = sizeof g_helpBuf;
+    const char *names[BACKUP_DIFF_MAX];
+    const int n = Presets_UndoNames(r.arg, names);
+    for (int shown = n; shown > 0; shown--) {
+        char list[200] = "";
+        for (int i = 0; i < shown; i++) {
+            if (i)
+                strncat(list, i + 1 == n ? Menu_Tr(" and ") : ", ", sizeof list - strlen(list) - 1);
+            strncat(list, names[i], sizeof list - strlen(list) - 1);
+        }
+        if (shown < n) {
+            char more[24];
+            snprintf(more, sizeof more, Menu_Tr(" and %d more"), n - shown);
+            strncat(list, more, sizeof list - strlen(list) - 1);
+        }
+        snprintf(buf, bufSize, Menu_Tr("Puts back what you had: %s."), list);
+        if (VoiceFits(buf, &r))
+            return buf;
+    }
+    return NULL;
+}
+
+// What Enter does on an action row or a game menu row, and whether it opens something (the
+// legend then says Open, not Choose).
+struct RowDo {
+    void (*run)();
+    bool opens;
+};
+static void OpenKeys() { Push(P_KEYS); }
+static void AskReset() { Menu_Ask(&kAskReset); }
+static void OpenMore() { Push(P_MORE); }
+static void OpenConsole() {
+    g_console = Host_LastInputWasPad() ? CON_READONLY : CON_FULL;
+    Trace("open console mode=%s", g_console == CON_READONLY ? "read-only" : "full");
+}
+static const RowDo kActionDo[] = {{OpenKeys, true}, {AskReset, false}, {OpenMore, true}, {OpenConsole, true}};
+static_assert(sizeof kActionDo / sizeof kActionDo[0] == A_COUNT, "what Enter does for every A_ action");
+
+static void GameResume() {
+    if (!Game_InProgress())  // at the start: the current save
+        ResumeCurrent();
+    else
+        Play();
+}
+static void GameNew() {
+    if (Game_Unsaved())  // in play, or kept in current.lba from before a Quit
+        Menu_Ask(&kAskNewGame);
+    else
+        NewGame();
+}
+static void GameLoad() { OpenList(P_LOAD); }
+static void GameSave() { OpenList(P_SAVE); }
+static void GameOptions() { Push(P_HUB); }
+static void GameQuit() { Game_Quit(); }
+static const RowDo kGameDo[] = {{GameResume, false}, {GameNew, false}, {GameLoad, true},
+                                {GameSave, true},    {GameOptions, true}, {GameQuit, false}};
+static_assert(sizeof kGameDo / sizeof kGameDo[0] == M_COUNT, "what Enter does for every M_ game row");
+
+static void EnterAction(const Row &r) { kActionDo[r.arg].run(); }
+static void ActionLegend(const Row &r, const char **keys, const char **words, int *n) {
+    keys[*n] = "Enter"; words[(*n)++] = kActionDo[r.arg].opens ? "Open" : "Choose";
+}
+static void EnterGame(const Row &r) {
+    g_menuNote = "";
+    kGameDo[r.arg].run();
+}
+static void GameLegend(const Row &r, const char **keys, const char **words, int *n) {
+    keys[*n] = "Enter"; words[(*n)++] = kGameDo[r.arg].opens ? "Open" : "Choose";
+}
+static const char *GameHelp(const Row &) { return g_menuNote[0] ? g_menuNote : NULL; }
+
+// A save, or the autosave: Save game asks before it writes over one, Load game loads.
+static const char *SaveLabel(const Row &r) { return Game_SaveName(r.arg); }
+static const char *AutosaveLabel(const Row &) { return Game_AutosaveName(); }
+static bool SaveShown(const Row &r) { return r.arg < Game_SaveCount(); }
+static void EnterSave(const Row &r) {
+    g_questionSave = r.type == R_AUTOSAVE ? -1 : r.arg;
+    if (TopPage() == P_SAVE)
+        Menu_Ask(&kAskSaveOver);  // a save would be lost
+    else
+        LoadSave(g_questionSave);  // no question: choosing a save on Load game is the choice,
+                                   // and runners load often (AUTOSAVE keeps the last scene)
+}
+static void SaveDel(const Row &r) {
+    g_questionSave = r.arg;
+    Menu_Ask(&kAskDelete);
+}
+static void SaveLegend(const Row &, const char **keys, const char **words, int *n) {
+    keys[*n] = "Enter"; words[(*n)++] = TopPage() == P_SAVE ? "Save" : "Load";
+    keys[*n] = "Del"; words[(*n)++] = "Delete";
+}
+static void AutosaveLegend(const Row &, const char **keys, const char **words, int *n) {
+    keys[*n] = "Enter"; words[(*n)++] = "Load";  // the autosave cannot be deleted
+}
+static void EnterNewSave(const Row &) {
+    Game_Save(-1);
+    Pop();  // back on the game menu's Save game row, as 1997 after a save
+    g_menuNote = "Game saved.";
+    NoteSavedFromPlay();
+}
+static void NewSaveLegend(const Row &, const char **keys, const char **words, int *n) {
+    keys[*n] = "Enter"; words[(*n)++] = "Save";
+}
+
+// enter, keys, del, value, legend, label, help, shown
+static const RowKind kReturnKind = {EnterReturn, NULL, NULL, NULL, NULL, NULL, NULL, NULL};
+static const RowKind kPageRowKind = {EnterPage, PageRowKeys, NULL, NULL, LegendOpen, NULL, NULL, NULL};
+static const RowKind kSettingKind = {EnterSetting, SettingKeys, NULL, SettingValue, SettingLegend, SettingLabel,
+                                     SettingHelp, NULL};
+static const RowKind kPresetChoiceKind = {EnterPresetChoice, NULL, NULL, NULL, PresetChoiceLegend, PresetChoiceLabel,
+                                          PresetChoiceHelp, NULL};
+static const RowKind kUndoKind = {EnterUndo, NULL, NULL, NULL, NULL, NULL, UndoHelp, NULL};
+static const RowKind kActionKind = {EnterAction, NULL, NULL, NULL, ActionLegend, NULL, NULL, NULL};
+static const RowKind kGameKind = {EnterGame, NULL, NULL, NULL, GameLegend, NULL, GameHelp, NULL};
+static const RowKind kSaveKind = {EnterSave, NULL, SaveDel, NULL, SaveLegend, SaveLabel, NULL, SaveShown};
+static const RowKind kNewSaveKind = {EnterNewSave, NULL, NULL, NULL, NewSaveLegend, NULL, NULL, NULL};
+static const RowKind kAutosaveKind = {EnterSave, NULL, NULL, NULL, AutosaveLegend, AutosaveLabel, NULL, NULL};
+
+static void SetOwnKinds() {
+    Menu_SetRowKind(R_RETURN, &kReturnKind);
+    Menu_SetRowKind(R_CATEGORY, &kPageRowKind);
+    Menu_SetRowKind(R_PRESET_ROW, &kPageRowKind);
+    Menu_SetRowKind(R_SETTING, &kSettingKind);
+    Menu_SetRowKind(R_PRESET_CHOICE, &kPresetChoiceKind);
+    Menu_SetRowKind(R_BACK_TO_MINE, &kUndoKind);
+    Menu_SetRowKind(R_ACTION, &kActionKind);
+    Menu_SetRowKind(R_GAME, &kGameKind);
+    Menu_SetRowKind(R_SAVE, &kSaveKind);
+    Menu_SetRowKind(R_NEW_SAVE, &kNewSaveKind);
+    Menu_SetRowKind(R_AUTOSAVE, &kAutosaveKind);
+}
+
+// Enter (or a click) on a row: its kind's.
+void Activate(const Row &r) {
+    if (KindOf(r).enter)
+        KindOf(r).enter(r);
+}
+
+void Menu_Back() { Pop(); }
+void Menu_TopRowTo(int row) { g_stack[g_depth - 1].row = row; }
 
 static void Move(int dir) {
     Place &t = Top();
@@ -1380,7 +774,7 @@ static void Move(int dir) {
 }
 
 // The cursor on the top page's row of that kind, as Enter on it leaves it.
-static void PutCursorOn(RowType type, int arg) {
+void PutCursorOn(RowType type, int arg) {
     Place &t = g_stack[g_depth - 1];
     const Page &p = g_pages[t.page];
     for (int i = 0; i < p.count; i++) {
@@ -1395,19 +789,18 @@ static void PutCursorOn(RowType type, int arg) {
 // As lba2cc's game menu: hover moves the cursor when the mouse moves, a press puts it there
 // and a release on the same target acts. The right button is Esc, the wheel Up and Down.
 
-typedef MenuPoint PointTarget;
-enum { POINT_MAX = 96 };
-static PointTarget g_points[POINT_MAX];
-static int g_pointCount;
+PointTarget g_points[POINT_MAX];
+int g_pointCount;
 static PointTarget g_press;  // what the left button went down on
 static bool g_pressOn;
-static int g_wheelView;      // notches turned this frame, for a page that scrolls (Menu_WheelView)
-static ScrollBarInfo g_bar;   // the last draw's scroll bar
+int g_wheelView;      // notches turned this frame, for a page that scrolls (Menu_WheelView)
+ScrollBarInfo g_bar;   // the last draw's scroll bar
 const ScrollBarInfo &Menu_ScrollBar() { return g_bar; }
-static int g_scrollTo = -1;  // the first line the scroll bar asked for this frame; -1 none
+int g_scrollTo = -1;  // the first line the scroll bar asked for this frame; -1 none
 static S32 g_barGrab = -1;   // dragging the thumb: where on it the pointer took it; -1 not
 
 void Menu_Point(PointKind kind, S32 x0, S32 y0, S32 x1, S32 y1, int a, int b) {
+    assert(g_pointCount < POINT_MAX && "a frame has more pointer targets than POINT_MAX: the pointer would miss the rest");
     if (g_pointCount < POINT_MAX)
         g_points[g_pointCount++] = PointTarget{kind, x0, y0, x1, y1, a, b};
 }
@@ -1430,7 +823,7 @@ static bool SameTarget(const PointTarget &a, const PointTarget &b) {
     return a.kind == b.kind && a.a == b.a && a.b == b.b;
 }
 
-static void CursorTo(int page, int row) {
+void CursorTo(int page, int row) {
     if (!g_depth || TopPage() != page)
         return;
     Place &t = g_stack[g_depth - 1];
@@ -1467,7 +860,12 @@ int Menu_WheelView(int &scroll, int visible, int total, int cursor) {
 // 2026-11-13). It stays on Back over empty space, as a row keeps the cursor; a key hides Back
 // and the cursor is on its row again.
 static bool g_onBack;
-static bool BackShown();
+// The corner Back is offered: a pointer is in use and Esc goes somewhere. Not on the game
+// menu itself: Resume game is its first row (the maintainer, 2026-11-16).
+bool BackShown() {
+    return LastPointer() != POINTER_NONE && !MenuClosed() && !g_console && EscGoesBack() &&
+           !(g_depth == 1 && TopPage() == P_MAIN);
+}
 
 bool Menu_CursorLit() {
     if (!g_onBack || !BackShown())
@@ -1489,18 +887,17 @@ static void PointTo(const PointTarget &p) {
         break;
     case POINT_CHIP:
         CursorTo(TopPage(), p.a);
-        Bindings_PointChip(p.b);
+        if (const PageHooks *h = TopHooks(); h && h->chip)
+            h->chip(p.b);
         break;
     case POINT_STEP:
     case POINT_SLIDER:
         CursorTo(TopPage(), p.b);
         break;
     case POINT_ANSWER:
-        if (Bindings_Busy()) {
-            Bindings_PointAnswer(p.a);
-        } else if (g_confirm && g_confirmCursor != p.a) {
-            g_confirmCursor = p.a;
-            Trace("cursor %s (pointer)", g_confirmCursor ? "Yes" : "No");
+        if (g_asking && g_answer != p.a) {
+            g_answer = p.a;
+            Trace("cursor %s (pointer)", g_answer ? "Yes" : "No");
         }
         break;
     case POINT_KEY:
@@ -1529,7 +926,7 @@ static S32 g_slideFromX, g_slideFromValue;
 static bool g_sliding;
 
 static void SlideTo(const PointTarget &p, S32 x) {
-    const Setting &st = kSettings[p.a];
+    const Setting &st = Settings_Def(p.a);
     if (!g_sliding) {
         if (x - g_slideFromX < SLIDE_START_PX && g_slideFromX - x < SLIDE_START_PX)
             return;
@@ -1539,10 +936,10 @@ static void SlideTo(const PointTarget &p, S32 x) {
     int v = w > 0 ? (int)(g_slideFromValue + ((x - g_slideFromX) * st.max + (x >= g_slideFromX ? w / 2 : -w / 2)) / w)
                   : g_slideFromValue;
     v = v < 0 ? 0 : v > st.max ? st.max : v;
-    if (v != g_val[p.a]) {
-        g_val[p.a] = v;
+    if (v != Settings_Value(p.a)) {
+        Settings_Put(p.a, v);
         char buf[32];
-        Trace("set %s=%s (pointer)", st.id, ValueText(p.a, buf, sizeof buf));
+        Trace("set %s=%s (pointer)", st.id, Settings_ValueText(p.a, buf, sizeof buf));
     }
 }
 
@@ -1561,7 +958,7 @@ static void UpdatePointer() {
     } else if (!BackShown()) {
         g_onBack = false;
     }
-    if (Bindings_Waiting()) {
+    if (TopBusy()) {
         // A click is not a key to bind: only the legend's Cancel and the right button act.
         if (in.pressed) {
             g_pressOn = at && at->kind == POINT_KEY;
@@ -1581,7 +978,7 @@ static void UpdatePointer() {
         // A click closes the console, opens the game menu over the game, or (on Quit's
         // screen) starts the game again.
         if (in.pressed)
-            Host_PressNow(g_quitShown ? KEY_ENTER : KEY_ESC);
+            Host_PressNow(Game_QuitShown() ? KEY_ENTER : KEY_ESC);
         else if (in.rightPressed && g_console)
             Host_PressNow(KEY_ESC);
         return;
@@ -1596,7 +993,7 @@ static void UpdatePointer() {
             PointTo(*at);
             if (at->kind == POINT_SLIDER) {
                 g_slideFromX = in.x;
-                g_slideFromValue = g_val[at->a];
+                g_slideFromValue = Settings_Value(at->a);
                 g_sliding = false;
             }
             if (at->kind == POINT_SCROLL && g_bar.shown) {
@@ -1642,10 +1039,11 @@ static void UpdatePointer() {
 }
 
 void Menu_Update() {
-    SyncView();
+    Menu_SyncView();
     UpdatePointer();
-    if (Bindings_Busy()) {  // waiting for a key, or asking about one another action has
-        Bindings_UpdateBusy();
+    if (TopBusy()) {  // the wait for a key: it takes every key and button
+        TopHooks()->updateBusy();
+        UpdateVoice();
         return;
     }
     if (g_console) {
@@ -1659,37 +1057,25 @@ void Menu_Update() {
         }
         return;
     }
-    if (g_playing) {
+    if (Game_Playing()) {
         if (Host_Pressed(KEY_ESC)) {  // the Menus key in play: current.lba keeps this screen
-            g_spot = LiveSpot();
-            g_currentSpot = g_spot;
-            snprintf(g_currentIsland, sizeof g_currentIsland, "%s", g_island);
-            g_dimGame = true;
+            Game_MenuKey();
             OpenGameMenu();
         } else if (Bindings_ActionPressed("Options")) {
             OpenFromPlay(P_HUB);
         } else if (Bindings_ActionPressed("Save")) {
             OpenFromPlay(P_SAVE);
         } else if (Bindings_ActionPressed("Load")) {
-            if (HaveSaves())
+            if (Game_HaveSaves())
                 OpenFromPlay(P_LOAD);
         } else if (Host_Pressed(KEY_ENTER)) {  // on to the next place: a scene change writes the autosave
-            g_spot = LiveSpot();
-            g_playFrom = Host_TimeMs();
-            if (++g_spot.scene % 3 == 0) {  // every third place, a boat to the next island
-                g_spot.island = (g_spot.island + 1) % SAVE_PICTURE_ISLANDS;
-                snprintf(g_island, sizeof g_island, "%s", kIslands[g_spot.island]);
-            }
-            g_autosaveSpot = g_spot;
-            snprintf(g_autosaveIsland, sizeof g_autosaveIsland, "%s", g_island);
-            Trace("scene %s %d", g_island, g_spot.scene);
+            Game_NextScene();
         }
         return;
     }
-    if (g_quitShown) {
+    if (Game_QuitShown()) {
         if (Host_Pressed(KEY_ENTER)) {  // the game starts again, on its first menu
-            g_quitShown = false;
-            g_inGame = false;  // g_unsaved stays: current.lba keeps the play for Resume game
+            Game_StartAgain();
             OpenGameMenu();
         } else if (Host_Pressed(KEY_ESC)) {
             g_quit = true;
@@ -1697,44 +1083,21 @@ void Menu_Update() {
         }
         return;
     }
-    if (g_confirm) {
+    if (g_asking) {
+        const Question *q = g_asking;
         if (Host_Pressed(KEY_UP) || Host_Pressed(KEY_DOWN)) {
-            g_confirmCursor ^= 1;
-            Trace("cursor %s", g_confirmCursor ? "Yes" : "No");
+            g_answer ^= 1;
+            Trace("cursor %s", g_answer ? "Yes" : "No");
         }
         if (Host_Pressed(KEY_ESC)) {
-            g_confirm = false;
+            g_asking = NULL;
             Trace("answer no (esc)");
         }
         if (Host_Pressed(KEY_ENTER)) {
-            g_confirm = false;
-            Trace("answer %s", g_confirmCursor ? "yes" : "no");
-            if (g_confirmCursor) {
-                switch (g_question) {
-                case Q_RESET:
-                    ResetSettings();
-                    break;
-                case Q_CLASSIC:
-                    ApplyPreset(1);
-                    break;
-                case Q_NEW_GAME:
-                    NewGame();
-                    break;
-                case Q_SAVE_OVER:
-                    SaveNow(g_questionSave);
-                    Pop();
-                    g_menuNote = "Game saved.";
-                    NoteSavedFromPlay();
-                    break;
-                case Q_DELETE:
-                    DeleteSave(g_questionSave);
-                    if (TopPage() == P_LOAD && !HaveSaves())
-                        Pop();  // nothing left to load: Load game goes from the game menu too
-                    break;
-                case Q_COUNT:
-                    break;
-                }
-            }
+            g_asking = NULL;
+            Trace("answer %s", g_answer ? "yes" : "no");
+            if (g_answer)
+                q->yes();
         }
         UpdateVoice();
         return;
@@ -1746,50 +1109,28 @@ void Menu_Update() {
         else
             Trace("help more: one window");
     }
-    if (Bindings_Active() && Host_Pressed(KEY_TAB))
-        Bindings_SwitchDevice();
     if (Host_Pressed(KEY_UP))
         Move(-1);
     if (Host_Pressed(KEY_DOWN))
         Move(+1);
-    if (TopPage() == P_MORE) {  // a long table: Page Up and Page Down, stopping at its ends
-        const int step = MoreOptions_PageStep(), last = g_pages[P_MORE].count - 1;
-        Place &t = Top();
-        if (Host_Pressed(KEY_PGUP))
-            t.row = t.row > step ? t.row - step : 0;
-        if (Host_Pressed(KEY_PGDN))
-            t.row = t.row + step < last ? t.row + step : last;
-    }
+    if (const PageHooks *h = TopHooks(); h && h->keys)
+        h->keys();  // the page's own: Tab, Page Up and Page Down
 
+    // The row under the cursor: its kind's keys, then Enter, then Del. Each may move the
+    // cursor or open a page, so the row is read again before the next.
     const Row *r = CursorRow();
-    if (r && r->type == R_SETTING && RowActive(*r)) {
-        if (Host_Pressed(KEY_LEFT))
-            ChangeSetting(r->arg, -1);
-        if (Host_Pressed(KEY_RIGHT))
-            ChangeSetting(r->arg, +1);
-    } else if (r && r->type == R_BINDING) {
-        // Left and Right go along the row's chips; wide, Left from the first goes back.
-        if (Host_Pressed(KEY_RIGHT))
-            Bindings_StepColumn(+1);
-        if (Host_Pressed(KEY_LEFT) && !Bindings_StepColumn(-1) && Wide())
-            Pop();
-    } else if (r && r->type == R_TUNING) {
-        MoreOptions_Keys(r->arg);  // Left and Right change the value, Del puts its default back
-    } else if (Wide() && r && (r->type == R_CATEGORY || r->type == R_PRESET_ROW) &&
-               Host_Pressed(KEY_RIGHT)) {
-        Activate(*r);  // wide, Right opens what Enter opens: a category, the preset page, a group
-    }
+    if (r && KindOf(*r).keys && RowActive(*r))
+        KindOf(*r).keys(*r);
     r = CursorRow();
     if (r && Host_Pressed(KEY_ENTER) && RowActive(*r))
         Activate(*r);
     r = CursorRow();
-    if (r && r->type == R_SAVE && Host_Pressed(KEY_DEL)) {
-        g_questionSave = r->arg;
-        Ask(Q_DELETE);
-    } else if (r && r->type == R_BINDING && Host_Pressed(KEY_DEL))
-        Bindings_Clear();
-    else if (TopPage() == P_KEYS && Host_Pressed(KEY_DEL))
-        Bindings_AskReset();
+    if (Host_Pressed(KEY_DEL)) {
+        if (r && KindOf(*r).del)
+            KindOf(*r).del(*r);
+        else if (const PageHooks *h = TopHooks(); h && h->del)
+            h->del();
+    }
 
     if (Host_Pressed(KEY_ESC))
         Pop();
@@ -1797,1689 +1138,3 @@ void Menu_Update() {
     UpdateVoice();
 }
 
-// ───────────────────────────── Drawing ─────────────────────────────
-
-// What was drawn this frame, for `state`.
-static DrawnRow g_drawn[40];
-static int g_drawnCount;
-static struct {
-    bool shown;
-    int x0, y0, x1, y1;
-    const char *kind;  // band, help-line, dialogue
-} g_helpBox;
-static char g_legend[128];
-// The box the legend's chips and words took last frame, and the 8x8 font's scale.
-static struct {
-    bool shown;
-    int x0, y0, x1, y1, scale;
-} g_legendBox;
-
-static void LegendGrow(S32 x0, S32 y0, S32 x1, S32 y1, S32 scale) {
-    if (!g_legendBox.shown) {
-        g_legendBox.shown = true;
-        g_legendBox.x0 = x0, g_legendBox.y0 = y0, g_legendBox.x1 = x1, g_legendBox.y1 = y1;
-    }
-    g_legendBox.x0 = x0 < g_legendBox.x0 ? x0 : g_legendBox.x0;
-    g_legendBox.y0 = y0 < g_legendBox.y0 ? y0 : g_legendBox.y0;
-    g_legendBox.x1 = x1 > g_legendBox.x1 ? x1 : g_legendBox.x1;
-    g_legendBox.y1 = y1 > g_legendBox.y1 ? y1 : g_legendBox.y1;
-    g_legendBox.scale = scale;
-}
-static int g_voiceLines, g_voiceNeeded, g_voiceMax, g_voiceWidth;
-
-DrawnRow &Menu_Record(const char *pane, const char *label, const char *value, RowFill fill, int x0, int y0, int x1,
-                        int y1) {
-    DrawnRow &d = g_drawn[g_drawnCount < 39 ? g_drawnCount++ : 39];
-    snprintf(d.label, sizeof d.label, "%s", label);
-    snprintf(d.value, sizeof d.value, "%s", value ? value : "");
-    d.pane = pane;
-    d.fill = fill == FILL_CURSOR ? "cursor" : fill == FILL_CURRENT ? "current" : "shade";
-    d.x0 = x0;
-    d.y0 = y0;
-    d.x1 = x1;
-    d.y1 = y1;
-    d.dim = d.changed = d.marks = d.setting = false;
-    d.textLeft = d.textRight = x0;
-    d.valueRight = 0;
-    return d;
-}
-
-// Centred text clipped to the row, the original's way (DrawOneChoice).
-void Menu_RowLabelCentred(S32 x0, S32 x1, S32 yc, const char *s, U8 colour, bool asIs, bool cursor) {
-    const ClipSave clip;
-    SetClip(x0 + 1, yc - ROW_H / 2, x1 - 1, yc + ROW_H / 2);
-    if (!asIs)
-        s = Ui_Tr(s);
-    if (Ui_TextWidthAsIs(s) > x1 - x0 - 16)
-        Ui_TextInRoom(x0 + 8, x1 - 8, yc - ROW_TEXT_RISE, s, colour, cursor);  // 1997: x0 + 8, swinging
-    else
-        Ui_TextAsIs((x0 + x1) / 2 - Ui_TextWidthAsIs(s) / 2, yc - ROW_TEXT_RISE, s, colour);
-    clip.Restore();
-}
-
-// One column: the 1997 row, "Label: Value" in one string, sliders as fills.
-static void DrawColumnRow(const Row &r, int row, S32 x0, S32 y0, S32 x1, S32 y1, bool cursor) {
-    S32 yc = (y0 + y1) / 2;
-    char text[160], val[48];
-    RowFill fill = cursor ? FILL_CURSOR : FILL_SHADE;
-    bool active = RowActive(r);
-
-    if (sw_greencurrent && r.type == R_PRESET_CHOICE && r.arg == g_preset && !cursor)
-        fill = FILL_CURRENT;  // the chosen preset wears the current-value plasma
-
-    bool slider = r.type == R_SETTING && (kSettings[r.arg].kind == K_SLIDER || kSettings[r.arg].kind == K_STEPS);
-    if (slider && cursor && active) {
-        // GAMEMENU.CPP: the slider plasma up to the value, fill-selected after it.
-        const Setting &st = kSettings[r.arg];
-        S32 x2 = x0 + (x1 - x0) * g_val[r.arg] / st.max;
-        GamePieces_BackupCorners(x0, y0, x1, y1);
-        GamePieces_FireBar(x0, y0, x1, y1, PLASMA_SLIDER);
-        if (x2 < x1)
-            Box(x2, y0, x1, y1, FILL_SELECTED);
-        GamePieces_Frame(x0, y0, x1, y1);
-    } else {
-        Ui_RowBackground(x0, y0, x1, y1, fill);
-    }
-
-    if (r.type == R_PRESET_ROW)
-        PresetRowLabel(text, sizeof text);
-    else if (r.type == R_SETTING && kSettings[r.arg].kind != K_SLIDER)
-        snprintf(text, sizeof text, "%s: %s", RowLabel(r), ValueText(r.arg, val, sizeof val));
-    else if (r.type == R_ACTION && r.arg == A_CONSOLE)
-        snprintf(text, sizeof text, "%s: %s", RowLabel(r), kVersion);
-    else
-        snprintf(text, sizeof text, "%s", RowLabel(r));
-    // A save's name is the player's, not a text to translate.
-    const bool asIs = r.type == R_SAVE || r.type == R_AUTOSAVE;
-    const S32 textW = asIs ? Ui_TextWidthAsIs(text) : Ui_TextWidth(text);
-    Menu_RowLabelCentred(x0, x1, yc, text, active ? INK_WHITE : INK_DISABLED, asIs, cursor);
-
-    DrawnRow &d = Menu_Record("column", text,
-                              r.type == R_SETTING                         ? ValueText(r.arg, val, sizeof val)
-                              : r.type == R_ACTION && r.arg == A_CONSOLE ? kVersion
-                                                                          : "",
-                              fill, x0, y0, x1, y1);
-    d.dim = !active;
-    d.setting = r.type == R_SETTING;
-    d.textLeft = (x0 + x1) / 2 - textW / 2;
-    d.textRight = (x0 + x1) / 2 + textW / 2 + 8;  // 8: the original's side padding
-    Menu_Point(POINT_ROW, x0, y0, x1, y1, TopPage(), row);
-    if (slider && cursor && active && kSettings[r.arg].kind == K_SLIDER)
-        Menu_Point(POINT_SLIDER, x0, y0, x1, y1, r.arg, row);
-}
-
-// Wide: label at the pane's one edge, value in a column on the right.
-static void DrawWideRow(const char *pane, const Row &r, int row, S32 x0, S32 y0, S32 x1, S32 y1, RowFill fill) {
-    S32 yc = (y0 + y1) / 2;
-    char label[160], val[48];
-    bool active = RowActive(r);
-    // The 1997 slider (GAMEMENU.CPP DrawOneChoice): under the cursor the whole row is the
-    // slider plasma up to the value, fill-selected after it, the label on it.
-    const bool barRow = r.type == R_SETTING && kSettings[r.arg].kind == K_SLIDER;
-    if (barRow && fill == FILL_CURSOR && active) {
-        S32 x2 = x0 + (x1 - x0) * g_val[r.arg] / kSettings[r.arg].max;
-        GamePieces_BackupCorners(x0, y0, x1, y1);
-        GamePieces_FireBar(x0, y0, x1, y1, PLASMA_SLIDER);
-        if (x2 < x1)
-            Box(x2, y0, x1, y1, FILL_SELECTED);
-        GamePieces_Frame(x0, y0, x1, y1);
-    } else {
-        Ui_RowBackground(x0, y0, x1, y1, fill);
-    }
-
-    // The preset row: "Preset" at the label's edge, the preset where a value goes.
-    const char *presetValue = NULL;
-    char presetText[160];
-    if (r.type == R_PRESET_ROW) {
-        PresetRowLabel(presetText, sizeof presetText);
-        char *colon = strstr(presetText, ": ");
-        if (colon) {
-            *colon = 0;
-            presetValue = colon + 2;
-        }
-        snprintf(label, sizeof label, "%s", presetText);
-    } else {
-        snprintf(label, sizeof label, "%s", RowLabel(r));
-    }
-
-    DrawnRow &d = Menu_Record(pane, label, "", fill, x0, y0, x1, y1);
-    d.dim = !active;
-    d.setting = r.type == R_SETTING;
-    const bool asIs = r.type == R_SAVE || r.type == R_AUTOSAVE;  // a save's name is the player's, not a text to translate
-    d.textLeft = x0 + ROW_TEXT_INSET;
-    d.textRight = x0 + ROW_TEXT_INSET + (asIs ? Ui_TextWidthAsIs(label) : Ui_TextWidth(label));
-    Menu_Point(POINT_ROW, x0, y0, x1, y1, TopPage(), row);
-    if (barRow && fill == FILL_CURSOR && active)
-        Menu_Point(POINT_SLIDER, x0, y0, x1, y1, r.arg, row);
-
-    const S32 valueRight = x1 - VALUE_INSET;
-    S32 valueLeft = 0;  // where a value starts: the label's room ends 8 before its marks
-    if (r.type == R_SETTING) {
-        const Setting &st = kSettings[r.arg];
-        bool changed = ValueChanged(r.arg);
-        S32 left = valueRight;
-        if (st.kind == K_STEPS) {
-            Ui_Steps(valueRight, yc, st.max, g_val[r.arg], &left);
-            snprintf(d.value, sizeof d.value, "%d/%d", g_val[r.arg], st.max);
-            valueLeft = left;
-        } else if (st.kind == K_SLIDER) {
-            snprintf(d.value, sizeof d.value, "%d", g_val[r.arg]);  // the bar is the value
-        } else {
-            ValueText(r.arg, val, sizeof val);
-            left = valueRight + 1 - Ui_TextInkWidth(val);  // the ink ends on the value edge
-            if (d.textRight + 8 > left - MARK_ROOM)
-                d.textRight = x1 + (d.textRight + 8 - (left - MARK_ROOM));  // label runs into the value
-            Ui_Text(left, yc - ROW_TEXT_RISE, val, !active ? INK_DISABLED : changed ? INK_COUNT : INK_WHITE);
-            snprintf(d.value, sizeof d.value, "%s", val);
-            valueLeft = left;
-        }
-        d.changed = changed;
-        d.valueRight = valueRight;
-        if (fill == FILL_CURSOR && active && st.kind != K_SLIDER) {
-            Ui_ChangeMarks(left - MARK_ROOM, valueRight + MARK_ROOM, yc);  // in the padding: the value never moves
-            d.marks = true;
-            // Each arrow and the padding around it (Triangle: 10 wide from its tip).
-            Menu_Point(POINT_STEP, left - MARK_ROOM - 6, y0, left - 3, y1, -1, row);
-            Menu_Point(POINT_STEP, valueRight + 3, y0, valueRight + MARK_ROOM + 6, y1, +1, row);
-        }
-    } else if (r.type == R_ACTION && r.arg == A_CONSOLE) {
-        // The version where a value goes, in the dimmed grey: it reads, it does not change.
-        S32 left = valueRight + 1 - Ui_TextInkWidth(kVersion);
-        if (d.textRight + 8 > left - MARK_ROOM)
-            d.textRight = x1 + (d.textRight + 8 - (left - MARK_ROOM));
-        Ui_Text(left, yc - ROW_TEXT_RISE, kVersion, INK_DISABLED);
-        snprintf(d.value, sizeof d.value, "%s", kVersion);
-        d.valueRight = valueRight;
-        valueLeft = left;
-    } else if (presetValue) {
-        S32 left = valueRight + 1 - Ui_TextInkWidth(presetValue);
-        if (d.textRight + 8 > left - MARK_ROOM)
-            d.textRight = x1 + (d.textRight + 8 - (left - MARK_ROOM));
-        Ui_Text(left, yc - ROW_TEXT_RISE, presetValue, PresetChanged() ? INK_COUNT : INK_WHITE);
-        snprintf(d.value, sizeof d.value, "%s", presetValue);
-        d.valueRight = valueRight;
-        valueLeft = left;
-    } else if (r.type == R_PRESET_CHOICE && r.arg == g_preset && PresetChanged()) {
-        valueLeft = valueRight + 1 - Ui_TextInkWidth("Changed");
-        Ui_Text(valueLeft, yc - ROW_TEXT_RISE, "Changed", INK_COUNT);
-        snprintf(d.value, sizeof d.value, "Changed");
-        d.valueRight = valueRight;
-    }
-    // The label last, in the room the value leaves (the 1997 swing when it is wider).
-    const ClipSave clip;
-    SetClip(x0 + 1, y0, x1 - 1, y1);
-    Ui_TextInRoom(x0 + ROW_TEXT_INSET, valueLeft ? valueLeft - MARK_ROOM - 8 - 1 : x1 - ROW_TEXT_INSET,
-                  yc - ROW_TEXT_RISE, asIs ? label : Ui_Tr(label), active ? INK_WHITE : INK_DISABLED,
-                  fill == FILL_CURSOR);
-    clip.Restore();
-}
-
-void Menu_DrawScrollBar(S32 x0, S32 y0, S32 y1, int first, int visible, int total) {
-    // ScrollBarReview: 12 wide, thumb inset 2, in the margin.
-    S32 x1 = x0 + 11;
-    GamePieces_Shade(x0 + 1, y0 + 1, x1 - 1, y1 - 1, MENU_SHADE_LVL);
-    Line(x0, y0, x1, y0, COUL_DOWN_BLUE);
-    Line(x0, y0, x0, y1, COUL_DOWN_BLUE);
-    Line(x1, y0, x1, y1, COUL_UP_BLUE);
-    Line(x0, y1, x1, y1, COUL_UP_BLUE);
-    S32 h = y1 - y0 - 4;
-    S32 ty0 = y0 + 2 + h * first / total, ty1 = y0 + 2 + h * (first + visible) / total - 1;
-    Box(x0 + 2, ty0, x1 - 2, ty1, FILL_SELECTED);
-    Line(x0 + 2, ty0, x1 - 2, ty0, COUL_UP_BLUE);
-    Line(x0 + 2, ty0, x0 + 2, ty1, COUL_UP_BLUE);
-    Line(x1 - 2, ty0, x1 - 2, ty1, COUL_DOWN_BLUE);
-    Line(x0 + 2, ty1, x1 - 2, ty1, COUL_DOWN_BLUE);
-    g_bar = ScrollBarInfo{true, x0, y0, x1, y1, ty0, ty1, first, visible, total};
-    // The target reaches past the groove into the margin, 12 px being thin for a finger;
-    // not left of it, where the rows end 9 px away.
-    const S32 reach = x1 + 8 < (S32)Host_LogicalW() - 1 ? x1 + 8 : (S32)Host_LogicalW() - 1;
-    Menu_Point(POINT_SCROLL, x0 - 2, y0, reach, y1, 0, 0);
-}
-
-// The legend: only the keys the selected row takes.
-static void LegendFor(const Row *r, const char **keys, const char **words, int *n) {
-    *n = 0;
-    if (g_console) {
-        keys[*n] = g_console == CON_READONLY ? "Any" : "Esc";
-        words[(*n)++] = "Close";
-        return;
-    }
-    if (g_confirm) {
-        keys[*n] = "\x18\x19"; words[(*n)++] = "Choose";
-        keys[*n] = "Enter"; words[(*n)++] = "Answer";
-        keys[*n] = "Esc"; words[(*n)++] = "Cancel";  // the safe answer, without moving to it
-        return;
-    }
-    if (r) {
-        if (r->type == R_SETTING && RowActive(*r)) {
-            Kind k = kSettings[r->arg].kind;
-            // A choice or a switch also steps on Enter, so the legend names both (EPmager,
-            // 2026-11-11); a slider or steps take Left and Right only.
-            const bool steps = k == K_SLIDER || k == K_STEPS;
-            keys[*n] = steps ? "\x11\x10" : "\x11\x10" CHIP_AND "Enter";
-            words[(*n)++] = steps ? "Adjust" : "Change";
-        } else if (r->type == R_PRESET_CHOICE && r->arg == g_preset) {
-            // The preset in use: Enter does nothing until it is changed, then puts it back.
-            if (PresetChanged()) {
-                keys[*n] = "Enter"; words[(*n)++] = "Restore";
-            }
-        } else if (r->type == R_SAVE) {
-            keys[*n] = "Enter"; words[(*n)++] = TopPage() == P_SAVE ? "Save" : "Load";
-            keys[*n] = "Del"; words[(*n)++] = "Delete";
-        } else if (r->type == R_AUTOSAVE) {
-            keys[*n] = "Enter"; words[(*n)++] = "Load";  // the autosave cannot be deleted
-        } else if (r->type == R_NEW_SAVE) {
-            keys[*n] = "Enter"; words[(*n)++] = "Save";
-        } else if (r->type == R_CATEGORY || r->type == R_PRESET_ROW ||
-                   (r->type == R_GAME && (r->arg == M_LOAD || r->arg == M_SAVE || r->arg == M_OPTIONS)) ||
-                   (r->type == R_ACTION && (r->arg == A_KEYS || r->arg == A_EXP || r->arg == A_CONSOLE))) {
-            keys[*n] = "Enter"; words[(*n)++] = "Open";
-        } else if (r->type != R_SETTING) {
-            keys[*n] = "Enter"; words[(*n)++] = "Choose";
-        }
-    }
-    if (!EscGoesBack())
-        return;  // the first game menu: Esc has nothing to go back to
-    keys[*n] = "Esc";
-    // In play the game menu's Esc goes back to the game: the legend says so, as its first row
-    // does (no corner Back there either).
-    words[(*n)++] = g_depth == 1 && TopPage() == P_MAIN ? "Resume" : "Back";
-}
-
-// Help with another window: Space (the pad's Y) turns it, "More" in the legend before its
-// last entry (Back stays last). Every page's legend comes through the band or the dialogue
-// window, so it is added there. Measured without it: a voice too long beside the legend as
-// it was is longer still beside a wider one.
-static int WithMore(const char **in, const char **inWords, int n, S32 voiceW, S32 lines, const char **keys,
-                    const char **words) {
-    for (int i = 0; i < n && i < 7; i++)
-        keys[i] = in[i], words[i] = inWords[i];
-    if (!g_voice.text[0] || n < 1 || n > 7 || Voice_Pages(g_voice.text, voiceW, lines) < 2)
-        return n;
-    keys[n] = keys[n - 1];
-    words[n] = words[n - 1];
-    keys[n - 1] = "Space";
-    words[n - 1] = "More";
-    return n + 1;
-}
-
-// A legend word in the Text language. "legend|Back" first: the legend's Back (the menu
-// before) is not the Back an action names (walking backwards).
-static const char *LegendWord(const char *w) {
-    if (Ui_Lang() <= 0)
-        return w;
-    char key[48];
-    snprintf(key, sizeof key, "legend|%s", w);
-    if (const char *t = Lang_Label(key, Ui_Lang()))
-        return t;
-    return Ui_Tr(w);
-}
-
-// Stacked, the band holds three lines: four entries go in two columns, read down, so Back
-// stays last at the bottom right as on every other page.
-static int LegendPerColumn(int n) { return n > 3 ? (n + 1) / 2 : n; }
-
-// One column of the stack, entries i0..i1-1: the widest chip and the widest word.
-static void LegendColumn(const char **keys, const char **words, int i0, int i1, S32 scale, S32 *chipW, S32 *wordW) {
-    *chipW = *wordW = 0;
-    for (int i = i0; i < i1; i++) {
-        S32 c = Ui_ChipWidth(keys[i], scale, Bindings_LegendPadFamily()), t = Ui_WordWidth(LegendWord(words[i]), scale);
-        *chipW = c > *chipW ? c : *chipW;
-        *wordW = t > *wordW ? t : *wordW;
-    }
-}
-
-static const S32 LEGEND_COLUMN_GAP = 8;  // between two columns, at scale 1
-
-// Stacked: each column the widest chip, the gap, the widest word.
-static S32 LegendWidth(const char **keys, const char **words, int n, S32 scale) {
-    const int per = LegendPerColumn(n);
-    S32 w = 0;
-    for (int i0 = 0; i0 < n; i0 += per) {
-        S32 chipW, wordW;
-        LegendColumn(keys, words, i0, i0 + per < n ? i0 + per : n, scale, &chipW, &wordW);
-        w += (i0 ? LEGEND_COLUMN_GAP * scale : 0) + chipW + 4 * scale + wordW;
-    }
-    return w;
-}
-
-// A key as the record writes it: the arrows as <> and ^v, two keys joined by "/".
-static void KeyText(const char *key, char *out, size_t n) {
-    out[0] = 0;
-    for (const char *k = key; k;) {
-        const char *and_ = strchr(k, CHIP_AND[0]);
-        std::string one = and_ ? std::string(k, and_ - k) : std::string(k);
-        const char *shown = one[0] == '\x11' ? "<>" : one[0] == '\x18' ? "^v" : one.c_str();
-        if (out[0])
-            strncat(out, "/", n - strlen(out) - 1);
-        strncat(out, shown, n - strlen(out) - 1);
-        k = and_ ? and_ + 1 : NULL;
-    }
-}
-
-// A legend entry the pointer can press: the key its word stands for. The arrows' entries
-// (Adjust, and Choose on a question) take no click: the rows and arrows are pointed at.
-static int LegendKeyOf(const char *key, const char *word) {
-    static const struct {
-        const char *word;
-        UiKey key;
-    } kWordKeys[] = {
-        {"Back", KEY_ESC},  {"Cancel", KEY_ESC},  {"Modern", KEY_ESC},     {"Close", KEY_ESC},  {"Resume", KEY_ESC},
-        {"Open", KEY_ENTER}, {"Change", KEY_ENTER}, {"Answer", KEY_ENTER}, {"Choose", KEY_ENTER}, {"Restore", KEY_ENTER},
-        {"Clear", KEY_DEL},  {"Defaults", KEY_DEL}, {"Keyboard", KEY_TAB}, {"Gamepad", KEY_TAB},
-        {"More", KEY_MORE},
-    };
-    if ((key[0] == '\x11' || key[0] == '\x18') && !strchr(key, CHIP_AND[0]))
-        return -1;
-    for (const auto &w : kWordKeys)
-        if (!strcmp(word, w.word))
-            return w.key;
-    return -1;
-}
-
-// The entry's target, and whether it is lit: the mouse over it, or a finger pressing it.
-static bool LegendPoint(S32 x0, S32 y0, S32 x1, S32 y1, const char *key, const char *word) {
-    const int k = LegendKeyOf(key, word);
-    if (k < 0)
-        return false;
-    Menu_Point(POINT_KEY, x0, y0, x1, y1, k);
-    HostPointer in;
-    Host_Pointer(&in);
-    return LastPointer() != POINTER_NONE && (LastPointer() == POINTER_MOUSE || in.held) && in.x >= x0 && in.x <= x1 &&
-           in.y >= y0 && in.y <= y1;
-}
-
-static void LegendRecord(int i, const char *key, const char *word) {
-    char item[64], k[32];
-    KeyText(key, k, sizeof k);
-    snprintf(item, sizeof item, "%s[%s] %s", i ? "  " : "", k, word);
-    strncat(g_legend, item, sizeof g_legend - strlen(g_legend) - 1);
-}
-
-// What a legend's key does, from its keyboard name (before a pad's names replace it):
-// Enter confirms, Esc goes back. The wait for a pad's button names its Start, which
-// cancels. Ui_Chip's roles: a key of two keys gives each its own.
-static int LegendRoles(const char *raw, const char *word) {
-    int roles = 0, part = 0;
-    for (const char *p = raw; part < 2; part++) {
-        const char *end = strchr(p, CHIP_AND[0]);
-        const size_t n = end ? (size_t)(end - p) : strlen(p);
-        const int role = n == 5 && !strncmp(p, "Enter", 5) ? CHIP_ROLE_CONFIRM
-                         : n == 3 && !strncmp(p, "Esc", 3) ? CHIP_ROLE_BACK
-                                                           : CHIP_ROLE_NONE;
-        roles |= role << (2 * part);
-        if (!end)
-            break;
-        p = end + 1;
-    }
-    if (!roles && !strcmp(word, "Cancel"))
-        roles = CHIP_ROLE_BACK;
-    return roles;
-}
-
-// In a row: chip, word, chip, word, centred on yc.
-// Stacked (the review card's legend): one key a line from y0, the chips ending on
-// one column and the words starting on the next, so the words read as a list.
-static void DrawLegendStacked(S32 x0, S32 y0, const char **keys, const char **raws, const char **words, int n,
-                              S32 scale) {
-    g_legend[0] = 0;
-    const int per = LegendPerColumn(n);
-    S32 chipW = 0, wordW = 0, x = x0 - LEGEND_COLUMN_GAP * scale;
-    S32 chipH = 12 * scale, pitch = chipH + 2;
-    for (int i = 0; i < n; i++) {
-        if (i % per == 0) {  // a new column, after the last one's widest word
-            x += (i ? chipW + 4 * scale + wordW : 0) + LEGEND_COLUMN_GAP * scale;
-            LegendColumn(keys, words, i, i + per < n ? i + per : n, scale, &chipW, &wordW);
-        }
-        S32 y = y0 + (i % per) * pitch;
-        S32 c = Ui_ChipWidth(keys[i], scale, Bindings_LegendPadFamily());
-        const bool lit = LegendPoint(x + chipW - c, y - 1, x + chipW + 4 * scale + Ui_WordWidth(LegendWord(words[i]), scale),
-                                     y + chipH, keys[i], words[i]);
-        Ui_Chip(x + chipW - c, y, keys[i], scale, lit, Bindings_LegendPadFamily(), LegendRoles(raws[i], words[i]));
-        Ui_Word(x + chipW + 4 * scale, y + chipH / 2 - 4 * scale, LegendWord(words[i]), lit ? INK_WHITE : INK_CONFIG_MENU,
-                scale);
-        LegendRecord(i, keys[i], words[i]);
-        LegendGrow(x + chipW - c, y, x + chipW + 4 * scale + Ui_WordWidth(LegendWord(words[i]), scale) - 1,
-                   y + chipH - 1, scale);
-    }
-}
-
-// The question's answers, the safe one first; the question itself is in the voice.
-// One column: a small panel in the middle, labels centred, as 1997. Wide: in place
-// of the page's rows, labels on their label edge.
-static void DrawConfirm(const char *pane, S32 x0, S32 x1, S32 y0) {
-    bool centred = !strcmp(pane, "confirm");
-    const char *const *answers = kQuestions[g_question].answers;
-    for (int i = 0; i < 2; i++) {
-        S32 ry0 = y0 + i * ROW_PITCH, yc = ry0 + ROW_H / 2;
-        RowFill fill = i == g_confirmCursor && Menu_CursorLit() ? FILL_CURSOR : FILL_SHADE;
-        Ui_RowBackground(x0, ry0, x1, ry0 + ROW_H, fill);
-        DrawnRow &d = Menu_Record(pane, answers[i], "", fill, x0, ry0, x1, ry0 + ROW_H);
-        Menu_Point(POINT_ANSWER, x0, ry0, x1, ry0 + ROW_H, i);
-        if (centred) {
-            Menu_RowLabelCentred(x0, x1, yc, answers[i], INK_WHITE, false, i == g_confirmCursor);
-            d.textLeft = (x0 + x1) / 2 - Ui_TextWidth(answers[i]) / 2;
-        } else {
-            const ClipSave clip;
-            SetClip(x0 + 1, ry0, x1 - 1, ry0 + ROW_H);
-            Ui_TextInRoom(x0 + ROW_TEXT_INSET, x1 - ROW_TEXT_INSET, yc - ROW_TEXT_RISE, Ui_Tr(answers[i]), INK_WHITE,
-                          i == g_confirmCursor);
-            clip.Restore();
-            d.textLeft = x0 + ROW_TEXT_INSET;
-            d.textRight = x0 + ROW_TEXT_INSET + Ui_TextWidth(answers[i]);
-        }
-    }
-}
-
-// Paged help says where it is with ellipses in the text (Voice_Draw), not a "1/2" mark: the
-// mark sat under the legend's Back at 640x480 (2026-11-12). `state` still names the window.
-static char g_pageMark[8];
-static void NotePageMark() {
-    S32 page = 0, pages = 1;
-    Voice_LastPage(&page, &pages);
-    g_pageMark[0] = 0;
-    if (pages > 1)
-        snprintf(g_pageMark, sizeof g_pageMark, "%d/%d", (int)page + 1, (int)pages);
-}
-const char *Menu_PageMark() { return g_pageMark; }
-const char *Menu_Legend() { return g_legend; }
-
-bool Menu_CursorEnterSteps(bool *isValue) {
-    *isValue = false;
-    if (!g_depth || g_confirm || g_console || Bindings_Active())
-        return false;
-    if (MoreOptions_Active()) {
-        *isValue = true;
-        return !MoreOptions_CursorIsNumber();
-    }
-    const Row *r = CursorRow();
-    if (!r || r->type != R_SETTING || !RowActive(*r))
-        return false;
-    *isValue = true;
-    const Kind k = kSettings[r->arg].kind;
-    return k == K_CHOICE || k == K_TOGGLE;
-}
-
-// MESSAGE.CPP NormalWinDial: the window's top this far above the screen's last line.
-enum { DIALOGUE_RISE = 137 };
-
-S32 Menu_DialogueTop() { return (S32)Host_LogicalH() - 1 - DIALOGUE_RISE; }
-
-void Menu_DrawDialogue(const char **keys, const char **words, int nk) {
-    // MESSAGE.CPP NormalWinDial: 8 in from the sides, 137 tall, 8 off the bottom.
-    S32 W = (S32)Host_LogicalW(), H = (S32)Host_LogicalH();
-    Menu_DrawDialogueIn(8, H - 1 - DIALOGUE_RISE, W - 1 - 8, H - 1 - 8, keys, words, nk);
-}
-
-// In a row: chip, word, then the next, from x; returns the width.
-static S32 DrawLegendRow(S32 x, S32 y, const char **keys, const char **raws, const char **words, int n, S32 scale,
-                         bool draw) {
-    if (draw)
-        g_legend[0] = 0;
-    S32 w = 0;
-    for (int i = 0; i < n; i++) {
-        if (i)
-            w += 12 * scale;
-        S32 c = Ui_ChipWidth(keys[i], scale, Bindings_LegendPadFamily());
-        if (draw) {
-            const bool lit = LegendPoint(x + w, y - 1, x + w + c + 4 * scale + Ui_WordWidth(LegendWord(words[i]), scale),
-                                         y + 12 * scale, keys[i], words[i]);
-            Ui_Chip(x + w, y, keys[i], scale, lit, Bindings_LegendPadFamily(), LegendRoles(raws[i], words[i]));
-            Ui_Word(x + w + c + 4 * scale, y + 2 * scale, LegendWord(words[i]), lit ? INK_WHITE : INK_CONFIG_MENU, scale);
-            LegendRecord(i, keys[i], words[i]);
-            LegendGrow(x + w, y, x + w + c + 4 * scale + Ui_WordWidth(LegendWord(words[i]), scale) - 1,
-                       y + 12 * scale - 1, scale);
-        }
-        w += c + 4 * scale + Ui_WordWidth(LegendWord(words[i]), scale);
-    }
-    return w;
-}
-
-// The help window's legend at the size that fits (switch legendfit, F8; EPmager, 2026-11-16):
-// the row laid out at f times its 1x size, its chips' boxes on the canvas at that size, their
-// letters and the words drawn at 1x and painted at f by the text layer. Returns the width.
-static float DrawLegendRowFit(float x, float y, const char **keys, const char **raws, const char **words, int n,
-                              float f, bool draw) {
-    if (draw)
-        g_legend[0] = 0;
-    float w = 0;
-    const int pad = Bindings_LegendPadFamily();
-    for (int i = 0; i < n; i++) {
-        if (i)
-            w += 12 * f;
-        const float c = (float)Ui_ChipWidth(keys[i], 1, pad) * f;
-        const char *word = LegendWord(words[i]);
-        const float ww = (float)Ui_WordWidth(word, 1) * f;
-        if (draw) {
-            const S32 x0 = (S32)lrintf(x + w), y0 = (S32)lrintf(y);
-            const S32 x1 = (S32)lrintf(x + w + c + 4 * f + ww) - 1, y1 = (S32)lrintf(y + 12 * f) - 1;
-            const bool lit = LegendPoint(x0, y0 - 1, x1 + 1, y1 + 1, keys[i], words[i]);
-            Ui_ChipFit(x + w, y, keys[i], f, lit, pad, LegendRoles(raws[i], words[i]));
-            Ui_WordFit((S32)lrintf(x + w + c + 4 * f), (S32)lrintf(y + 2 * f), word,
-                       lit ? INK_WHITE : INK_CONFIG_MENU, f);
-            LegendRecord(i, keys[i], words[i]);
-            LegendGrow(x0, y0, x1, y1, f >= 1.5f ? 2 : 1);
-        }
-        w += c + 4 * f + ww;
-    }
-    return w;
-}
-
-// The legend's keys as the device used last names them (a pad's buttons after a pad press).
-static void LegendKeys(const char **in, const char **out, int nk) {
-    for (int i = 0; i < nk && i < 8; i++)
-        out[i] = Bindings_LegendKey(in[i]);
-}
-
-void Menu_DrawDialogueIn(S32 x0, S32 y0, S32 x1, S32 y1, const char **keysGiven, const char **wordsGiven, int nk) {
-    const char *keysIn[8], *words[8];
-    nk = WithMore(keysGiven, wordsGiven, nk, x1 - x0 - 2 * PANEL_PAD_X, nk ? 2 : 3, keysIn, words);
-    Ui_Panel(x0, y0, x1, y1, PANEL_SHADE_LVL);
-    // The legend takes the window's third line, so the help has two, as in the wide band;
-    // no help at 640x480 needs a third (measured 2026-11-11, six languages).
-    const S32 maxLines = nk ? 2 : 3;
-    g_voiceLines = Voice_Draw(g_voice, x0 + PANEL_PAD_X, y0 + PANEL_PAD_Y, x1 - x0 - 2 * PANEL_PAD_X, maxLines,
-                              &g_voiceNeeded);
-    g_voiceMax = maxLines;
-    g_voiceWidth = x1 - x0 - 2 * PANEL_PAD_X;
-    if (nk) {
-        const char *keys[8];
-        LegendKeys(keysIn, keys, nk);
-        // The 8x8 font at 2x when the line fits, as the wide band has it; 1x, the 1997 key
-        // screen's size, when it does not. With legendfit, the size between that fits.
-        const S32 room = x1 - x0 - 2 * PANEL_PAD_X;
-        S32 scale = 2;
-        if (DrawLegendRow(0, 0, keys, keysIn, words, nk, scale, false) > room)
-            scale = 1;
-        if (scale == 1 && sw_legendfit && PropScale_CanFit()) {
-            float f = (float)room / DrawLegendRowFit(0, 0, keys, keysIn, words, nk, 1.0f, false);
-            f = f > 2.0f ? 2.0f : f < 1.0f ? 1.0f : f;
-            const float w = DrawLegendRowFit(0, 0, keys, keysIn, words, nk, f, false);
-            DrawLegendRowFit((float)(x1 - PANEL_PAD_X + 1) - w, (float)(y1 - 8 + 1) - 12 * f, keys, keysIn, words, nk,
-                             f, true);
-        } else {
-            S32 w = DrawLegendRow(0, 0, keys, keysIn, words, nk, scale, false);
-            DrawLegendRow(x1 - PANEL_PAD_X - w + 1, y1 - 8 - 12 * scale + 1, keys, keysIn, words, nk, scale, true);
-        }
-    } else {
-        g_legend[0] = 0;
-    }
-    NotePageMark();
-    g_helpBox.shown = true;
-    g_helpBox.kind = "dialogue";
-    g_helpBox.x0 = x0; g_helpBox.y0 = y0; g_helpBox.x1 = x1; g_helpBox.y1 = y1;
-}
-
-// ── The corner Back (decided 2026-11-12) ──
-// For a mouse or a finger only: shown once the pointer was used last, gone at a key or a
-// pad's button, which have Esc and B. It sits on the title's line: in the one column at the
-// rows' left edge (the title moves right of it when it must), wide in the frame's margin left
-// of the rows. A row's height, as big a target as a row; it presses Esc.
-// Not on the game menu itself: Resume game is its first row (the maintainer, 2026-11-16).
-static bool BackShown() {
-    return LastPointer() != POINTER_NONE && !MenuClosed() && !g_console && EscGoesBack() &&
-           !(g_depth == 1 && TopPage() == P_MAIN);
-}
-// Always Back, one look and one width on every screen (decided 2026-11-12; on a question it
-// does what the legend's Esc Cancel does). In the Text language as the legend has it
-// ("legend|Back": the plain "Back" is the walk-back key).
-static const char *BackWord() { return LegendWord("Back"); }
-static S32 BackWidth() { return 44 + Ui_TextWidthAsIs(BackWord()) + 20; }
-// In the one column at the rows' left edge (1997's LargeurMenu 550, centred); wide on the
-// frame's side margin, left of the rows.
-static S32 BackLeft() {
-    return Wide() ? Menu_WideFrame().x0 + WIDE_INSET_X : (S32)Host_LogicalW() / 2 - COLUMN_HALF_W;
-}
-static struct {
-    bool shown;
-    S32 x0, y0, x1, y1;
-} g_backBox;
-
-static void DrawBack() {
-    S32 tx, ty;
-    const bool titled = Ui_FirstTitle(&tx, &ty);
-    (void)tx;
-    const S32 x0 = BackLeft();
-    // The title's 38 in a row's 50, so the word sits on the title's line (wide, 6 into the
-    // top margin: lined up with the title reads better than kept out of it).
-    const S32 y0 = (titled ? ty : Wide() ? Menu_WideFrame().y0 + WIDE_INSET_Y : ROWS_MARGIN) - 6;
-    const S32 x1 = x0 + BackWidth(), y1 = y0 + ROW_H, yc = (y0 + y1) / 2;
-    HostPointer in;
-    Host_Pointer(&in);
-    const bool lit = !Menu_CursorLit();  // it has the cursor
-    Ui_RowBackground(x0, y0, x1, y1, lit ? FILL_CURSOR : FILL_SHADE);
-    Ui_Arrow(x0 + 18, yc, -1);
-    Ui_TextAsIs(x0 + 44, yc - ROW_TEXT_RISE, BackWord(), INK_WHITE);
-    Menu_Point(POINT_KEY, x0, y0, x1, y1, KEY_ESC, POINT_KEY_BACK);
-    g_backBox = {true, x0, y0, x1, y1};
-}
-
-// The game menu and its save lists: no help, so in the one column a strip one voice line tall
-// (a note such as "Game saved.", and the legend at its right) in place of the dialogue window.
-// A question there still asks in the dialogue window.
-// The save picture, where 1997 shows one: on the first game menu, Resume game's (the
-// current save's), in place of the title; on Load game, the save under the cursor's, under
-// the title. Not in play: six rows and a picture don't fit (387 px at 640x480; decided
-// 2026-11-14), and the game it would show is behind the menu.
-// Framed, then the gap rows have between them: a row is drawn ROW_H + 1 tall, so 5 px.
-enum { PICTURE_H = SAVE_PICTURE_H + 2 + ROW_GAP - 1 };
-
-// Before a game the game menu keeps the picture's place even with no save to show, the
-// product's name centred in it: the name and the first row are where a returning player has
-// them, laid out for the five rows a save brings (Resume game, New game, Load game, Options,
-// Quit). With the name in a title's place it sat 8 px over New game (EPmager, 2026-11-16).
-enum { MAIN_ROWS_WITH_SAVE = 5 };
-static bool MainBeforeGame() { return !g_confirm && TopPage() == P_MAIN && !g_inGame; }
-
-// A save's picture, drawn from where it left the game.
-static const U8 *Picture(const GameSpot &spot) {
-    static U8 picture[SAVE_PICTURE_W * SAVE_PICTURE_H];
-    GameScene_Picture(picture, spot);
-    return picture;
-}
-
-// The picture this page shows, NULL for none.
-static const U8 *PagePicture() {
-    if (g_confirm)
-        return NULL;
-    if (TopPage() == P_MAIN)
-        return !g_inGame && g_haveCurrent ? Picture(g_currentSpot) : NULL;
-    if (TopPage() == P_LOAD) {
-        const Row *r = CursorRow();
-        if (r && r->type == R_SAVE)
-            return Picture(SpotOf(g_saves[r->arg]));
-        if (r && r->type == R_AUTOSAVE)
-            return Picture(g_autosaveSpot);
-    }
-    return NULL;
-}
-
-// The game menu is titled with the product's name, never translated (the maintainer,
-// 2026-11-16; the game's logo was tried and kept for later).
-#define PRODUCT_NAME "LBA2 Classic Community"
-
-// The name as a wordmark (chosen from a mock-up, 2026-11-16): LBA large in gold, the 2 raised
-// as the game's logo has it (LBA and a raised 2), and CLASSIC COMMUNITY in small spaced capitals under it,
-// its capitals 8 above the first row, in the 56 px a title takes. The game font has one size:
-// there, the name on one line.
-struct MarkSize {
-    S32 cap, supCap, supGap, subCap, subSpacing, gap, shadow, subShadow;
-    float rim, supRim;  // the gold rim round LBA and round the 2
-};
-static const MarkSize kMarkTitle = {32, 18, 2, 10, 3, 6, 4, 2, 1.5f, 0.75f};
-// In the save picture's place, 1.8 times as large, so the name fills it as the picture does
-// (chosen in play over 1 and 1.5, the maintainer, 2026-11-16: at a title's size it was 1.5
-// times the rows' capitals, under 40% of the place's height). The 2 keeps its 2 px gap: scaled,
-// the gap after the A was 14 screen px at 1080p against 10 between L and B.
-static const MarkSize kMarkPlace = {58, 32, 2, 18, 5, 11, 7, 4, 2.7f, 1.35f};
-enum { MARK_ROW_GAP = 8 };
-enum { INK_GOLD = 107, INK_PALE = 191 };  // the menu palette's (247,187,87) and (187,223,227)
-static const char kMarkSub[] = "CLASSIC COMMUNITY";
-
-static S32 MarkSubWidth(const MarkSize &m) {
-    S32 w = 0;
-    for (const char *c = kMarkSub; *c; c++) {
-        const char one[2] = {*c, 0};
-        w += ScreenFont_SmallWidth(one, m.subCap) + (c[1] ? m.subSpacing : 0);
-    }
-    return w;
-}
-
-// CLASSIC COMMUNITY, its shadow then its letters, the top of its capitals at subTop.
-static void DrawMarkSub(S32 xSub, S32 subTop, const MarkSize &m) {
-    for (int pass = 0; pass < 2; pass++) {
-        const S32 ds = pass ? 0 : m.subShadow;
-        S32 x = xSub;
-        for (const char *c = kMarkSub; *c; c++) {
-            const char one[2] = {*c, 0};
-            ScreenFont_SmallText(x + ds, subTop + ds, one, pass ? INK_PALE : INK_BLACK, m.subCap);
-            x += ScreenFont_SmallWidth(one, m.subCap) + m.subSpacing;
-        }
-    }
-}
-
-static bool LogoOn() { return sw_videologo && ScreenFont_On() && VideoLogo_Ready(); }
-
-// The intro's logo for the name (switch videologo), centred on cx between top and bottom
-// (both included), as wide as its height makes it. In the picture's place with logosub,
-// CLASSIC COMMUNITY keeps the bottom of that space and the logo takes what is above it.
-// still: the logo at rest, no build-in and no ripple, as the game menu in play has it.
-static void DrawLogoTitle(S32 cx, S32 top, S32 bottom, const MarkSize &m, bool still) {
-    S32 logoBottom = bottom, l = cx, r = cx;
-    if (sw_logosub && !still) {
-        // The line's cell reaches half a capital under its baseline, and its shadow further:
-        // all of it stays above `bottom`, or the row drawn under it would take it off the screen.
-        const S32 subTop = bottom + 1 - m.subShadow - (m.subCap + m.subCap / 2), wSub = MarkSubWidth(m);
-        DrawMarkSub(cx - wSub / 2, subTop, m);
-        logoBottom = subTop - m.gap - 1;
-        l = cx - wSub / 2, r = cx - wSub / 2 + wSub - 1;
-    }
-    const S32 h = logoBottom - top + 1, w = (S32)(h * VideoLogo_Aspect() + 0.5f);
-    const S32 x0 = cx - w / 2, x1 = x0 + w - 1;
-    VideoLogo_Queue(x0, top, x1, logoBottom, still);
-    Menu_Record("title", PRODUCT_NAME, "", FILL_SHADE, x0 < l ? x0 : l, top, x1 > r ? x1 : r, bottom).textLeft = x0 < l ? x0 : l;
-}
-
-// Over x0..x1, its last line MARK_ROW_GAP above firstRow.
-static void DrawProductTitle(S32 x0, S32 x1, S32 firstRow, const MarkSize &m = kMarkTitle) {
-    const S32 CAP = m.cap, SUP_CAP = m.supCap, SUP_GAP = m.supGap, SUB_CAP = m.subCap, GAP = m.gap, SHADOW = m.shadow,
-              SUB_SHADOW = m.subShadow;
-    const S32 cx = (x0 + x1 + 1) / 2;
-    if (!ScreenFont_On()) {
-        Ui_Title(x0, x1, firstRow - ROW_PITCH, PRODUCT_NAME, true);
-        Menu_Record("title", PRODUCT_NAME, "", FILL_SHADE, x0, firstRow - ROW_PITCH, x1, firstRow - ROW_PITCH + TEXT_LINE_H)
-            .textLeft = cx - Ui_TextWidthAsIs(PRODUCT_NAME) / 2;
-        return;
-    }
-    if (LogoOn() && &m == &kMarkTitle) {
-        // In play: the logo smaller, in a title's pitch less the gap to the first row, and
-        // at rest (the maintainer, 2026-11-17).
-        DrawLogoTitle(cx, firstRow - ROW_PITCH, firstRow - MARK_ROW_GAP - 1, m, true);
-        return;
-    }
-    const S32 subTop = firstRow - MARK_ROW_GAP - SUB_CAP;
-    const S32 top = subTop - GAP - CAP;
-    const S32 wLba = ScreenFont_SmallWidth("LBA", CAP), wSup = ScreenFont_SmallWidth("2", SUP_CAP);
-    // LBA centred on the line under it, the 2 hanging right of it as a superscript does.
-    const S32 wMark = wLba + SUP_GAP + wSup, xMark = cx - wLba / 2;
-    const S32 wSub = MarkSubWidth(m), xSub = cx - wSub / 2;
-    // Fire in LBA and the 2 (word_fire.h), over their box; the shadows stay black.
-    WordFire_Frame(xMark, top, xMark + wMark - 1, top + CAP - 1);
-    for (int pass = 0; pass < 2; pass++) {  // the shadows, then the letters over them
-        const S32 d = pass ? 0 : SHADOW, ds = pass ? 0 : SUB_SHADOW;
-        if (pass) {
-            // The 2's rim half LBA's: at its size a full one left little fire inside (the
-            // maintainer, 2026-11-16).
-            ScreenFont_SmallTextFilled(xMark, top, "LBA", INK_GOLD, CAP, m.rim);
-            ScreenFont_SmallTextFilled(xMark + wLba + SUP_GAP, top, "2", INK_GOLD, SUP_CAP, m.supRim);
-        } else {
-            ScreenFont_SmallText(xMark + d, top + d, "LBA", INK_BLACK, CAP);
-            ScreenFont_SmallText(xMark + wLba + SUP_GAP + d, top + d, "2", INK_BLACK, SUP_CAP);
-        }
-        S32 x = xSub;
-        for (const char *c = kMarkSub; *c; c++) {
-            const char one[2] = {*c, 0};
-            ScreenFont_SmallText(x + ds, subTop + ds, one, pass ? INK_PALE : INK_BLACK, SUB_CAP);
-            x += ScreenFont_SmallWidth(one, SUB_CAP) + m.subSpacing;
-        }
-    }
-    const S32 l = xMark < xSub ? xMark : xSub, r = xMark + wMark > xSub + wSub ? xMark + wMark : xSub + wSub;
-    Menu_Record("title", PRODUCT_NAME, "", FILL_SHADE, l, top, r - 1, subTop + SUB_CAP - 1).textLeft = l;
-}
-
-// The picture with 1997's frame round it (DrawScreenSave: DrawCadre one pixel outside),
-// its top left at x, y.
-static void DrawPicture(const U8 *pic, S32 x, S32 y) {
-    const S32 x1 = x + SAVE_PICTURE_W - 1, y1 = y + SAVE_PICTURE_H - 1;
-    GamePieces_BackupCorners(x - 1, y - 1, x1 + 1, y1 + 1);
-    U8 *dst = (U8 *)Log;
-    for (S32 j = 0; j < SAVE_PICTURE_H; j++)
-        memcpy(dst + TabOffLine[y + j] + x, pic + j * SAVE_PICTURE_W, SAVE_PICTURE_W);
-    GamePieces_Frame(x - 1, y - 1, x1 + 1, y1 + 1);
-    Menu_Record("picture", "", "", FILL_SHADE, x - 1, y - 1, x1 + 1, y1 + 1);
-}
-
-// The picture centred in its own place: between the last line taken above it (the title's,
-// or the edge's) and the first row, the same gap above and below (the odd pixel below);
-// the maintainer, 2026-11-16: it sat on the first row and far from Load game's title.
-// On the first game menu the picture is Resume game's: on the other rows the product's name
-// takes its place, centred in it, so the rows stay where they are (the maintainer, 2026-11-16).
-static void DrawPictureBetween(const U8 *pic, S32 x, S32 above, S32 firstRow) {
-    const S32 frameH = SAVE_PICTURE_H + 2, free = firstRow - above - 1 - frameH;
-    const S32 y = above + 1 + free / 2 + 1;
-    const Row *r = CursorRow();
-    if (!pic || (TopPage() == P_MAIN && !(r && r->type == R_GAME && r->arg == M_RESUME))) {
-        const MarkSize &m = kMarkPlace;
-        if (LogoOn()) {  // the logo fills the picture's place, frame and all
-            DrawLogoTitle(x - 1 + (SAVE_PICTURE_W + 2) / 2, y - 1, y - 1 + frameH - 1, m, false);
-            return;
-        }
-        const S32 markH = m.cap + m.gap + m.subCap;
-        DrawProductTitle(x - 1 + SAVE_PICTURE_W / 2 - COLUMN_HALF_W, x - 1 + SAVE_PICTURE_W / 2 + COLUMN_HALF_W,
-                         y - 1 + (frameH - markH) / 2 + markH + MARK_ROW_GAP, m);
-        return;
-    }
-    DrawPicture(pic, x, y);
-}
-
-enum { STRIP_H = 60 };  // the voice line at 12 in, 10 under it: six rows and a title fit 640x480
-enum { BAND_H = 86 };   // the wide band: two lines of help and the legend
-static bool StripPage() {
-    const int p = TopPage();
-    return !g_confirm && (p == P_MAIN || p == P_LOAD || p == P_SAVE);
-}
-
-// The strip with its bottom right corner at x1, y1: in the one column 8 in from the screen's,
-// in the wide frame where the band's is (the band is two lines tall for help these pages
-// don't have; decided 2026-11-16).
-static void DrawStripAt(S32 x0, S32 x1, S32 y1, const char **keysGiven, const char **words, int nk) {
-    const S32 y0 = y1 - STRIP_H + 1;
-    Ui_Panel(x0, y0, x1, y1, PANEL_SHADE_LVL);
-    const char *keys[8];
-    LegendKeys(keysGiven, keys, nk);
-    S32 scale = 2;
-    if (DrawLegendRow(0, 0, keys, keysGiven, words, nk, scale, false) > x1 - x0 - 2 * PANEL_PAD_X)
-        scale = 1;
-    const S32 lw = nk ? DrawLegendRow(0, 0, keys, keysGiven, words, nk, scale, false) : 0;
-    const S32 voiceW = x1 - x0 - 2 * PANEL_PAD_X - (lw ? lw + PANEL_PAD_X : 0);
-    g_voiceLines = Voice_Draw(g_voice, x0 + PANEL_PAD_X, y0 + PANEL_PAD_Y, voiceW, 1, &g_voiceNeeded);
-    g_voiceMax = 1;
-    g_voiceWidth = voiceW;
-    if (nk)
-        DrawLegendRow(x1 - PANEL_PAD_X - lw + 1, (y0 + y1) / 2 - 6 * scale + 1, keys, keysGiven, words, nk, scale,
-                      true);
-    else
-        g_legend[0] = 0;
-    NotePageMark();
-    g_helpBox.shown = true;
-    g_helpBox.kind = "strip";
-    g_helpBox.x0 = x0; g_helpBox.y0 = y0; g_helpBox.x1 = x1; g_helpBox.y1 = y1;
-}
-
-static void DrawStrip(const char **keysGiven, const char **words, int nk) {
-    const S32 W = (S32)Host_LogicalW(), H = (S32)Host_LogicalH();
-    DrawStripAt(8, W - 1 - 8, H - 1 - 8, keysGiven, words, nk);
-}
-
-static void DrawColumn() {
-    S32 W = (S32)Host_LogicalW(), H = (S32)Host_LogicalH();
-    const Place &t = Top();
-    const Page &p = g_pages[t.page];
-    int shown[PAGE_ROWS_MAX];
-    const int count = ShownRows(t.page, shown);
-    int cursor = Position(t.page, t.row);
-
-    if (g_confirm) {
-        DrawConfirm("confirm", W / 2 - 180, W / 2 + 180, 120);
-    } else {
-        // Help in the dialogue window on every one-column page (decided 2026-11-03); the game
-        // menu's pages, which have none, take a strip one line tall, so its six rows fit at
-        // 640x480 as 1997's did.
-        const U8 *pic = PagePicture();
-        const bool place = MainBeforeGame();  // the picture's place, the name in it with no save
-        S32 top = ROWS_MARGIN, bottom = H - 1 - (StripPage() ? STRIP_H : DIALOGUE_RISE) - ROWS_MARGIN;
-        if (place) {
-            // The first game menu's picture and five rows take 402 px (127 + 5 x 56 - 5): at
-            // 640x480 they fit with the frame 4 from the top and the last row 6 above the strip,
-            // one more than between rows (the proximity rule). 1997's frame was 9 from the top.
-            top = 4;
-            bottom = H - 1 - STRIP_H - 14;
-        }
-        // A page names itself in a title above its rows, as the wide pages do (EPmager,
-        // 2026-11-12). The hub too, so the corner Back has its line and nothing moves when
-        // it comes (decided 2026-11-12).
-        const bool titled = !place;  // the picture in its place
-        const S32 titleH = (titled ? ROW_PITCH : 0) + (pic || place ? PICTURE_H : 0);
-        int visible = (bottom - top - titleH + ROW_GAP) / ROW_PITCH;
-        if (visible > count)
-            visible = count;
-        if (g_scroll > count - visible)
-            g_scroll = count - visible;  // a row went (Undo reset): no rows past the end
-        if (const int want = Menu_WheelView(g_scroll, visible, count, cursor); want != cursor) {
-            CursorTo(t.page, shown[want]);
-            cursor = want;
-        }
-        if (cursor < g_scroll)
-            g_scroll = cursor;
-        if (cursor >= g_scroll + visible)
-            g_scroll = cursor - visible + 1;
-        S32 stackH = visible * ROW_PITCH - ROW_GAP;
-        const int laid = place && visible < MAIN_ROWS_WITH_SAVE ? MAIN_ROWS_WITH_SAVE : visible;
-        S32 y = top + (bottom - top - titleH - (laid * ROW_PITCH - ROW_GAP)) / 2 + titleH;  // centred above the dialogue window
-        if (titled && t.page == P_MAIN) {
-            DrawProductTitle(W / 2 - COLUMN_HALF_W, W / 2 + COLUMN_HALF_W, y);
-        } else if (titled) {
-            Ui_Title(W / 2 - COLUMN_HALF_W, W / 2 + COLUMN_HALF_W, y - titleH, p.name);
-            Menu_Record("title", p.name, "", FILL_SHADE, W / 2 - COLUMN_HALF_W, y - titleH, W / 2 + COLUMN_HALF_W, y - titleH + TEXT_LINE_H).textLeft =
-                W / 2 - Ui_TextWidth(p.name) / 2;
-        }
-        if (pic || place)  // under the title, or on the first game menu from the screen's edge (640x480 has no more)
-            DrawPictureBetween(pic, W / 2 - SAVE_PICTURE_W / 2, titled ? y - titleH + TEXT_LINE_H : -1, y);
-        // The 1997 width: LargeurMenu 550, centred.
-        S32 x0 = W / 2 - COLUMN_HALF_W, x1 = W / 2 + COLUMN_HALF_W;
-        for (int i = g_scroll; i < g_scroll + visible; i++) {
-            DrawColumnRow(p.rows[shown[i]], shown[i], x0, y, x1, y + ROW_H, i == cursor && Menu_CursorLit());
-            y += ROW_PITCH;
-        }
-        if (visible < count)
-            Menu_DrawScrollBar(x1 + SCROLL_BAR_GAP, y - visible * ROW_PITCH, y - visible * ROW_PITCH + stackH - 1,
-                               g_scroll, visible, count);
-    }
-    const char *keys[4], *words[4];
-    int nk;
-    LegendFor(g_confirm ? NULL : CursorRow(), keys, words, &nk);
-    if (StripPage())
-        DrawStrip(keys, words, nk);
-    else
-        Menu_DrawDialogue(keys, words, nk);
-}
-
-// Wide: one page at a time, centred and as wide as the 1997 canvas: the hub, then a page,
-// as the 1997 menu goes. Every page names itself in a title, the hub too (1997's had none).
-static void DrawWide() {
-    WideFrame f = Menu_WideFrame();
-    const S32 top = f.y0 + WIDE_INSET_Y;
-    const S32 x0 = f.x0 + (f.w - DRILL_W) / 2, x1 = x0 + DRILL_W - 1;
-    const Place &t = Top();
-    const Page &page = g_pages[t.page];
-
-    if (g_confirm) {
-        // The question's answers in place of the rows.
-        DrawConfirm("wide", x0, x1, Ui_Title(x0, x1, top, kQuestions[g_question].title));
-    } else {
-        int shown[PAGE_ROWS_MAX];
-        const int n = ShownRows(t.page, shown);
-        int cursor = Position(t.page, t.row);
-        const U8 *pic = PagePicture();
-        // The first game menu: the picture in the title's place and the rows under it, what
-        // height is left shared out in three like gaps, above the picture, under it and above
-        // the strip, that last at least 6, more than between rows (the proximity rule;
-        // decided 2026-11-16).
-        const bool inPlace = MainBeforeGame();  // with no save, the name in the picture's place
-        const S32 stripTop = Menu_WideRowsLimit() + ROWS_MARGIN + 1;
-        S32 rowsTop = top, above = top - 1;
-        if (!inPlace && t.page == P_MAIN) {
-            rowsTop = top + ROW_PITCH;  // the title's pitch, as every page has it
-            DrawProductTitle(x0, x1, rowsTop);
-        } else if (!inPlace) {  // the hub too, as the column has it: rows keep their height between pages (decided 2026-11-13)
-            rowsTop = Ui_Title(x0, x1, top, page.name);
-            Menu_Record("title", page.name, "", FILL_SHADE, x0, top, x1, top + TEXT_LINE_H).textLeft =
-                (x0 + x1 + 1) / 2 - Ui_TextWidth(page.name) / 2;
-        }
-        if (pic || inPlace) {
-            if (!inPlace) {
-                above = top + TEXT_LINE_H;  // the title's last line
-                rowsTop += PICTURE_H;
-            } else {
-                const int laid = n < MAIN_ROWS_WITH_SAVE ? MAIN_ROWS_WITH_SAVE : n;
-                const S32 space = stripTop - top - (SAVE_PICTURE_H + 2) - (laid * ROW_PITCH - ROW_GAP + 1);
-                S32 a = (space + 1) / 3, c = space - 2 * a;
-                if (c < 6) {
-                    c = 6;
-                    a = (space - c) / 2;
-                }
-                const S32 b = space - a - c;  // under the picture
-                rowsTop = space < 5 + 6 ? top + PICTURE_H : top + a + SAVE_PICTURE_H + 2 + b;
-            }
-            DrawPictureBetween(pic, (x0 + x1 + 1) / 2 - SAVE_PICTURE_W / 2, above, rowsTop);
-        }
-        const S32 limit = inPlace ? stripTop - 7 : Menu_WideRowsLimit();
-        int visible = (limit - rowsTop + ROW_GAP) / ROW_PITCH;
-        if (visible > n)
-            visible = n;
-        if (g_scroll > n - visible)
-            g_scroll = n - visible;  // a row went (Undo reset): no rows past the end
-        if (const int want = Menu_WheelView(g_scroll, visible, n, cursor); want != cursor) {
-            CursorTo(t.page, shown[want]);
-            cursor = want;
-        }
-        if (cursor < g_scroll)
-            g_scroll = cursor;
-        if (cursor >= g_scroll + visible)
-            g_scroll = cursor - visible + 1;
-        S32 y = rowsTop;
-        for (int i = g_scroll; i < g_scroll + visible; i++) {
-            const Row &row = page.rows[shown[i]];
-            RowFill fill = FILL_SHADE;
-            if (i == cursor && Menu_CursorLit())
-                fill = FILL_CURSOR;
-            else if (sw_greencurrent && row.type == R_PRESET_CHOICE && row.arg == g_preset)
-                fill = FILL_CURRENT;  // the chosen preset wears the current-value plasma, as in the column
-            DrawWideRow("wide", row, shown[i], x0, y, x1, y + ROW_H, fill);
-            y += ROW_PITCH;
-        }
-        if (visible < n)
-            Menu_DrawScrollBar(x1 + SCROLL_BAR_GAP, rowsTop, rowsTop + visible * ROW_PITCH - ROW_GAP - 1, g_scroll,
-                               visible, n);
-    }
-
-    // Help and legend.
-    const char *keys[4], *words[4];
-    int nk;
-    LegendFor(CursorRow(), keys, words, &nk);
-    Menu_DrawFoot(keys, words, nk);
-}
-
-// The last line a row may take: 16 above the band, or above the game pages' strip.
-S32 Menu_WideRowsLimit() {
-    WideFrame f = Menu_WideFrame();
-    S32 H = f.y0 + f.h;
-    return H - WIDE_INSET_Y - (StripPage() ? STRIP_H : BAND_H) - ROWS_MARGIN;
-}
-
-// The voice's width in the band: what the legend leaves, at most the review's 620.
-static S32 BandVoiceWidth(const char **keys, const char **words, int nk) {
-    S32 W = Menu_WideFrame().w;
-    S32 legendW = LegendWidth(keys, words, nk, 2);
-    S32 voiceW = (W - 2 * WIDE_INSET_X) - legendW - 48;
-    return voiceW > 620 ? 620 : voiceW;
-}
-
-void Menu_DrawFoot(const char **keysGiven, const char **wordsGiven, int nk) {
-    if (StripPage()) {
-        const WideFrame fr = Menu_WideFrame();
-        DrawStripAt(fr.x0 + WIDE_INSET_X, fr.x0 + fr.w - 1 - WIDE_INSET_X, fr.y0 + fr.h - 1 - WIDE_INSET_Y, keysGiven,
-                    wordsGiven, nk);
-        return;
-    }
-    const char *keysIn[8], *words[8];
-    nk = WithMore(keysGiven, wordsGiven, nk, BandVoiceWidth(keysGiven, wordsGiven, nk), 2, keysIn, words);
-    // After a pad press the legend names the pad's buttons, not the keyboard's.
-    const char *keys[8];
-    for (int i = 0; i < nk && i < 8; i++)
-        keys[i] = Bindings_LegendKey(keysIn[i]);
-    WideFrame f = Menu_WideFrame();
-    S32 W = f.w, H = f.h;
-    const S32 side = WIDE_INSET_X;
-    const S32 chip = 2;  // the 8x8 key font at 2x (decided 2026-11-03)
-    S32 bx0 = f.x0 + side, bx1 = f.x0 + W - side - 1;
-    S32 bandY0 = f.y0 + H - WIDE_INSET_Y - BAND_H, bandY1 = f.y0 + H - 1 - WIDE_INSET_Y;
-    S32 legendW = LegendWidth(keys, words, nk, chip);
-    Ui_Panel(bx0, bandY0, bx1, bandY1, 15);  // darkened to level 15 (decided 2026-11-03)
-    S32 voiceW = BandVoiceWidth(keys, words, nk);
-    g_voiceLines = Voice_Draw(g_voice, bx0 + PANEL_PAD_X, bandY0 + 5, voiceW, 2, &g_voiceNeeded);
-    g_voiceMax = 2;
-    g_voiceWidth = voiceW;
-    NotePageMark();
-    DrawLegendStacked(bx1 - 24 - legendW + 1, bandY0 + 7, keys, keysIn, words, nk, chip);
-    g_helpBox.shown = true;
-    g_helpBox.kind = "band";
-    g_helpBox.x0 = bx0; g_helpBox.y0 = bandY0; g_helpBox.x1 = bx1; g_helpBox.y1 = bandY1;
-}
-
-// The prototype's own lines, the F1 keys and a switch's note, on one line in the top margin:
-// the one place free at every size (EPmager, 2026-11-12: a list at the top right hid the
-// rows under it, the note at the bottom right the legend's words). Each switch's toggle
-// names its value in the note.
-static void DrawTopLine(const char *s, U8 ink) {
-    const S32 w = Ui_SmallWidth(s, 1), x = (S32)Host_LogicalW() / 2 - w / 2, y = 4;
-    Box(x - 4, y - 3, x + w + 3, y + 10, 0);
-    Ui_Small(x, y, s, ink, 1);
-}
-
-static void DrawOverlay() {
-    DrawTopLine("F1 hide  F2 size  F3 green  F4 long help  F10 key colours  F11 pad names  F12 shapes", INK_CONFIG_MENU);
-}
-
-// The console as lba2cc draws it (CONSOLE.CPP Console_Draw): the top half of the screen,
-// darkened, the 8x8 font at 9 px a line from x 8, a line under it, the prompt "]> " last.
-// Here on the logical canvas (lba2cc draws it on the render buffer). The messages are
-// examples of what a launch logs.
-static const char *const kConsoleLines[][2] = {
-    {"h", "LBA2 Classic Community %s \xFA macOS arm64 \xFA 10 cores \xFA 16 GB RAM"},
-    {"t", "Built Nov  3 2026 12:00:00 from commit %s"},
-    {"t", "Game data: ~/Games/lba2 (found by: the install folder)"},
-    {"t", "Profile: ~/Library/Application Support/lba2cc"},
-    {"d", "Video: 1920 x 1080 fullscreen, vsync on"},
-    {"t", "Island 0, cube 0: Twinsen's house"},
-    {"t", "Type help for the commands."},
-};
-static S32 g_consoleBottom;  // the line under it, for `state`
-
-static void DrawConsole() {
-    S32 W = (S32)Host_LogicalW(), H = (S32)Host_LogicalH();
-    S32 h = H / 2;
-    if (h < 9 * 4)
-        h = 9 * 4;
-    GamePieces_Shade(0, 0, W - 1, h - 1, 15);
-    Line(0, h - 1, W - 1, h - 1, INK_WHITE);
-    g_consoleBottom = h - 1;
-    S32 n = (S32)(sizeof kConsoleLines / sizeof kConsoleLines[0]);
-    S32 lines = h / 9 - 1;  // one is the prompt's
-    S32 y = 0;
-    for (S32 i = n > lines ? n - lines : 0; i < n; i++, y += 9) {
-        char line[160];
-        snprintf(line, sizeof line, kConsoleLines[i][1], kConsoleLines[i][0][0] == 'h' ? kVersionString : kCommit);
-        U8 ink = kConsoleLines[i][0][0] == 'h' ? INK_CONFIG_HEAD : kConsoleLines[i][0][0] == 'd' ? INK_DISABLED : INK_WHITE;
-        Ui_Small(8, y, line, ink, 1);
-    }
-    if (g_console == CON_READONLY)
-        Ui_Small(8, y, "Read only. Any button closes it.", INK_CONFIG_HEAD, 1);
-    else
-        Ui_Small(8, y, (Host_TimeMs() / 500) % 2 ? "]> " : "]> _", INK_WHITE, 1);
-}
-
-// Frame rate on: the count in the bottom left corner, white, the 8x8 font (OBJECT.CPP
-// AffNbFps). lba2cc draws it only in play; here it shows over the menu so the row can be judged.
-static void DrawFps() {
-    static U32 windowStart, frames, shown;
-    U32 now = Host_TimeMs();
-    frames++;
-    if (now - windowStart >= 1000) {
-        shown = frames * 1000 / (now - windowStart ? now - windowStart : 1);
-        windowStart = now;
-        frames = 0;
-    }
-    char buf[16];
-    snprintf(buf, sizeof buf, "%u ", (unsigned)shown);
-    Ui_Small(0, (S32)Host_LogicalH() - 8, buf, INK_WHITE, 1);
-}
-
-// The picture at the screen's own resolution, as the Image row says (decided 2026-11-11):
-// Classic the smallest whole step that covers the screen, Smooth the exact cover factor.
-static void SyncBackgroundRes() {
-    const int want = 1 + g_val[S_IMAGE];
-    if (want != Host_BackgroundRes())
-        Host_SetBackgroundRes(want);
-}
-
-// The pretend game, or Quit's screen. The game is a landscape drawn in code (game_scene.h),
-// its saves' pictures taken from it, with three lines in the voice at its pitch near the
-// bottom (on one, 784 wide, they would not fit 640). Quit's screen is black, two lines.
-static void DrawClosed() {
-    const S32 W = (S32)Host_LogicalW(), H = (S32)Host_LogicalH();
-    char what[128];
-    const char *lines[3];
-    int n;
-    S32 y0;
-    if (g_quitShown) {
-        Box(0, 0, W - 1, H - 1, 0);
-        lines[0] = Ui_Tr("The game would close here.");
-        lines[1] = Ui_Tr("<ENTER> starts it again. <ESC> quits.");
-        n = 2;
-        y0 = H / 2 - TEXT_LINE_H;
-    } else {
-        GameScene_Draw((U8 *)Log + TabOffLine[0], TabOffLine[1] - TabOffLine[0], (U32)W, (U32)H, LiveSpot());
-        ScreenPicture_NoPicture(0);  // the menu picture is gone: the canvas is all game
-        if (g_savedFromPlay && Host_TimeMs() - g_savedAt < 2500)
-            snprintf(what, sizeof what, "%s", Lang_Tr("Game saved.", g_val[S_TEXT_LANG]));
-        else if (g_playingWhat[0])
-            snprintf(what, sizeof what, "%s", g_playingWhat);
-        else
-            snprintf(what, sizeof what, "%s", Ui_Tr("A new game."));
-        lines[0] = what;
-        lines[1] = Ui_Tr("<ENTER> walks on to the next place.");
-        lines[2] = Ui_Tr("<ESC> opens the game menu.");
-        n = 3;
-        y0 = H - 3 * TEXT_LINE_H - 8;
-        GamePieces_Shade(0, y0 - 6, W - 1, H - 1, MENU_SHADE_LVL);  // the menu's darkening, so the lines read on any scene
-    }
-    for (int i = 0; i < n; i++) {
-        const S32 w = Ui_TextWidthAsIs(lines[i]), y = y0 + i * TEXT_LINE_H;
-        // the dialogue shadow
-        Ui_TextAsIs(W / 2 - w / 2 + 2, y + 4, lines[i], INK_BLACK);
-        Ui_TextAsIs(W / 2 - w / 2, y, lines[i], DIALOGUE_HERO * 16 + 12);
-        Menu_Record(g_quitShown ? "quit" : "game", lines[i], "", FILL_SHADE, W / 2 - w / 2, y, W / 2 + w / 2,
-                    y + TEXT_LINE_H)
-            .textLeft = W / 2 - w / 2;
-    }
-}
-
-void Menu_Draw() {
-    SyncBackgroundRes();
-    Host_SetPropScale(sw_propscale);
-    ScreenFont_SetSubpixel(sw_zsub != 0);
-    PropScale_BeginFrame();
-    ScreenFont_Set(g_val[S_FONT]);  // before the layout: widths follow the font
-    Ui_SetLang(g_val[S_TEXT_LANG]);  // and the language
-    ScreenFont_BeginFrame();
-    VideoLogo_BeginFrame();
-    VideoLogo_SetIdle(sw_videologo);
-    VideoLogo_SetCc(sw_logocc != 0);
-    Ui_BeginFrame();
-    SyncView();
-    g_drawnCount = 0;
-    g_pointCount = 0;
-    g_bar.shown = false;
-    g_helpBox.shown = false;
-    g_helpBox.x0 = g_helpBox.y0 = g_helpBox.x1 = g_helpBox.y1 = 0;  // where it was is no help on a new screen
-    g_voiceLines = g_voiceNeeded = g_voiceMax = g_voiceWidth = 0;
-    g_legend[0] = 0;
-    g_legendBox.shown = false;
-
-    Host_SetBackdrop(g_val[S_BACKGROUND]);
-    Host_DrawBackground();
-    GamePieces_AnimatePlasma();
-    if (g_inGame && !MenuClosed()) {  // in a game the menu is over the game as it was left
-        const U32 W = Host_LogicalW(), H = Host_LogicalH();
-        // Esc's dimming in RGB as the scene is drawn: the fog table on a dithered scene speckles.
-        GameScene_Draw((U8 *)Log + TabOffLine[0], TabOffLine[1] - TabOffLine[0], W, H, LiveSpot(),
-                       g_dimGame ? GAME_DIM_KEEP : 1.0f);
-        ScreenPicture_NoPicture(0);
-    }
-
-    Ui_SetBackRight(BackShown() ? BackLeft() + BackWidth() : 0);
-    g_backBox.shown = false;
-    if (MenuClosed()) {
-        DrawClosed();
-    } else if (Bindings_Active()) {
-        Bindings_Draw();
-    } else if (MoreOptions_Active()) {
-        MoreOptions_Draw();
-    } else if (Wide()) {
-        DrawWide();
-    } else {
-        DrawColumn();
-    }
-    if (BackShown())
-        DrawBack();
-
-    if (g_console)
-        DrawConsole();
-    if (g_val[S_FPS])
-        DrawFps();
-    VideoLogo_NoteBegin();  // the logo stays above the top line
-    if (g_toast[0] && Host_TimeMs() < g_toastUntil)
-        DrawTopLine(g_toast, INK_CONFIG_HEAD);
-    else if (sw_overlay)
-        DrawOverlay();
-    VideoLogo_NoteEnd();
-    g_wheelView = 0;  // turned where nothing scrolls: dropped
-    g_scrollTo = -1;
-}
-
-// ───────────────────────────── Switches and state ─────────────────────────────
-
-struct SwitchDef {
-    const char *name;
-    int *value;
-    int min, max;
-    int start;  // the value a fresh start has
-};
-static const SwitchDef kSwitches[] = {
-    {"overlay", &sw_overlay, 0, 1, 0},
-    {"padnames", &g_val[S_PADNAMES], 0, 3, 0},  // the Button names row
-    {"whole", &sw_whole, 0, 1, 0},
-    {"greencurrent", &sw_greencurrent, 0, 1, 0},
-    {"padicons", &g_padIcons, 0, 1, 1},  // shapes for the pad's buttons on chips
-    {"roleink", &g_roleInk, 0, 1, 1},    // Enter green, Esc red in the legend
-    {"longhelp", &sw_longhelp, 0, 1, 1},  // a second window of help, turned with Space or Y
-    {"pointer", &sw_pointer, 0, 2, 0},   // for tests: as if the mouse (1) or a finger (2) was used last
-    {"propscale", &sw_propscale, 0, 6, 5},  // the menu at a proportional scale (5, decided 2026-11-16), F5
-    {"zsub", &sw_zsub, 0, 1, 0},  // Zilla Slab letters at quarter pixels, F6
-    {"videologo", &sw_videologo, 0, 3, 1},  // the intro's logo for the wordmark, F9
-    {"logosub", &sw_logosub, 0, 1, 0},
-    {"logocc", &sw_logocc, 0, 1, 1},  // Shift+F9
-    {"legendfit", &sw_legendfit, 0, 1, 1},  // the help window's legend fitted to its width, F8
-};
-
-bool Menu_SetSwitch(const char *name, int v) {
-    if (!strcmp(name, "videologo")) {
-        // Switched on: the build-in from its start. From one ripple to another: that ripple
-        // now, since the build-in is the same for all three and would only hide the change.
-        if (sw_videologo >= 1 && v >= 1 && v <= 3 && v != sw_videologo)
-            VideoLogo_RippleNow();
-        else
-            VideoLogo_Restart();
-    }
-    if (!strcmp(name, "keyboard")) {  // 0: as a console with no keyboard yet
-        Host_SetKeyboardSeen(v != 0);
-        return true;
-    }
-    for (size_t i = 0; i < sizeof kSwitches / sizeof kSwitches[0]; i++) {
-        const SwitchDef &s = kSwitches[i];
-        if (strcmp(s.name, name) != 0)
-            continue;
-        if (v < s.min || v > s.max)
-            v = s.min + ((v - s.min) % (s.max - s.min + 1) + (s.max - s.min + 1)) % (s.max - s.min + 1);
-        *s.value = v;
-        g_voice.text[0] = 0;  // say it again under the new rules
-        Toast("%s = %d", name, v);
-        Trace("switch %s=%d", name, v);
-        return true;
-    }
-    return false;
-}
-
-int Menu_GetSwitch(const char *name) {
-    for (size_t i = 0; i < sizeof kSwitches / sizeof kSwitches[0]; i++)
-        if (!strcmp(kSwitches[i].name, name))
-            return *kSwitches[i].value;
-    return -1;
-}
-
-bool Menu_Open(const char *name) {
-    SyncView();
-    if (!strcmp(name, "Keys and buttons")) {
-        Menu_Open("Controls and camera");
-        PutCursorOn(R_ACTION, A_KEYS);  // as Enter on it leaves it
-        Activate(*CursorRow());
-        UpdateVoice();
-        return true;
-    }
-    if (!strcmp(name, "More options")) {
-        Menu_Open("Advanced and reset");
-        PutCursorOn(R_ACTION, A_EXP);  // as Enter on it leaves it
-        Activate(*CursorRow());
-        return true;
-    }
-    if (!strcmp(name, "Console")) {
-        Menu_Open("Advanced and reset");
-        PutCursorOn(R_ACTION, A_CONSOLE);
-        g_console = Host_LastInputWasPad() ? CON_READONLY : CON_FULL;
-        return true;
-    }
-    g_console = CON_CLOSED;
-    Bindings_Close();
-    for (int p = P_MAIN; p <= P_SAVE; p++) {  // the game menu, and its pages from their rows
-        if (strcmp(g_pages[p].name, name) != 0)
-            continue;
-        g_confirm = false;
-        g_quitShown = false;
-        if (p == P_SAVE)
-            g_inGame = true;  // Save game is there only in a game
-        g_dimGame = true;  // as Esc opens the game menu
-        OpenGameMenu();
-        if (p != P_MAIN) {
-            PutCursorOn(R_GAME, p == P_LOAD ? M_LOAD : M_SAVE);
-            Activate(*CursorRow());
-        }
-        Trace("open page=%s (control)", name);
-        return true;
-    }
-    for (int p = 0; p < P_KEYS; p++) {  // Keys and buttons opens from its row, above
-        if (strcmp(g_pages[p].name, name) != 0)
-            continue;
-        // Esc comes back to the page's own row on the hub, as after Enter on it.
-        int hubRow = 0;
-        for (int i = 0; i < g_pages[P_HUB].count; i++)
-            if (g_pages[P_HUB].rows[i].type != R_RETURN && g_pages[P_HUB].rows[i].arg == p)
-                hubRow = i;
-        // As the Options key opens them in play: Esc from the hub goes back to the game.
-        g_confirm = false;
-        g_playing = g_quitShown = false;
-        g_inGame = true;
-        g_dimGame = false;  // the Options key's: the scene as it is
-        g_depth = 1;
-        g_stack[0].page = P_HUB;
-        g_stack[0].row = hubRow;
-        if (p != P_HUB)
-            Push(p);
-        g_scroll = 0;
-        Trace("open page=%s (control)", name);
-        return true;
-    }
-    return false;
-}
-
-bool Menu_Set(const char *id, int value) {
-    for (int s = 0; s < S_COUNT; s++) {
-        if (strcmp(kSettings[s].id, id) != 0)
-            continue;
-        if (value < 0 || value > kSettings[s].max)
-            return false;
-        g_val[s] = value;
-        Trace("set %s=%d (control)", id, value);
-        return true;
-    }
-    return MoreOptions_Set(id, value);
-}
-
-void Menu_Reset() {
-    for (size_t i = 0; i < sizeof kSwitches / sizeof kSwitches[0]; i++)
-        *kSwitches[i].value = kSwitches[i].start;
-    Host_ResetInput();
-    VideoLogo_Restart();
-    Bindings_Reset();
-    MoreOptions_Defaults();
-    g_confirm = false;
-    g_confirmCursor = 0;
-    g_console = CON_CLOSED;
-    g_presetBackup.have = false;
-    g_resetBackup.have = false;
-    g_scroll = 0;
-    g_toast[0] = 0;
-    g_toastUntil = 0;
-    Menu_Init();
-}
-
-int Menu_DrawnRows(const DrawnRow **rows) {
-    *rows = g_drawn;
-    return g_drawnCount;
-}
-
-void Menu_Help(MenuHelp *h) {
-    h->where = g_helpBox.shown ? g_helpBox.kind : "none";
-    h->x0 = g_helpBox.x0;
-    h->y0 = g_helpBox.y0;
-    h->x1 = g_helpBox.x1;
-    h->y1 = g_helpBox.y1;
-    h->needed = g_voiceNeeded;
-    S32 page, pages;
-    Voice_LastPage(&page, &pages);
-    if (!g_helpBox.shown)
-        page = pages = 0;  // no help this frame: the count is the last one drawn, elsewhere
-    h->page = page;
-    h->pages = pages;
-    h->max = g_voiceMax;
-    h->width = g_voiceWidth;
-    h->text = g_voice.text;
-    h->legend = g_legendBox.shown;
-    h->lx0 = g_legendBox.x0, h->ly0 = g_legendBox.y0, h->lx1 = g_legendBox.x1, h->ly1 = g_legendBox.y1;
-    h->legendScale = g_legendBox.scale;
-}
-
-bool Menu_WantsQuit() { return g_quit; }
-
-const char *Menu_Layout() {
-    return g_playing ? "game" : g_quitShown ? "quit" : Wide() ? "wide" : "column";
-}
-
-const char *Menu_PageName() {
-    return g_pages[Top().page].name;
-}
-
-// One for the hub; each page opened and a question add one.
-static int Depth() {
-    return g_depth + (g_confirm ? 1 : 0);
-}
-
-const char *Menu_CursorLabel() {
-    static char buf[160];
-    const Row *r = MoreOptions_Active() || MenuClosed() ? NULL : CursorRow();
-    if (!r)
-        return "";
-    return r->type == R_PRESET_ROW ? PresetRowLabel(buf, sizeof buf) : RowLabel(*r);
-}
-
-int Menu_Where(char *buf, size_t n) {
-    if (MenuClosed()) {
-        snprintf(buf, n, "%s", g_playing ? "game" : "quit");
-        return 0;
-    }
-    if (Bindings_Active()) {
-        // One name for the page and its groups' pages, which the inner part names.
-        char inner[200];
-        int d = Bindings_Where(inner, sizeof inner);
-        snprintf(buf, n, "%s | %s", g_pages[P_KEYS].name, inner);
-        return Depth() + (d == 3 ? 1 : 0);  // waiting for a key or asking: one more than its page
-    }
-    if (MoreOptions_Active()) {
-        char inner[200];
-        MoreOptions_Where(inner, sizeof inner);
-        snprintf(buf, n, "%s | %s", Menu_PageName(), inner);
-        return Depth();
-    }
-    if (g_console) {
-        snprintf(buf, n, "%s | %s | console", Menu_PageName(), Menu_CursorLabel());
-        return Depth() + 1;
-    }
-    if (g_confirm)
-        snprintf(buf, n, "%s | %s | confirm", Menu_PageName(), g_confirmCursor ? "Yes" : "No");
-    else
-        snprintf(buf, n, "%s | %s", Menu_PageName(), Menu_CursorLabel());
-    return Depth();
-}
-
-bool Menu_CursorSetting(bool *active) {
-    const Row *r = MoreOptions_Active() || MenuClosed() ? NULL : CursorRow();
-    if (!r || r->type != R_SETTING)
-        return false;
-    *active = RowActive(*r);
-    return true;
-}
-
-const char *Menu_CursorValue() {
-    for (int i = 0; i < g_drawnCount; i++)
-        if (!strcmp(g_drawn[i].fill, "cursor"))
-            return g_drawn[i].value;
-    return "";
-}
-
-const char *Menu_ConsoleMode() {
-    return g_console == CON_FULL ? "full" : g_console == CON_READONLY ? "read-only" : "closed";
-}
-
-const char *Menu_PresetLabel() {
-    static char buf[160];
-    return PresetRowLabel(buf, sizeof buf);
-}
-
-void Menu_JsonString(FILE *f, const char *s) {
-    fputc('"', f);
-    for (; *s; s++) {
-        unsigned char c = (unsigned char)*s;
-        if (c == '"' || c == '\\')
-            fprintf(f, "\\%c", c);
-        else if (c < 0x20)
-            fprintf(f, "\\u%04x", c);
-        else
-            fputc(c, f);
-    }
-    fputc('"', f);
-}
-
-// Widths in the game font of every string a page can show, for sizing panes:
-// labels, every value a setting can take (ink), help, category names.
-void Menu_WriteMeasure(FILE *f) {
-    fprintf(f, "{\"settings\":[");
-    for (int s = 0; s < S_COUNT; s++) {
-        const Setting &st = kSettings[s];
-        S32 vmax = 0;
-        if (st.kind == K_CHOICE || st.kind == K_TOGGLE) {
-            for (int v = 0; v <= st.max; v++) {
-                S32 w = Ui_TextInkWidth(st.names[v]);
-                if (w > vmax)
-                    vmax = w;
-            }
-        } else if (st.kind == K_SLIDER) {
-            vmax = 128;
-        } else {
-            S32 left = 0;
-            vmax = -1;  // steps: measured where drawn
-            (void)left;
-        }
-        fprintf(f, "%s{\"id\":\"%s\",\"label\":\"%s\",\"label_w\":%d,\"value_w\":%d,\"help_w\":%d}", s ? "," : "",
-                st.id, st.label, Ui_TextWidth(st.label), vmax, Ui_TextWidth(st.help));
-    }
-    fprintf(f, "],\"hub\":[");
-    for (int i = 0; i < g_pages[P_HUB].count; i++) {
-        const Row &r = g_pages[P_HUB].rows[i];
-        char label[160];
-        if (r.type == R_PRESET_ROW) {
-            FormatPresetRow(label, sizeof label, "Classic", true);
-        } else {
-            snprintf(label, sizeof label, "%s", RowLabel(r));
-        }
-        fprintf(f, "%s{\"label\":\"%s\",\"w\":%d,\"help_w\":%d}", i ? "," : "", label, Ui_TextWidth(label),
-                Ui_TextWidth(RowHelp(r) ? RowHelp(r) : ""));
-    }
-    fprintf(f, "]}\n");
-}
-
-void Menu_WriteState(FILE *f) {
-    SyncView();
-    char buf[160];
-    fprintf(f, "{\"t\":%u,\"physical\":[%u,%u],\"logical\":[%u,%u],\"scale\":%u,\"layout\":",
-            (unsigned)Host_TimeMs(), (unsigned)Host_PhysW(), (unsigned)Host_PhysH(),
-            (unsigned)Host_LogicalW(), (unsigned)Host_LogicalH(),
-            (unsigned)Host_Scale(Host_PhysW(), Host_PhysH()));
-    Menu_JsonString(f, Menu_Layout());
-    fprintf(f, ",\"page\":");
-    Menu_JsonString(f, Menu_PageName());
-    const Place &top = Top();
-    fprintf(f, ",\"stack\":[");
-    for (int i = 0; i < g_depth; i++) {
-        const Row &r = g_pages[g_stack[i].page].rows[g_stack[i].row];
-        fprintf(f, "%s{\"page\":", i ? "," : "");
-        Menu_JsonString(f, g_pages[g_stack[i].page].name);
-        fprintf(f, ",\"row\":");
-        Menu_JsonString(f, r.type == R_PRESET_ROW ? PresetRowLabel(buf, sizeof buf) : RowLabel(r));
-        fprintf(f, "}");
-    }
-    fprintf(f, "],\"cursor\":%d,\"scroll\":%d,\"confirm\":%s", Position(top.page, top.row), g_scroll,
-            g_confirm ? "true" : "false");
-    const Row *r = CursorRow();
-    fprintf(f, ",\"cursor_row\":");
-    Menu_JsonString(f, r ? (r->type == R_PRESET_ROW ? PresetRowLabel(buf, sizeof buf) : RowLabel(*r)) : "");
-    fprintf(f, ",\"preset\":\"%s\",\"preset_changed\":%s,\"preset_row\":", kPresetNames[g_preset],
-            PresetChanged() ? "true" : "false");
-    Menu_JsonString(f, PresetRowLabel(buf, sizeof buf));
-
-    fprintf(f, ",\"rows\":[");
-    for (int i = 0; i < g_drawnCount; i++) {
-        const DrawnRow &d = g_drawn[i];
-        fprintf(f, "%s{\"pane\":\"%s\",\"label\":", i ? "," : "", d.pane);
-        Menu_JsonString(f, d.label);
-        fprintf(f, ",\"value\":");
-        Menu_JsonString(f, d.value);
-        fprintf(f, ",\"fill\":\"%s\",\"rect\":[%d,%d,%d,%d],\"dim\":%s,\"changed\":%s,\"marks\":%s,\"setting\":%s,\"text_left\":%d,\"text_right\":%d,\"value_right\":%d}",
-                d.fill, d.x0, d.y0, d.x1, d.y1, d.dim ? "true" : "false", d.changed ? "true" : "false",
-                d.marks ? "true" : "false", d.setting ? "true" : "false", d.textLeft, d.textRight, d.valueRight);
-    }
-    fprintf(f, "]");
-
-    int total = (int)strlen(g_voice.text);
-    int shown = g_voice.typed ? (int)((Host_TimeMs() - g_voice.start) / 20) : total;
-    if (shown > total)
-        shown = total;
-    fprintf(f, ",\"voice\":{\"text\":");
-    Menu_JsonString(f, g_voice.text);
-    fprintf(f, ",\"typed\":%s,\"letters_shown\":%d,\"letters\":%d,\"where\":", g_voice.typed ? "true" : "false",
-            shown, total);
-    Menu_JsonString(f, g_helpBox.shown ? g_helpBox.kind : "none");
-    S32 page, pages;
-    Voice_LastPage(&page, &pages);
-    // Help longer than its window pages on; it is cut off only past what the voice wraps.
-    fprintf(f, ",\"lines\":%d,\"lines_needed\":%d,\"max_lines\":%d,\"width\":%d,\"page\":%d,\"pages\":%d,\"cut_off\":%s",
-            g_voiceLines, g_voiceNeeded, g_voiceMax, g_voiceWidth, (int)page, (int)pages,
-            g_voiceNeeded >= VOICE_MAX_LINES ? "true" : "false");
-    fprintf(f, ",\"page_mark\":");
-    Menu_JsonString(f, g_pageMark);
-    fprintf(f, ",\"rect\":[%d,%d,%d,%d]}", g_helpBox.x0, g_helpBox.y0, g_helpBox.x1, g_helpBox.y1);
-    fprintf(f, ",\"legend\":");
-    Menu_JsonString(f, g_legend);
-    {
-        bool isValue;
-        const bool steps = Menu_CursorEnterSteps(&isValue);
-        fprintf(f, ",\"cursor_value\":\"%s\"", !isValue ? "none" : steps ? "enter steps" : "enter leaves");
-    }
-    fprintf(f, ",\"clip\":[%d,%d,%d,%d]", (int)ClipXMin, (int)ClipYMin, (int)ClipXMax, (int)ClipYMax);
-    // What the pointer can point at, as the last draw placed it: [kind, x0, y0, x1, y1, a, b].
-    static const char *const kPointKinds[] = {"row", "chip", "answer", "step", "slider", "key", "scroll"};
-    static_assert(sizeof kPointKinds / sizeof kPointKinds[0] == POINT_SCROLL + 1, "a name for every PointKind");
-    fprintf(f, ",\"pointer\":\"%s\"", LastPointer() == POINTER_TOUCH ? "touch" : LastPointer() == POINTER_MOUSE ? "mouse" : "none");
-    if (g_backBox.shown)
-        fprintf(f, ",\"back\":[%d,%d,%d,%d]", (int)g_backBox.x0, (int)g_backBox.y0, (int)g_backBox.x1, (int)g_backBox.y1);
-    fprintf(f, ",\"points\":[");
-    for (int i = 0; i < g_pointCount; i++) {
-        const PointTarget &p = g_points[i];
-        fprintf(f, "%s[\"%s\",%d,%d,%d,%d,%d,%d]", i ? "," : "", kPointKinds[p.kind], (int)p.x0, (int)p.y0, (int)p.x1,
-                (int)p.y1, p.a, p.b);
-    }
-    fprintf(f, "]");
-    if (g_bar.shown)  // groove, thumb, and the view it shows
-        fprintf(f, ",\"scrollbar\":{\"groove\":[%d,%d,%d,%d],\"thumb\":[%d,%d],\"first\":%d,\"visible\":%d,\"total\":%d}",
-                (int)g_bar.x0, (int)g_bar.y0, (int)g_bar.x1, (int)g_bar.y1, (int)g_bar.ty0, (int)g_bar.ty1, g_bar.first,
-                g_bar.visible, g_bar.total);
-    fprintf(f, ",\"console\":\"%s\",\"console_bottom\":%d,\"version\":", g_console == CON_FULL ? "full" : g_console == CON_READONLY ? "read-only" : "closed",
-            g_console ? (int)g_consoleBottom : -1);
-    Menu_JsonString(f, kVersion);
-
-    if (Bindings_Active()) {
-        fprintf(f, ",\"bindings\":");
-        Bindings_WriteState(f);
-    }
-    if (MoreOptions_Active()) {
-        fprintf(f, ",\"more_options\":");
-        MoreOptions_WriteState(f);
-    }
-    fprintf(f, ",\"switches\":{");
-    for (size_t i = 0; i < sizeof kSwitches / sizeof kSwitches[0]; i++)
-        fprintf(f, "%s\"%s\":%d", i ? "," : "", kSwitches[i].name, *kSwitches[i].value);
-    fprintf(f, "},\"settings\":{");
-    for (int s = 0; s < S_COUNT; s++)
-        fprintf(f, "%s\"%s\":%d", s ? "," : "", kSettings[s].id, g_val[s]);
-    fprintf(f, "}}\n");
-    fflush(f);
-}

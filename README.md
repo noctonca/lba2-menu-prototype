@@ -25,6 +25,42 @@ here writes `lba2.cfg` or a save.
 
 GPL-2.0, as lba2cc.
 
+## Where the menu's code is
+
+The menu is in files with one job each, cut where the menu plan cuts lba2cc's
+("Where the code goes"), so that it is carried over a file at a time:
+
+| File | Holds | In lba2cc |
+|---|---|---|
+| `src/menu.cpp` | the loop: the stack of pages, the question, the kinds of row and what each does, the pointer | `OPTIONS_MENU.CPP` |
+| `src/menu_pages.cpp` | the row tables of the Options pages and of the game menu, Load game and Save game | `OPTIONS_PAGES.CPP` |
+| `src/menu_draw.cpp` | the view: both layouts, the draw record, the pointer's targets | `OPTIONS_DRAW.CPP` |
+| `src/bindings.cpp` | Keys and buttons: its pages, its kind of row, its own view | `OPTIONS_KEYS.CPP` |
+| `src/more_options.cpp` | More options: its page, its kind of row, its own view | `OPTIONS_MORE.CPP` |
+| `src/menu_settings.cpp` | a stand-in: the example settings, and the presets, undo and reset over them | the presets go to `OPTIONS_PRESETS.CPP`; the values are lba2cc's settings tables |
+| `src/fake_game.cpp` | a stand-in: the saves and the game around the menu | none: lba2cc has the game |
+| `src/menu_state.cpp` | what scripts and tests read and set: the switches, `set`, `open`, `state` | the console's `ui` commands |
+
+Three headers say what crosses between them:
+
+- `src/menu_parts.h` is what a page in its own file needs: the page model
+  (`Row`, `Page`), a kind of row's handlers (`RowKind`), a page's (`PageHooks`),
+  the question (`Question`), the draw record and the pointer's targets. Keys
+  and buttons and More options use nothing else of the menu.
+- `src/menu_settings.h` and `src/game.h` are the menu's two doors to what is
+  not the menu: the settings and presets, and the game and its saves. The
+  loop, the tables and the view read and change a value only through them.
+- `src/menu_internal.h` is what the menu's own four files share. It is the
+  coupling between them, kept as one list so that it can be seen and kept
+  short.
+
+To add a kind of row, give it a `RowKind` (what Enter, its own keys and Del do,
+what its legend, label and help are) and set it with `Menu_SetRowKind`; the
+loop asks the kind and has no list of kinds to add to. To add a page with its
+own keys or its own view, give it `PageHooks`. To ask something, fill in a
+`Question` and call `Menu_Ask`: the loop, the pointer, the legend and both
+layouts already know how to show one and take its answer.
+
 ## Build
 
     git submodule update --init
@@ -607,10 +643,12 @@ and F2 round the list and back (253 runs, about 30 seconds). Both runs start at 
 first size, as a headless run's native size is its launch size.
 
 `tools/baseline.py` checks a change meant to move code without changing what a
-player sees. `record DIR` runs 28 scripts under a fixed clock (seeded walks of
+player sees. `record DIR` runs 32 scripts under a fixed clock (seeded walks of
 400 keys at four sizes, with now and then a pad button, a size change or an
-`open`, and the sweep's layout walk) and keeps a `state` after every key and a
-hash of a picture every 25 keys; `diff A B` prints, per run, the first state
+`open`, the sweep's layout walk, and the play walk: the Options, Save and
+Load keys in play, the Menus key, a save, a delete and Quit's screen, with a
+picture after every key) and keeps a `state` after every key and a hash of a
+picture every 25 keys; `diff A B` prints, per run, the first state
 that differs and which pictures differ, and exits 1 if any run does.
 
     $ tools/baseline.py record .runs/before    # on the commit before
