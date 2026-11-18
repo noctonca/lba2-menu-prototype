@@ -1,5 +1,6 @@
 // What the menu's own files share: menu.cpp (the loop), menu_pages.cpp (the row tables),
-// menu_draw.cpp (the view) and menu_state.cpp (what scripts and tests read and set).
+// menu_draw.cpp (the view) and menu_state.cpp (what scripts and tests read and set); and
+// whats_new.cpp, a trial that marks rows across every page.
 //
 // Not for a page's own file: bindings.cpp and more_options.cpp use menu_parts.h, as a page
 // added later does. Not for the settings or the game either: those are asked through
@@ -23,8 +24,8 @@
 // ───────────────────────────── menu_pages.cpp: the rows ─────────────────────────────
 
 // What a row's `arg` names, for the kinds that have a table of things to do.
-enum { A_KEYS, A_RESET, A_EXP, A_CONSOLE, A_COUNT };  // R_ACTION: opens Keys and buttons, asks to reset,
-                                                       // opens More options, opens the console (kActionDo)
+enum { A_KEYS, A_RESET, A_EXP, A_CONSOLE, A_TRY, A_COUNT };  // R_ACTION: opens Keys and buttons, asks to reset,
+    // opens More options, opens the console, opens More options on What's new's To try row (kActionDo)
 enum { M_RESUME, M_NEW, M_LOAD, M_SAVE, M_OPTIONS, M_QUIT, M_COUNT };  // R_GAME (kGameDo)
 enum { PAGE_ROWS_MAX = MORE_OPTIONS_MAX };  // More options is the longest page
 
@@ -49,6 +50,7 @@ int TopPage();
 const PageHooks *TopHooks();
 const Row *CursorRow();
 void Push(int page);
+int OpeningRow(int page);  // the row Push puts the cursor on
 void CursorTo(int page, int row);
 void PutCursorOn(RowType type, int arg);
 void Activate(const Row &r);
@@ -136,4 +138,5 @@ extern int sw_logocc;
 extern int sw_legendfit;
 extern int sw_greencurrent;
 extern int sw_longhelp;
+extern int sw_whatsnew;  // whats_new.cpp owns it
 int LastPointer();  // the pointer used last, or the one a test fixed

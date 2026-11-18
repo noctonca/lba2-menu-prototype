@@ -40,6 +40,7 @@ The menu is in files with one job each, cut where the menu plan cuts lba2cc's
 | `src/menu_settings.cpp` | a stand-in: the example settings, and the presets, undo and reset over them | the presets go to `OPTIONS_PRESETS.CPP`; the values are lba2cc's settings tables |
 | `src/fake_game.cpp` | a stand-in: the saves and the game around the menu | none: lba2cc has the game |
 | `src/menu_state.cpp` | what scripts and tests read and set: the switches, `set`, `open`, `state` | the console's `ui` commands |
+| `src/whats_new.cpp` | a trial: what a new build tells a player, its marks, its line and its page | not decided (MENU_PLAN.md open question 16) |
 
 Three headers say what crosses between them:
 
@@ -295,6 +296,7 @@ own keys:
 | Key | What it does |
 | --- | --- |
 | F1 | these keys on one line in the top margin (switch `overlay`); a switch's note takes the line for 2 s |
+| Shift+F1 | a trial of what a new build tells a player (switch `whatsnew`, off at start; see `src/whats_new.h`): 1 the first run after an update from a pretend 0.13.2: a gold dot after each new row's name and on the path to it, until the cursor has been on the row and left it; "What's new: Options." on the start screen until What's new is opened; and What's new first on Options, in three groups (now on in Modern, new settings, to try), for the whole run, and gone from the next run that starts with everything on it seen; 2 a later run of that build (as is Quit and Enter in the prototype); 3 a fresh install, which sees none of it. The dot is gold, chosen over pale cyan and soft green |
 | F2 | the next screen size; Shift+F2 the previous (see Screen sizes) |
 | F3 | the green current-value plasma on the chosen preset, besides its "(current)" (switch `greencurrent`, off at start) |
 | F4 | long help: a row's short line, then a second window on Space or Y saying when or why to change it (switch `longhelp`, on at start; off is the short help alone) |
@@ -627,7 +629,7 @@ screen it was found on:
 - `--layout-only` leaves out the walks by keys.
 - Add `--headless` and `; shot x.png` to an `again` line for a picture.
 
-`tools/sweep.py` runs the self test for seven screen sizes and the six
+`tools/sweep.py` runs the self test for seven screen sizes and the seven
 combinations, one process each, in parallel (about 10 seconds on the Mac), and
 takes `--sizes`, `--combo`, `--only`, `--again` and `--layout-only` the same way.
 It and `tools/resize-check.sh` first build `build-test/`, a RelWithDebInfo copy

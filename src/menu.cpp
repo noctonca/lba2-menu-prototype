@@ -7,6 +7,7 @@
 #include "bindings.h"
 #include "trace.h"
 #include "lang.h"
+#include "whats_new.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -158,15 +159,17 @@ int Position(int page, int row) {
 
 // A row the cursor can be on: the row itself when shown, else the next one shown, else the
 // one before (an undo row that went, after the undo).
+// A group's head is shown but never under the cursor.
+static bool Selectable(const Page &p, int i) { return RowShown(p, i) && p.rows[i].type != R_HEADING; }
 static int ResolveRow(int page, int row) {
     const Page &p = g_pages[page];
-    if (row >= 0 && row < p.count && RowShown(p, row))
+    if (row >= 0 && row < p.count && Selectable(p, row))
         return row;
     for (int i = row + 1; i < p.count; i++)
-        if (RowShown(p, i))
+        if (Selectable(p, i))
             return i;
     for (int i = (row < p.count ? row : p.count) - 1; i >= 0; i--)
-        if (RowShown(p, i))
+        if (Selectable(p, i))
             return i;
     return 0;
 }
@@ -176,7 +179,7 @@ static int ResolveRow(int page, int row) {
 Place &Top() {
     Place &t = g_stack[g_depth - 1];
     t.row = ResolveRow(t.page, t.row);
-    assert(RowShown(g_pages[t.page], t.row) && "the cursor is on a row its page shows");
+    assert(Selectable(g_pages[t.page], t.row) && "the cursor is on a row its page shows, never a head");
     return t;
 }
 
@@ -371,10 +374,20 @@ void UpdateVoice() {
         Menu_Say(text);
 }
 
+// The row a page opens on: its first shown, past What's new's row, which is there for the eye
+// and does not take the cursor from where the page has always opened.
+int OpeningRow(int page) {
+    const Page &p = g_pages[page];
+    for (int i = 0; i < p.count; i++)
+        if (Selectable(p, i) && !(p.rows[i].type == R_CATEGORY && p.rows[i].arg == P_WHATSNEW))
+            return i;
+    return ResolveRow(page, 0);
+}
+
 void Push(int page) {
     assert(g_depth < (int)(sizeof g_stack / sizeof g_stack[0]) && "the stack holds the deepest way in");
     g_stack[g_depth].page = page;
-    g_stack[g_depth].row = ResolveRow(page, 0);  // the first row shown: 1997's sub-menus open on their Return row
+    g_stack[g_depth].row = OpeningRow(page);  // the first row shown: 1997's sub-menus open on their Return row
     g_depth++;
     g_scroll = 0;
     if (const PageHooks *h = g_pages[page].hooks; h && h->opened)
@@ -500,6 +513,7 @@ void Menu_Init() {
     SetOwnKinds();
     Bindings_Pages(g_pages);
     MoreOptions_Pages(g_pages);
+    WhatsNew_Pages(g_pages);
     g_pages[P_MAIN] = kGamePages[0];
     g_pages[P_LOAD] = kGamePages[1];
     g_pages[P_SAVE] = kGamePages[2];
@@ -655,7 +669,15 @@ static void OpenConsole() {
     g_console = Host_LastInputWasPad() ? CON_READONLY : CON_FULL;
     Trace("open console mode=%s", g_console == CON_READONLY ? "read-only" : "full");
 }
-static const RowDo kActionDo[] = {{OpenKeys, true}, {AskReset, false}, {OpenMore, true}, {OpenConsole, true}};
+// What's new's To try row: More options, on the row it names.
+static void OpenTry() {
+    Push(P_MORE);
+    for (int i = 0; i < MoreOptions_Count(); i++)
+        if (!strcmp(MoreOptions_Name(i), "cam_world_anchor"))
+            PutCursorOn(R_TUNING, i);
+}
+static const RowDo kActionDo[] = {{OpenKeys, true}, {AskReset, false}, {OpenMore, true}, {OpenConsole, true},
+                                  {OpenTry, true}};
 static_assert(sizeof kActionDo / sizeof kActionDo[0] == A_COUNT, "what Enter does for every A_ action");
 
 static void GameResume() {
@@ -689,7 +711,18 @@ static void EnterGame(const Row &r) {
 static void GameLegend(const Row &r, const char **keys, const char **words, int *n) {
     keys[*n] = "Enter"; words[(*n)++] = kGameDo[r.arg].opens ? "Open" : "Choose";
 }
-static const char *GameHelp(const Row &) { return g_menuNote[0] ? g_menuNote : NULL; }
+static const char *GameHelp(const Row &) {
+    if (g_menuNote[0])
+        return g_menuNote;
+    // After an update, until What's new is opened (whats_new.h), on the first menu of the run,
+    // before a game: in play the legend's Esc Resume leaves the strip 204 to 248 px at 640x480,
+    // too little for it in five languages; the dots carry it there. It names the row by its own
+    // name, short enough for the strip at 640x480 in every language (the sentence with a count
+    // was not: 2026-11-18, measured).
+    if (WhatsNew_LineShown() && !Game_InProgress())
+        return "What's new: Options.";
+    return NULL;
+}
 
 // A save, or the autosave: Save game asks before it writes over one, Load game loads.
 static const char *SaveLabel(const Row &r) { return Game_SaveName(r.arg); }
@@ -767,7 +800,13 @@ static void Move(int dir) {
     const int n = ShownRows(t.page, shown);
     if (n <= 0)
         return;
-    t.row = shown[(Position(t.page, t.row) + dir + n) % n];
+    int at = Position(t.page, t.row);
+    for (int k = 0; k < n; k++) {  // past a group's head
+        at = (at + dir + n) % n;
+        if (Selectable(g_pages[t.page], shown[at]))
+            break;
+    }
+    t.row = shown[at];
     g_menuNote = "";
     const Row *r = CursorRow();
     Trace("cursor %s", r ? (r->type == R_PRESET_ROW ? "preset row" : RowLabel(*r)) : "-");
@@ -1076,6 +1115,7 @@ void Menu_Update() {
     if (Game_QuitShown()) {
         if (Host_Pressed(KEY_ENTER)) {  // the game starts again, on its first menu
             Game_StartAgain();
+            WhatsNew_NextRun();
             OpenGameMenu();
         } else if (Host_Pressed(KEY_ESC)) {
             g_quit = true;
@@ -1135,6 +1175,7 @@ void Menu_Update() {
     if (Host_Pressed(KEY_ESC))
         Pop();
 
+    WhatsNew_Frame(MenuClosed() || !Menu_CursorLit() ? NULL : CursorRow());
     UpdateVoice();
 }
 

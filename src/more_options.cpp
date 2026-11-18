@@ -6,6 +6,7 @@
 #include "menu_parts.h"
 #include "trace.h"
 #include "ui.h"
+#include "whats_new.h"
 
 #include <SVGA/CLIP.H>
 #include <SVGA/FIL_LINE.H>
@@ -532,6 +533,11 @@ static void DrawTable(S32 px0, S32 px1, S32 py0, S32 py1) {
         d.first = line[k - 1] < 0;
         d.textRight = nameX + Ui_SmallWidth(kTuning[i].name, s) - 1;
         S32 tx = tagX;
+        if (WhatsNew_TuningNew(i)) {  // What's new's dot after the name, in the 8x8 font's sizes
+            const S32 cx = d.textRight + 1 + 4 * s + 2 * s;
+            Menu_NewDot(cx, y + 4 * s - 1, 2 * s);
+            d.textRight = cx + 2 * s;
+        }
         if (IsExperimental(i) && tx + Ui_SmallWidth(kTag, s) - 1 + 8 * s < left) {
             // The tag after the name, in the heads' colour, two letters clear of it; where it
             // does not fit (the 2x font in the one column), the voice still says it.

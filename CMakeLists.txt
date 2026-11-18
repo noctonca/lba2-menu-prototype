@@ -96,6 +96,7 @@ add_executable(lba2menu
     src/menu_draw.cpp
     src/menu_state.cpp
     src/menu_settings.cpp
+    src/whats_new.cpp
     src/fake_game.cpp
     src/bindings.cpp
     src/more_options.cpp

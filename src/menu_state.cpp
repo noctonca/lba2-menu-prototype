@@ -7,6 +7,7 @@
 #include "trace.h"
 #include "video_logo.h"
 #include "pad_icons.h"
+#include "whats_new.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -64,6 +65,9 @@ static const SwitchDef kSwitches[] = {
     {"logosub", &sw_logosub, 0, 1, 0},
     {"logocc", &sw_logocc, 0, 1, 1},  // Shift+F9
     {"legendfit", &sw_legendfit, 0, 1, 1},  // the help window's legend fitted to its width, F8
+    // What a new build tells a player, a trial (whats_new.h): 1 the first run after an update
+    // from a pretend 0.13.2, 2 a later run of it, 3 a fresh install. Shift+F1.
+    {"whatsnew", &sw_whatsnew, 0, 3, 0},
 };
 
 bool Menu_SetSwitch(const char *name, int v) {
@@ -86,6 +90,8 @@ bool Menu_SetSwitch(const char *name, int v) {
         if (v < s.min || v > s.max)
             v = s.min + ((v - s.min) % (s.max - s.min + 1) + (s.max - s.min + 1)) % (s.max - s.min + 1);
         *s.value = v;
+        if (s.value == &sw_whatsnew)
+            WhatsNew_Reset();  // as the player starts the build: nothing seen yet
         g_voice.text[0] = 0;  // say it again under the new rules
         Toast("%s = %d", name, v);
         Trace("switch %s=%d", name, v);
@@ -116,6 +122,14 @@ bool Menu_Open(const char *name) {
         Activate(*CursorRow());
         return true;
     }
+    if (!strcmp(name, "What's new")) {  // from the hub's row, as Enter on it leaves it
+        if (!WhatsNew_Offered())
+            return false;  // no row to open it from: everything on it was seen
+        Menu_Open("Options");
+        PutCursorOn(R_CATEGORY, P_WHATSNEW);
+        Activate(*CursorRow());
+        return true;
+    }
     if (!strcmp(name, "Console")) {
         Menu_Open("Advanced and reset");
         PutCursorOn(R_ACTION, A_CONSOLE);
@@ -142,7 +156,7 @@ bool Menu_Open(const char *name) {
         if (strcmp(g_pages[p].name, name) != 0)
             continue;
         // Esc comes back to the page's own row on the hub, as after Enter on it.
-        int hubRow = 0;
+        int hubRow = OpeningRow(P_HUB);
         for (int i = 0; i < g_pages[P_HUB].count; i++)
             if (g_pages[P_HUB].rows[i].type != R_RETURN && g_pages[P_HUB].rows[i].arg == p)
                 hubRow = i;
@@ -184,6 +198,7 @@ void Menu_Reset() {
     g_answer = 0;
     g_console = CON_CLOSED;
     Presets_ForgetBackups();
+    WhatsNew_Reset();
     g_scroll = 0;
     g_toast[0] = 0;
     g_toastUntil = 0;
@@ -369,9 +384,11 @@ void Menu_WriteState(FILE *f) {
         Menu_JsonString(f, d.label);
         fprintf(f, ",\"value\":");
         Menu_JsonString(f, d.value);
-        fprintf(f, ",\"fill\":\"%s\",\"rect\":[%d,%d,%d,%d],\"dim\":%s,\"changed\":%s,\"marks\":%s,\"setting\":%s,\"text_left\":%d,\"text_right\":%d,\"value_right\":%d}",
+        fprintf(f, ",\"fill\":\"%s\",\"rect\":[%d,%d,%d,%d],\"dim\":%s,\"changed\":%s,\"marks\":%s,\"setting\":%s,\"text_left\":%d,\"text_right\":%d,\"value_right\":%d",
                 d.fill, d.x0, d.y0, d.x1, d.y1, d.dim ? "true" : "false", d.changed ? "true" : "false",
                 d.marks ? "true" : "false", d.setting ? "true" : "false", d.textLeft, d.textRight, d.valueRight);
+        // "new" only while the trial marks the row, so a record with the switch off is as before.
+        fprintf(f, "%s}", d.isNew ? ",\"new\":true" : "");
     }
     fprintf(f, "]");
 
@@ -425,6 +442,10 @@ void Menu_WriteState(FILE *f) {
     if (const PageHooks *h = TopHooks(); h && h->writeState) {
         fprintf(f, ",\"%s\":", h->stateName);
         h->writeState(f);
+    }
+    if (sw_whatsnew) {
+        fprintf(f, ",\"whats_new\":");
+        WhatsNew_WriteState(f);
     }
     fprintf(f, ",\"switches\":{");
     for (size_t i = 0; i < sizeof kSwitches / sizeof kSwitches[0]; i++)

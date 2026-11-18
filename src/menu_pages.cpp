@@ -2,6 +2,7 @@
 #include "menu.h"
 
 #include "menu_internal.h"
+#include "whats_new.h"
 
 #include <stdio.h>
 
@@ -29,6 +30,11 @@ static bool AutoCamera() { return Settings_Value(S_CAM_OUT) == 1; }  // Invert a
 
 static const Row kHubRows[] = {
     {R_RETURN, "Return to the game", 0, "Back to where you were.", NULL, NULL, NULL},
+    // A trial (whats_new.h): there while something on it is still unseen. First, so it is in
+    // view where the game menu's line sends the player; Options still opens on the preset row
+    // (OpeningRow), as it always has.
+    {R_CATEGORY, "What's new", P_WHATSNEW, "What this build changed for you, and what to try.", WhatsNew_Offered,
+     NULL, NULL},
     {R_PRESET_ROW, "", P_PRESET, "As in 1997, or today's look with bugs fixed.", NULL, NULL, NULL},
     {R_CATEGORY, "Language and interface", P_LANG, "Text, voices, the font and the background.", NULL, NULL, NULL},
     {R_CATEGORY, "Display and graphics", P_DISPLAY, "Resolution, window and detail.", NULL, NULL, NULL},

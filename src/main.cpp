@@ -484,8 +484,12 @@ int Lba2Main(int argc, char *argv[]) {
         }
 
         // The prototype's own keys.
-        if (Host_Pressed(KEY_F1))
-            Menu_SetSwitch("overlay", !Menu_GetSwitch("overlay"));
+        if (Host_Pressed(KEY_F1)) {
+            if (Host_ShiftHeld())  // What's new: off, after an update, a fresh install
+                Menu_SetSwitch("whatsnew", (Menu_GetSwitch("whatsnew") + 1) % 4);
+            else
+                Menu_SetSwitch("overlay", !Menu_GetSwitch("overlay"));
+        }
         if (Host_Pressed(KEY_F3))
             Menu_SetSwitch("greencurrent", !Menu_GetSwitch("greencurrent"));
         if (Host_Pressed(KEY_F4))

@@ -30,7 +30,9 @@
 
 // The switch combinations tools/sweep.py runs, in its order: the pad's names of each
 // family (0 is the connected pad's, Xbox without one), and the green plasma on the chosen preset.
-static const char *kCombos[] = {"padnames=0", "padnames=2", "padnames=3", "greencurrent=1", "pointer=1", "pointer=2"};
+// whatsnew=1: the What's new trial after an update (whats_new.h), its page and marks.
+static const char *kCombos[] = {"padnames=0", "padnames=2", "padnames=3", "greencurrent=1", "pointer=1", "pointer=2",
+                                "whatsnew=1"};
 
 static const char *kPages[] = {
     "Options", "Preset", "Language and interface", "Display and graphics", "Sound",
@@ -842,6 +844,14 @@ struct Walker {
             Open(kPages[p]);
             Check(kPages[p]);
             for (int i = 1; i < 12; i++) {
+                Key("down");
+                Check();
+            }
+        }
+        if (Menu_GetSwitch("whatsnew") == 1 && Wanted("What's new")) {
+            Open("What's new");
+            Check("What's new");
+            for (int i = 1; i < 8; i++) {
                 Key("down");
                 Check();
             }

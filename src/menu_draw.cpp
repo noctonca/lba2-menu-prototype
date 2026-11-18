@@ -12,6 +12,7 @@
 #include "screen_picture.h"
 #include "screen_font.h"
 #include "prop_scale.h"
+#include "whats_new.h"
 
 #include <SVGA/BOX.H>
 #include <SVGA/SCREEN.H>
@@ -59,7 +60,7 @@ DrawnRow &Menu_Record(const char *pane, const char *label, const char *value, Ro
     d.y0 = y0;
     d.x1 = x1;
     d.y1 = y1;
-    d.dim = d.changed = d.marks = d.setting = false;
+    d.dim = d.changed = d.marks = d.setting = d.isNew = false;
     d.textLeft = d.textRight = x0;
     d.valueRight = 0;
     return d;
@@ -78,8 +79,47 @@ void Menu_RowLabelCentred(S32 x0, S32 x1, S32 yc, const char *s, U8 colour, bool
     clip.Restore();
 }
 
+// What's new's dot (whats_new.h): after the row's name, a dot that draws the eye without
+// alarm, in the menu palette's gold (247,199,111). Chosen in play over pale cyan, which went
+// into the cursor's plasma, and soft green, too near Enter's (the maintainer, 2026-11-18); not
+// red or orange (alarm, and Esc's), not the teal that says a value was changed.
+enum { NEW_DOT_R = 4, NEW_DOT_GAP = 10 };  // the dot's radius; from the name's last letter
+void Menu_NewDot(S32 cx, S32 yc, S32 r) {
+    const U8 ink = 108;
+    for (int pass = 0; pass < 2; pass++)  // its shadow, then the dot: it reads on the cursor's plasma too
+        for (S32 dy = -r; dy <= r; dy++) {
+            S32 w = 0;
+            while ((w + 1) * (w + 1) + dy * dy <= r * r + r)
+                w++;
+            const S32 d = pass ? 0 : 1;
+            Box(cx - w + d, yc + dy + d, cx + w + d, yc + dy + d, pass ? ink : INK_BLACK);
+        }
+}
+// The dot after text ending at textEnd. Returns its right edge, for the fit checks.
+static S32 NewDotAfter(S32 textEnd, S32 yc) {
+    const S32 cx = textEnd + NEW_DOT_GAP + NEW_DOT_R;
+    Menu_NewDot(cx, yc, NEW_DOT_R);
+    return cx + NEW_DOT_R + 1;
+}
+
+// A group's head (What's new): its name where a row's label goes, on no shade, never lit.
+enum { HEAD_INK = 191 };  // the wordmark's pale blue, (187,223,227)
+static void DrawHeading(const char *pane, const Row &r, S32 x0, S32 y0, S32 x1, S32 y1, bool centred) {
+    const S32 yc = (y0 + y1) / 2, w = Ui_TextWidth(r.label);
+    const S32 x = centred ? (x0 + x1) / 2 - w / 2 : x0 + ROW_TEXT_INSET;
+    Ui_TextShadow(x, yc - ROW_TEXT_RISE, r.label, HEAD_INK);
+    DrawnRow &d = Menu_Record(pane, r.label, "", FILL_SHADE, x0, y0, x1, y1);
+    d.fill = "heading";
+    d.textLeft = x;
+    d.textRight = x + w;
+}
+
 // One column: the 1997 row, "Label: Value" in one string, sliders as fills.
 static void DrawColumnRow(const Row &r, int row, S32 x0, S32 y0, S32 x1, S32 y1, bool cursor) {
+    if (r.type == R_HEADING) {
+        DrawHeading("column", r, x0, y0, x1, y1, true);
+        return;
+    }
     S32 yc = (y0 + y1) / 2;
     char text[160], val[48];
     RowFill fill = cursor ? FILL_CURSOR : FILL_SHADE;
@@ -124,6 +164,11 @@ static void DrawColumnRow(const Row &r, int row, S32 x0, S32 y0, S32 x1, S32 y1,
     d.setting = r.type == R_SETTING;
     d.textLeft = (x0 + x1) / 2 - textW / 2;
     d.textRight = (x0 + x1) / 2 + textW / 2 + 8;  // 8: the original's side padding
+    if (WhatsNew_RowNew(r)) {  // after the text; its right edge is the text's, for the fit checks
+        const S32 right = NewDotAfter((x0 + x1) / 2 + textW / 2, yc);
+        d.textRight = right + 8;  // the original's side padding, as above
+        d.isNew = true;
+    }
     Menu_Point(POINT_ROW, x0, y0, x1, y1, TopPage(), row);
     if (slider && cursor && active && Settings_Def(r.arg).kind == K_SLIDER)
         Menu_Point(POINT_SLIDER, x0, y0, x1, y1, r.arg, row);
@@ -131,6 +176,10 @@ static void DrawColumnRow(const Row &r, int row, S32 x0, S32 y0, S32 x1, S32 y1,
 
 // Wide: label at the pane's one edge, value in a column on the right.
 static void DrawWideRow(const char *pane, const Row &r, int row, S32 x0, S32 y0, S32 x1, S32 y1, RowFill fill) {
+    if (r.type == R_HEADING) {
+        DrawHeading(pane, r, x0, y0, x1, y1, false);
+        return;
+    }
     S32 yc = (y0 + y1) / 2;
     char label[160], val[48];
     bool active = RowActive(r);
@@ -225,6 +274,16 @@ static void DrawWideRow(const char *pane, const Row &r, int row, S32 x0, S32 y0,
         Ui_Text(valueLeft, yc - ROW_TEXT_RISE, "Changed", INK_COUNT);
         snprintf(d.value, sizeof d.value, "Changed");
         d.valueRight = valueRight;
+    }
+    if (WhatsNew_RowNew(r)) {
+        // After the name, in the room the value leaves; past it, the record says it spills.
+        const S32 room = valueLeft ? valueLeft - MARK_ROOM - 8 - 1 : x1 - ROW_TEXT_INSET;
+        const S32 right = NewDotAfter(x0 + ROW_TEXT_INSET + (asIs ? Ui_TextWidthAsIs(label) : Ui_TextWidth(label)), yc);
+        if (right > room)
+            d.textRight = x1 + (right - room);
+        else if (right > d.textRight)
+            d.textRight = right;
+        d.isNew = true;
     }
     // The label last, in the room the value leaves (the 1997 swing when it is wider).
     const ClipSave clip;
@@ -828,16 +887,24 @@ static bool StripPage() {
 // The strip with its bottom right corner at x1, y1: in the one column 8 in from the screen's,
 // in the wide frame where the band's is (the band is two lines tall for help these pages
 // don't have; decided 2026-11-16).
+// The strip's legend: its width and the 8x8 font's scale, 2 unless that leaves no room.
+static S32 StripLegend(S32 x0, S32 x1, const char **keys, const char **keysGiven, const char **words, int nk,
+                       S32 *scale) {
+    *scale = 2;
+    if (DrawLegendRow(0, 0, keys, keysGiven, words, nk, *scale, false) > x1 - x0 - 2 * PANEL_PAD_X)
+        *scale = 1;
+    return nk ? DrawLegendRow(0, 0, keys, keysGiven, words, nk, *scale, false) : 0;
+}
+static S32 StripVoiceWidth(S32 x0, S32 x1, S32 lw) { return x1 - x0 - 2 * PANEL_PAD_X - (lw ? lw + PANEL_PAD_X : 0); }
+
 static void DrawStripAt(S32 x0, S32 x1, S32 y1, const char **keysGiven, const char **words, int nk) {
     const S32 y0 = y1 - STRIP_H + 1;
     Ui_Panel(x0, y0, x1, y1, PANEL_SHADE_LVL);
     const char *keys[8];
     LegendKeys(keysGiven, keys, nk);
-    S32 scale = 2;
-    if (DrawLegendRow(0, 0, keys, keysGiven, words, nk, scale, false) > x1 - x0 - 2 * PANEL_PAD_X)
-        scale = 1;
-    const S32 lw = nk ? DrawLegendRow(0, 0, keys, keysGiven, words, nk, scale, false) : 0;
-    const S32 voiceW = x1 - x0 - 2 * PANEL_PAD_X - (lw ? lw + PANEL_PAD_X : 0);
+    S32 scale;
+    const S32 lw = StripLegend(x0, x1, keys, keysGiven, words, nk, &scale);
+    const S32 voiceW = StripVoiceWidth(x0, x1, lw);
     g_voiceLines = Voice_Draw(g_voice, x0 + PANEL_PAD_X, y0 + PANEL_PAD_Y, voiceW, 1, &g_voiceNeeded);
     g_voiceMax = 1;
     g_voiceWidth = voiceW;
@@ -1038,6 +1105,16 @@ static S32 BandVoiceWidth(const char **keys, const char **words, int nk) {
 // row's short help where its help would not fit.
 bool VoiceFits(const char *text, const Row *r) {
     S32 W = (S32)Host_LogicalW();
+    if (StripPage()) {  // the game menu's pages: one line beside the legend, as DrawStripAt
+        const char *keysGiven[4], *words[4], *keys[8];
+        int nk;
+        LegendFor(r, keysGiven, words, &nk);
+        LegendKeys(keysGiven, keys, nk);
+        const WideFrame fr = Menu_WideFrame();
+        const S32 x0 = Wide() ? fr.x0 + WIDE_INSET_X : 8, x1 = Wide() ? fr.x0 + fr.w - 1 - WIDE_INSET_X : W - 1 - 8;
+        S32 scale;
+        return Voice_Lines(text, StripVoiceWidth(x0, x1, StripLegend(x0, x1, keys, keysGiven, words, nk, &scale))) <= 1;
+    }
     if (!Wide())
         return Voice_Lines(text, W - 49) <= 2;  // the legend has the dialogue window's third line
     const char *keys[4], *words[4];

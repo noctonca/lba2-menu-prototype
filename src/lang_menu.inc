@@ -166,3 +166,8 @@
 {"A new game.", "Une nouvelle partie.", "Ein neues Spiel.", "Una partida nueva.", "Una nuova partita.", "Um jogo novo."},
 {"<ENTER> walks on to the next place.", "<ENTER> m\x8a""ne au lieu suivant.", "<ENTER> geht weiter zum n\x84""chsten Ort.", "<ENTER> lleva al lugar siguiente.", "<ENTER> porta al luogo successivo.", "<ENTER> leva ao lugar seguinte."},
 {"<ESC> opens the game menu.", "<ESC> ouvre le menu du jeu.", "<ESC> \x94""ffnet das Spielmen\x81"".", "<ESC> abre el men\xa3"" del juego.", "<ESC> apre il menu di gioco.", "<ESC> abre o menu do jogo."},
+{"What's new", "Nouveaut\x82""s", "Neuigkeiten", "Novedades", "Novit\x85""", "Novidades"},
+{"Now on in Modern", "Activ\x82"" en Moderne", "Jetzt an in Modern", "Activado en Moderno", "Attivo in Moderno", "Ativado em Moderno"},
+{"New settings", "Nouveaux r\x82""glages", "Neue Einstellungen", "Ajustes nuevos", "Nuove impostazioni", "Novas defini\x87""\xe4""es"},
+{"To try", "\xb7"" essayer", "Zum Ausprobieren", "Para probar", "Da provare", "Para experimentar"},
+{"Camera holds its direction", "La cam\x82""ra garde sa direction", "Kamera h\x84""lt die Richtung", "La c\xa0""mara mantiene su direcci\xa2""n", "La telecamera tiene la direzione", "A c\x83""mara mant\x82""m a dire\x87""\xc6""o"},

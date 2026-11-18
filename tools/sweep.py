@@ -49,7 +49,7 @@ MORE_OPTIONS_PAGE = "More options"
 
 # The same as selftest.cpp kCombos: the pad's names of each family, and the screens as the
 # mouse (pointer=1: the Back button, hover) and a finger (pointer=2) show them.
-COMBOS = ["padnames=0", "padnames=2", "padnames=3", "greencurrent=1", "pointer=1", "pointer=2"]
+COMBOS = ["padnames=0", "padnames=2", "padnames=3", "greencurrent=1", "pointer=1", "pointer=2", "whatsnew=1"]
 
 def parse_combo(spec):
     return {k: int(v) for k, v in (part.split("=") for part in spec.split(","))}

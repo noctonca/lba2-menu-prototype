@@ -18,6 +18,7 @@ enum RowType {
     R_SAVE,      // a save on the Load game or Save game page (arg: its place in the list, newest first)
     R_NEW_SAVE,  // Save game's last row: a save of its own
     R_AUTOSAVE,  // Load game's last row: the autosave, which loads and is never deleted
+    R_HEADING,   // a group's head (What's new): drawn, never under the cursor
     R_COUNT
 };
 
@@ -117,11 +118,13 @@ void Menu_SyncView();
 // The pages: the Options pages, then Keys and buttons (its groups) and a page of each group's
 // actions, which bindings.cpp makes from its tables (Bindings_Pages), then More options, a row
 // for each of its values, which more_options.cpp makes from its table (MoreOptions_Pages), then
-// the game menu and its two save lists.
+// the game menu and its two save lists, then What's new (whats_new.cpp).
 enum { KEY_GROUPS = 7 };  // bindings.cpp kGroups
 enum {
     P_HUB, P_PRESET, P_LANG, P_DISPLAY, P_SOUND, P_CONTROLS, P_ADVANCED, P_ORIGINAL,
-    P_KEYS, P_KEY_GROUP, P_MORE = P_KEY_GROUP + KEY_GROUPS, P_MAIN, P_LOAD, P_SAVE, P_COUNT
+    P_KEYS, P_KEY_GROUP, P_MORE = P_KEY_GROUP + KEY_GROUPS, P_MAIN, P_LOAD, P_SAVE,
+    P_WHATSNEW,  // a trial (whats_new.h)
+    P_COUNT
 };
 void Bindings_Pages(Page *pages);     // fills pages[P_KEYS] and pages[P_KEY_GROUP + group]
 void MoreOptions_Pages(Page *pages);  // fills pages[P_MORE]
@@ -153,6 +156,7 @@ struct DrawnRow {
     const char *fill;
     int x0, y0, x1, y1;
     bool dim, changed, marks;
+    bool isNew;     // wears What's new's mark (whats_new.h)
     bool setting;   // a setting row: it shows a value
     int textLeft;   // where the label starts
     int textRight;  // where the label (or value) ends; > x1 means it spills
@@ -183,6 +187,8 @@ struct MenuPoint {
 int Menu_Points(const MenuPoint **out);  // the last draw's, for the self test
 
 // Centred in the row; wider than the row, from its left (8 in) and, with cursor, swinging.
+// What's new's dot (whats_new.h), centred on cx, yc, of radius r, in the colour on trial.
+void Menu_NewDot(S32 cx, S32 yc, S32 r);
 void Menu_RowLabelCentred(S32 x0, S32 x1, S32 yc, const char *s, U8 colour, bool asIs = false, bool cursor = false);
 void Menu_DrawScrollBar(S32 x0, S32 y0, S32 y1, int first, int visible, int total);
 // The scroll bar this frame drew, if any: where its groove and thumb are, and the view it
