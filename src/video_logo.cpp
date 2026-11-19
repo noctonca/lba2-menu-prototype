@@ -641,7 +641,9 @@ static std::vector<U32> s_still;  // alpha in the top byte, colour not multiplie
 static S32 s_stillW, s_stillH;
 static float s_stillS, s_stillFx, s_stillFy;
 
-static void PaintStill(U32 *argb, U32 pitch, S32 cx0, S32 cy0, S32 cx1, S32 cy1, const Placed &at) {
+// argb holds the screen from (offX, offY) on: the cross-fade paints into a copy of a box of it.
+static void PaintStill(U32 *argb, U32 pitch, S32 cx0, S32 cy0, S32 cx1, S32 cy1, const Placed &at, S32 offX = 0,
+                       S32 offY = 0) {
     // The cache starts at the whole pixel left of the ink, one pixel of margin round it.
     const S32 ox = (S32)floorf(at.x0) - 1, oy = (S32)floorf(at.y0) - 1;
     const float fx = at.x0 - ox, fy = at.y0 - oy;
@@ -661,17 +663,17 @@ static void PaintStill(U32 *argb, U32 pitch, S32 cx0, S32 cy0, S32 cx1, S32 cy1,
             }
     }
     for (S32 py = std::max(cy0, oy); py < std::min(cy1, oy + h); py++) {
-        U32 *row = (U32 *)((U8 *)argb + (size_t)py * pitch);
+        U32 *row = (U32 *)((U8 *)argb + (size_t)(py - offY) * pitch);
         const U32 *src = &s_still[(size_t)(py - oy) * w];
         for (S32 px = std::max(cx0, ox); px < std::min(cx1, ox + w); px++) {
             const U32 c = src[px - ox], a = c >> 24;
             if (!a)
                 continue;
-            const U32 d = row[px], ia = 255 - a;
+            const U32 d = row[px - offX], ia = 255 - a;
             const U32 r = (((c >> 16) & 0xff) * a + ((d >> 16) & 0xff) * ia + 127) / 255;
             const U32 g = (((c >> 8) & 0xff) * a + ((d >> 8) & 0xff) * ia + 127) / 255;
             const U32 b = ((c & 0xff) * a + (d & 0xff) * ia + 127) / 255;
-            row[px] = 0xff000000u | r << 16 | g << 8 | b;
+            row[px - offX] = 0xff000000u | r << 16 | g << 8 | b;
         }
     }
 }
@@ -685,7 +687,17 @@ static bool s_started;
 static U32 s_startMs;
 static int s_idle = 1;
 
-void VideoLogo_BeginFrame() { s_queued = false; }
+// The opening (VideoLogo_Opening): this frame's picture box and how far the fade is, and the
+// screen under the logo and the picture's place as the last frame before the fade had it.
+enum { OPEN_NONE, OPEN_KEEP, OPEN_FADE };
+static int s_opening = OPEN_NONE;
+static S32 s_px0, s_py0, s_px1, s_py1;
+static float s_fadeT;
+static std::vector<U32> s_under;
+static S32 s_ux0, s_uy0, s_ux1, s_uy1;
+static U32 s_uw, s_uh;
+
+void VideoLogo_BeginFrame() { s_queued = false, s_opening = OPEN_NONE; }
 void VideoLogo_Restart() { s_started = false; }
 void VideoLogo_SetIdle(int mode) { s_idle = mode; }
 void VideoLogo_SetCc(bool on) {
@@ -735,6 +747,20 @@ void VideoLogo_Queue(S32 x0, S32 y0, S32 x1, S32 y1, bool still) {
 // When the build-in is over: the cc's beat comes after the video's.
 static float BuildEnd() { return s_ccOn && s_ccReady ? CC_END : BUILD_END; }
 
+S32 VideoLogo_SinceBuiltMs() {
+    if (!s_started)
+        return -0x7fffffff;
+    return (S32)(Host_TimeMs() - s_startMs) - (S32)(BuildEnd() * 1000.0f / FPS);
+}
+
+void VideoLogo_Opening(S32 x0, S32 y0, S32 x1, S32 y1, float t) {
+    if (!s_queued)
+        return;
+    s_opening = t < 0 ? OPEN_KEEP : OPEN_FADE;
+    s_px0 = x0, s_py0 = y0, s_px1 = x1, s_py1 = y1;
+    s_fadeT = t > 1 ? 1 : t;
+}
+
 void VideoLogo_RippleNow() {
     s_started = true;
     s_startMs = Host_TimeMs() - (U32)(BuildEnd() * 1000.0f / FPS) - RIPPLE_EVERY_MS;
@@ -767,6 +793,44 @@ void VideoLogo_Paint(U32 *argb, U32 pitch, U32 w, U32 h) {
     at.s = std::min(sw / s_inkW, sh / s_inkH);
     at.x0 = sx0 + (sw - s_inkW * at.s) * 0.5f;
     at.y0 = sy0 + (sh - s_inkH * at.s) * 0.5f;
+    if (s_opening != OPEN_NONE) {
+        // The box the opening covers on the screen: the logo's and the picture's frame.
+        const S32 lx0 = std::min(s_bx0, s_px0), ly0 = std::min(s_by0, s_py0);
+        const S32 lx1 = std::max(s_bx1, s_px1), ly1 = std::max(s_by1, s_py1);
+        const S32 ux0 = std::max(0, (S32)floorf(bx + lx0 * k)), uy0 = std::max(0, (S32)floorf(by + ly0 * k));
+        const S32 ux1 = std::min((S32)w, (S32)floorf(bx + (lx1 + 1) * k)), uy1 = std::min((S32)h, (S32)floorf(by + (ly1 + 1) * k));
+        if (ux1 <= ux0 || uy1 <= uy0)
+            return;
+        const S32 uw = ux1 - ux0;
+        if (s_opening == OPEN_KEEP) {
+            // The logo is still building or resting: keep what is under it for the fade.
+            s_under.resize((size_t)uw * (uy1 - uy0));
+            for (S32 y = uy0; y < uy1; y++)
+                memcpy(&s_under[(size_t)(y - uy0) * uw], (U8 *)argb + (size_t)y * pitch + ux0 * 4, (size_t)uw * 4);
+            s_ux0 = ux0, s_uy0 = uy0, s_ux1 = ux1, s_uy1 = uy1, s_uw = w, s_uh = h;
+        } else {
+            // The fade: the settled logo over what was kept, giving way to the frame as drawn
+            // (the picture in it). Nothing kept for this screen (it was resized): the picture.
+            if (s_under.empty() || s_uw != w || s_uh != h || s_ux0 != ux0 || s_uy0 != uy0 || s_ux1 != ux1 || s_uy1 != uy1)
+                return;
+            static std::vector<U32> before;
+            before = s_under;
+            PaintStill(before.data(), (U32)uw * 4, ux0, uy0, ux1, uy1, at, ux0, uy0);
+            const float e = s_fadeT * s_fadeT * (3 - 2 * s_fadeT);
+            const U32 b = (U32)(e * 256 + 0.5f), a = 256 - b;
+            for (S32 y = uy0; y < uy1; y++) {
+                U32 *row = (U32 *)((U8 *)argb + (size_t)y * pitch);
+                const U32 *src = &before[(size_t)(y - uy0) * uw];
+                for (S32 x = ux0; x < ux1; x++) {
+                    const U32 c = src[x - ux0], d = row[x];
+                    const U32 rb = ((c & 0xff00ffu) * a + (d & 0xff00ffu) * b) >> 8 & 0xff00ffu;
+                    const U32 g = ((c & 0xff00u) * a + (d & 0xff00u) * b) >> 8 & 0xff00u;
+                    row[x] = 0xff000000u | rb | g;
+                }
+            }
+            return;
+        }
+    }
     const Moment m = s_queuedStill ? MomentAt(BUILD_END, true, false) : MomentNow();
     if (m.still) {
         PaintStill(argb, pitch, 0, 0, (S32)w, (S32)h, at);

@@ -133,6 +133,8 @@ extern int sw_whole;
 extern int sw_propscale;
 extern int sw_zsub;
 extern int sw_videologo;
+extern int sw_opening;  // Resume game's opening: the logo first, then the picture
+void Menu_ReplayOpening();
 extern int sw_logosub;
 extern int sw_logocc;
 extern int sw_legendfit;

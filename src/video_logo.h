@@ -42,6 +42,15 @@ void VideoLogo_Restart();
 // Play the idle ripple now, the build-in taken as over (for comparing the three ripples
 // without waiting 30 seconds for each).
 void VideoLogo_RippleNow();
+// Milliseconds since the build-in ended (negative while it plays; very negative before the
+// logo has been queued at all).
+S32 VideoLogo_SinceBuiltMs();
+// Resume game's opening (switch opening, the maintainer, 2026-11-18): the logo builds in and
+// rests where the save's picture goes, then cross-fades into the picture. Called after this
+// frame's Queue, with the picture's frame x0..x1, y0..y1 (both ends included). t < 0: the
+// logo is drawn as usual, and the screen under it and the frame is kept. 0 to 1: the canvas
+// has the picture, and the settled logo over what was kept fades into it (eased).
+void VideoLogo_Opening(S32 x0, S32 y0, S32 x1, S32 y1, float t);
 // The idle ripple: 1 at half the video's height, 2 at the video's, 3 at the video's with the blue ring.
 void VideoLogo_SetIdle(int mode);
 // The cc of LBA2 Classic Community under the 2 (assets/logo/cc.svg, ours and not the

@@ -391,6 +391,12 @@ explains itself in the voice as the cursor lands on it; there is no help page.
   place, smaller and at rest: nothing moves over a game that is waiting.
   The sizes above are the wordmark's, which switch `videologo` 0 brings back
   (the maintainer, 2026-11-17).
+- With a save the cursor starts on Resume game, whose place shows the save's
+  picture, so a player resuming never saw the logo build in. Now the logo
+  builds in there first, rests 1.5 s and cross-fades into the picture
+  (0.5 s), once a run; nothing waits for it, and the cursor off Resume game
+  ends it (the maintainer, 2026-11-18; switch `opening`).
+  **[self test: opening]**
 - A save is named as lba2cc names one it makes, `<island> <date> <time>`,
   shorter than lba2cc's `<island> - <date> <hours-minutes-seconds>`: that
   spilled a 640x480 row by up to 33 px with the longest island, and 8 without

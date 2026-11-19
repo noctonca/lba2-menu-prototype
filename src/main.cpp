@@ -496,8 +496,12 @@ int Lba2Main(int argc, char *argv[]) {
             Menu_SetSwitch("longhelp", !Menu_GetSwitch("longhelp"));
         if (Host_Pressed(KEY_F11))
             Menu_SetSwitch("padnames", Menu_GetSwitch("padnames") + 1);
-        if (Host_Pressed(KEY_F10))
-            Menu_SetSwitch("roleink", !Menu_GetSwitch("roleink"));
+        if (Host_Pressed(KEY_F10)) {
+            if (Host_ShiftHeld())  // Resume game's opening; turned on, it plays from the build-in
+                Menu_SetSwitch("opening", !Menu_GetSwitch("opening"));
+            else
+                Menu_SetSwitch("roleink", !Menu_GetSwitch("roleink"));
+        }
         if (Host_Pressed(KEY_F5))
             Menu_SetSwitch("propscale", Menu_GetSwitch("propscale") + (Host_ShiftHeld() ? -1 : 1));
         if (Host_Pressed(KEY_F7))  // straight between the last two compared, 1 and 5

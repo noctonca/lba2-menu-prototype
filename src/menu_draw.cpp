@@ -854,6 +854,12 @@ static void DrawPicture(const U8 *pic, S32 x, S32 y) {
     Menu_Record("picture", "", "", FILL_SHADE, x - 1, y - 1, x1 + 1, y1 + 1);
 }
 
+// Resume game's opening: the logo rests this long once built in, then fades into the picture
+// over OPEN_FADE_MS (rest chosen by the maintainer, 2026-11-18; the fade by eye).
+enum { OPEN_REST_MS = 1500, OPEN_FADE_MS = 500 };
+static bool g_openingDue = true;  // once a run, until the picture shows or the cursor leaves
+void Menu_ReplayOpening() { g_openingDue = true; }
+
 // The picture centred in its own place: between the last line taken above it (the title's,
 // or the edge's) and the first row, the same gap above and below (the odd pixel below);
 // the maintainer, 2026-11-16: it sat on the first row and far from Load game's title.
@@ -863,7 +869,26 @@ static void DrawPictureBetween(const U8 *pic, S32 x, S32 above, S32 firstRow) {
     const S32 frameH = SAVE_PICTURE_H + 2, free = firstRow - above - 1 - frameH;
     const S32 y = above + 1 + free / 2 + 1;
     const Row *r = CursorRow();
-    if (!pic || (TopPage() == P_MAIN && !(r && r->type == R_GAME && r->arg == M_RESUME))) {
+    const bool onResume = r && r->type == R_GAME && r->arg == M_RESUME;
+    if (pic && g_openingDue) {
+        // Resume game's opening: the logo builds in and rests in the picture's place, then
+        // cross-fades into the picture, once a run (switch opening; the maintainer, 2026-11-18:
+        // the cursor starts on Resume game, so a player resuming never saw the build-in).
+        // The cursor off Resume game ends it, and coming back shows the picture.
+        const S32 since = MainBeforeGame() && onResume && sw_opening && LogoOn() ? VideoLogo_SinceBuiltMs() : -1;
+        if (since >= OPEN_REST_MS + OPEN_FADE_MS || !(MainBeforeGame() && onResume && sw_opening && LogoOn())) {
+            g_openingDue = false;
+        } else {
+            const S32 lx = x - 1 + (SAVE_PICTURE_W + 2) / 2, fx1 = x + SAVE_PICTURE_W, fy1 = y + SAVE_PICTURE_H;
+            const bool fading = since >= OPEN_REST_MS;
+            if (fading)
+                DrawPicture(pic, x, y);  // before the logo is queued: its check sees the picture
+            DrawLogoTitle(lx, y - 1, y - 1 + frameH - 1, kMarkPlace, false);
+            VideoLogo_Opening(x - 1, y - 1, fx1, fy1, fading ? (float)(since - OPEN_REST_MS) / OPEN_FADE_MS : -1.0f);
+            return;
+        }
+    }
+    if (!pic || (TopPage() == P_MAIN && !onResume)) {
         const MarkSize &m = kMarkPlace;
         if (LogoOn()) {  // the logo fills the picture's place, frame and all
             DrawLogoTitle(x - 1 + (SAVE_PICTURE_W + 2) / 2, y - 1, y - 1 + frameH - 1, m, false);

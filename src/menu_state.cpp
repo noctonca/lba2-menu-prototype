@@ -27,6 +27,10 @@ int sw_zsub = 0;       // Zilla Slab letters at quarter pixels
 // one with the ring as the logo fades in, then the gentle one every 30 seconds (the
 // maintainer, 2026-11-17, after trying 3 as the start).
 int sw_videologo = 1;
+// Resume game's opening (the maintainer, 2026-11-18): on the first game menu with a save the
+// logo builds in where the picture goes, rests 1.5 s and cross-fades into the save's picture,
+// once a run. 0: the picture at once, as before.
+int sw_opening = 1;
 int sw_logosub = 0;    // 1 = CLASSIC COMMUNITY kept under the logo in the picture's place
 int sw_logocc = 1;     // the cc under the logo's 2; 0 = the logo as the intro has it
 int sw_legendfit = 1;  // the help window's legend at the size that fits (EPmager, 2026-11-16)
@@ -63,6 +67,7 @@ static const SwitchDef kSwitches[] = {
     {"zsub", &sw_zsub, 0, 1, 0},  // Zilla Slab letters at quarter pixels, F6
     {"videologo", &sw_videologo, 0, 3, 1},  // the intro's logo for the wordmark, F9
     {"logosub", &sw_logosub, 0, 1, 0},
+    {"opening", &sw_opening, 0, 1, 1},  // Resume game's opening, Shift+F10 (on again: from the build-in)
     {"logocc", &sw_logocc, 0, 1, 1},  // Shift+F9
     {"legendfit", &sw_legendfit, 0, 1, 1},  // the help window's legend fitted to its width, F8
     // What a new build tells a player, a trial (whats_new.h): 1 the first run after an update
@@ -78,6 +83,10 @@ bool Menu_SetSwitch(const char *name, int v) {
             VideoLogo_RippleNow();
         else
             VideoLogo_Restart();
+    }
+    if (!strcmp(name, "opening")) {
+        Menu_ReplayOpening();  // either way, from the build-in, as a fresh run has it
+        VideoLogo_Restart();
     }
     if (!strcmp(name, "keyboard")) {  // 0: as a console with no keyboard yet
         Host_SetKeyboardSeen(v != 0);

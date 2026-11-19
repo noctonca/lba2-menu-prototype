@@ -305,6 +305,7 @@ own keys:
 | F7 | `propscale` straight between 5 and 1, the last two compared |
 | F8 | the help window's legend at the size that fits its width, between 1x and 2x, instead of dropping to 1x (switch `legendfit`, on at start, decided 2026-11-16; needs `propscale` 5 or 6; `./play-legendfit.sh`) |
 | F9 | the product's name: the intro's LBA 2 logo instead of the wordmark, drawn in code at the screen's resolution and built in as the intro builds it (switch `videologo`, 1 at start; 0 is the wordmark it replaced; the build-in always has the intro's full ripple and blue ring, and 1 to 3 choose the ripple every 30 seconds after it: half the intro's height, the intro's height, the intro's height with the blue ring; stepping from one to the next plays that ripple at once; in play the game menu has it smaller, at a title's size, at rest; Shift+F9 steps switch `logocc`, the lower-case cc of Classic Community under the logo's 2, which is ours, in the logo's colours, and arrives after the intro's build-in (1 at start; 0 is the logo as the intro has it); switch `logosub` 1 keeps CLASSIC COMMUNITY under it before a game; see `src/video_logo.h`, `assets/logo/README.md`; `./play-logo.sh`) |
+| Shift+F10 | Resume game's opening (switch `opening`, on at start; turned on again it plays from the build-in): on the first game menu with a save the logo builds in where the picture goes, rests 1.5 s and cross-fades into the save's picture over 0.5 s, once a run; Enter does not wait for it, and the cursor off Resume game ends it; 0 shows the picture at once. The fade is painted at the screen's resolution over what was under the logo; see `VideoLogo_Opening` in `src/video_logo.h`; `./play-opening.sh` |
 | F11 | steps the Button names row: Auto / Xbox / PlayStation / Nintendo (switch `padnames`) |
 
 Two more switches have no key: `keyboard` 0 plays as a console before a key is
@@ -538,6 +539,10 @@ the cursor on the group's first row.
 Then it walks the menu by its keys and checks what they do. Each problem a
 walk finds starts with the walk's name:
 
+- `opening:` Resume game's opening, when the logo is on: off, the picture at
+  once; on, the logo and no picture at the start and at 4 s, both while it
+  fades at 4.8 s, the picture alone at 5.3 s; Enter during the build-in plays;
+  off Resume game and back shows the picture.
 - `flow:` the game menu around Options. With 20 saves (`--saves 20`), at a
   start: Resume game first, no Save game, Load game with a row for each of the 20 saves in alphabetical
   order and AUTOSAVE last, opening on AUTOSAVE, where Del does nothing and the

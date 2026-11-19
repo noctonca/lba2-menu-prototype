@@ -15,6 +15,7 @@
 #include "trace.h"
 #include "ui.h"
 #include "pad_icons.h"
+#include "screen_font.h"
 
 #include <SVGA/SCREEN.H>
 
@@ -1966,7 +1967,41 @@ struct Walker {
         Menu_SetSavesAtStart(20);
     }
 
+    // Resume game's opening (switch opening): with the logo, the first game menu shows it
+    // where the picture goes until the build-in is over and it has rested 1.5 s, then both
+    // while it fades, then the picture. Enter during it plays at once; the cursor off Resume
+    // game ends it, so coming back shows the picture. Off, the picture at once.
+    void Opening() {
+        if (opt->only || !Menu_GetSwitch("videologo") || !ScreenFont_On())
+            return;
+        const char *name = "LBA2 Classic Community";
+        auto replay = [&](int v) {
+            Start();
+            path.assign(1, Fmt("switch opening %d", v));
+            Menu_SetSwitch("opening", v);
+            Frame();
+        };
+        replay(0);
+        Expect(PictureDrawn() && !Drawn(name), "opening: off: no picture at once, or the logo with it");
+        replay(1);
+        Expect(!PictureDrawn() && Drawn(name), "opening: start: the picture, or no logo, while the logo builds in");
+        Wait(250);  // 4 s: built in (3.1 s) and resting
+        Expect(!PictureDrawn() && Drawn(name), "opening: at 4 s: the picture, or no logo, while the logo rests");
+        Wait(50);   // 4.8 s: fading
+        Expect(PictureDrawn() && Drawn(name), "opening: at 4.8 s: not the logo and the picture, fading");
+        Wait(30);   // 5.3 s: over
+        Expect(PictureDrawn() && !Drawn(name), "opening: at 5.3 s: no picture, or the logo still");
+        replay(1);
+        Key("enter");
+        InGameScreen("opening: Enter while the logo builds in");
+        replay(1);
+        Key("down");
+        Key("up");
+        Expect(PictureDrawn() && !Drawn(name), "opening: back on Resume game: no picture, or the logo");
+    }
+
     void Behavior() {
+        Opening();  // ends with the opening over, as every later walk expects
         Flow();
         Reach();
         for (size_t p = 0; p < sizeof kPages / sizeof kPages[0]; p++)
